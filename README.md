@@ -57,6 +57,17 @@ Settings: `/etc/trader/trader.env` (password, markets). Data: `/opt/trader/trade
 - Update after code changes: `sudo bash deploy/update.sh` from the new copy.
 - Logs: `journalctl -u trader-runner -f`. The dashboard's Operations section shows the same health.
 
+## CI / CD (GitHub Actions)
+
+- **CI** (`.github/workflows/ci.yml`) runs on every push and pull request: the dashboard build (lint and type
+  checks), a compile check of every Python file plus an API smoke test (`tests/smoke_api.py`, no network), and
+  shellcheck on `deploy/*.sh`.
+- **Deploy** (`.github/workflows/deploy.yml`) runs after CI passes on `main`: it SSHes into the VPS, pulls `main`
+  and runs `deploy/update.sh`, then checks the three services. It needs repository secrets `VPS_HOST`,
+  `VPS_USER` and `VPS_SSH_KEY` (a separate key for GitHub; its public half goes into the VPS user's
+  `~/.ssh/authorized_keys`), optionally `VPS_KNOWN_HOSTS` and `VPS_REPO_DIR`. Without them it skips.
+  It can also be run by hand from the Actions tab.
+
 ## What the dashboard controls
 
 - **Performance**: P&L in rupees vs the daily goal, per account, daily bars.
