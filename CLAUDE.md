@@ -3,7 +3,7 @@
 Paper-trading bot (testing phase: no broker, no real money) with a Next.js dashboard and a FastAPI backend.
 Owner: Ansh. Replies in Hinglish, direct and candid.
 
-## On the VPS (Debian, user `claudeops`)
+## On the VPS (Debian)
 
 - Code and data: `/opt/trader` (read-only for you). Bot data: `/opt/trader/trader/`
   - `live/log.txt` runner log, `live/decisions.jsonl` every candidate and why it was traded or skipped,
