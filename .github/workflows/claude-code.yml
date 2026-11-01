@@ -1,0 +1,52 @@
+# One-click Claude Code setup on the VPS: Actions -> "Claude Code on VPS" -> Run workflow -> pick a step.
+# Uses the same SSH secrets as deploy.yml (VPS_HOST, VPS_USER, VPS_SSH_KEY, VPS_KNOWN_HOSTS, VPS_REPO_DIR).
+# The sign-in step (`login`) needs your own claude.ai login in a terminal, so it is not here:
+#   ssh root@<VPS> then: sudo bash ~/claude-trading-bot/deploy/claude-code.sh login
+# Remove this file once Claude Code is set up; deploy/claude-code.sh stays for later use.
+name: Claude Code on VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: "install = set up user + Claude Code; start/status/stop = Remote Control (start needs login first)"
+        type: choice
+        options: [install, status, start, stop]
+        default: install
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      HOST: ${{ secrets.VPS_HOST }}
+      USER_NAME: ${{ secrets.VPS_USER }}
+      KEY: ${{ secrets.VPS_SSH_KEY }}
+      KNOWN: ${{ secrets.VPS_KNOWN_HOSTS }}
+      DIR: ${{ secrets.VPS_REPO_DIR }}
+      STEP: ${{ inputs.step }}
+    steps:
+      - name: Set up SSH
+        run: |
+          [ -n "$HOST" ] && [ -n "$KEY" ] || { echo "::error::VPS_HOST / VPS_SSH_KEY secrets are missing"; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" | tr -d '\r' > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          if [ -n "$KNOWN" ]; then printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts; else ssh-keyscan -T 15 "$HOST" > ~/.ssh/known_hosts; fi
+      - name: Run deploy/claude-code.sh ${{ inputs.step }} on the VPS
+        run: |
+          case "$STEP" in install|status|start|stop) ;; *) echo "bad step"; exit 1 ;; esac
+          REMOTE_DIR="${DIR:-claude-trading-bot}"
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes "${USER_NAME:-root}@$HOST" \
+            "set -e; cd '$REMOTE_DIR'; git fetch --quiet origin main; git checkout --quiet main; git reset --hard --quiet origin/main; sudo bash deploy/claude-code.sh $STEP"
+      - name: Next step
+        if: success() && inputs.step == 'install'
+        run: |
+          echo "::notice::Installed. Now sign in once over SSH: sudo bash ~/claude-trading-bot/deploy/claude-code.sh login, then run this workflow with step=start."
