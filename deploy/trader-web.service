@@ -1,0 +1,15 @@
+[Unit]
+Description=Trader dashboard (Next.js on port 3000)
+After=network-online.target trader-api.service
+
+[Service]
+User=trader
+WorkingDirectory=/opt/trader
+EnvironmentFile=/etc/trader/trader.env
+Environment=NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -H ${WEB_HOST} -p 3000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

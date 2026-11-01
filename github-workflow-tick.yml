@@ -1,0 +1,19 @@
+# MOVE THIS FILE to .github/workflows/tick.yml (create the folders), then commit. See README.
+# Backup scheduler for the cloud runner: calls /api/py/cron/tick every 5 minutes.
+# GitHub's schedule is best effort (runs can start 5-20 minutes late, and are paused after 60 days without
+# commits on public repos), so cron-job.org is the main scheduler; this keeps ticks coming if it fails.
+# Repo settings -> Secrets and variables -> Actions: add DASHBOARD_URL (https://your-app.vercel.app) and CRON_SECRET.
+name: cloud-runner-tick
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call the cloud runner
+        run: |
+          curl -fsS --max-time 90 -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.DASHBOARD_URL }}/api/py/cron/tick" | head -c 600
