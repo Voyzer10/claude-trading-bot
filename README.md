@@ -57,6 +57,21 @@ Settings: `/etc/trader/trader.env` (password, markets). Data: `/opt/trader/trade
 - Update after code changes: `sudo bash deploy/update.sh` from the new copy.
 - Logs: `journalctl -u trader-runner -f`. The dashboard's Operations section shows the same health.
 
+## Claude Code on the VPS (Remote Control)
+
+Run Claude Code on the VPS and drive it from the Claude app or claude.ai/code (needs a Pro/Max/Team/Enterprise
+plan). It runs as its own user `claudeops`: it can read the bot and its logs and restart the three services,
+nothing else as root, and it cannot read `/etc/trader/trader.env`.
+
+```
+cd ~/claude-trading-bot && git pull
+sudo bash deploy/claude-code.sh          # install
+sudo bash deploy/claude-code.sh login    # sign in once (prints a link to open on your phone/PC)
+sudo bash deploy/claude-code.sh start    # Remote Control, restarts by itself after a reboot
+sudo bash deploy/claude-code.sh status   # running? last lines of its terminal
+```
+`CLAUDE.md` tells that session where everything is and the rules (no edits on the VPS; changes go through GitHub).
+
 ## CI / CD (GitHub Actions)
 
 - **CI** (`.github/workflows/ci.yml`) runs on every push and pull request: the dashboard build (lint and type
