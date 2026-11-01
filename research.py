@@ -8,6 +8,7 @@ combination, and check the winners on days they were NOT chosen on (walk-forward
     python research.py crypto             # trader/universe_crypto.txt, 60 days of 15m bars
     python research.py crypto-5m          # the same rule on 5-minute bars (4h and 1h ranges)
     python research.py crypto-live        # the live rule with live entry timing: close vs +1 min vs +5 min
+    python research.py crypto-v4          # ATR stops, trailing exits, tight-range (squeeze) breakouts
 
 Bars are cached in trader/research/cache/ (delete it to refetch). Reports:
 trader/research/report_<mode>.txt and .json.
@@ -614,7 +615,7 @@ def live_timing_main(a, syms, src):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="Walk-forward backtest of the breakout rules. Not financial advice.")
-    p.add_argument("mode", choices=["nse", "crypto", "crypto-short", "crypto-mr", "crypto-5m", "crypto-live", "fno"])
+    p.add_argument("mode", choices=["nse", "crypto", "crypto-short", "crypto-mr", "crypto-5m", "crypto-live", "crypto-v4", "fno"])
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--workers", type=int, default=6)
     p.add_argument("--top", type=int, default=10)
@@ -652,6 +653,9 @@ def main(argv=None):
             syms = syms[:a.limit]
         if a.mode == "crypto-live":
             return live_timing_main(a, syms, src)
+        if a.mode == "crypto-v4":  # stop / exit / squeeze variants: research_v4.py
+            import research_v4
+            return research_v4.main(a, syms, src, fetch_all, fetch, stats, OUT, IST)
         iv = "5m" if a.mode == "crypto-5m" else "15m"
         print("Fetching 60 days of %s bars for %d coins (%s)..." % (iv, len(syms), src), flush=True)
         data, failed = fetch_all(syms, "-USD", iv, a.workers)
