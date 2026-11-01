@@ -45,21 +45,30 @@ DEFAULTS = {
     "_note": "Auto PAPER trading rules for crypto. Paper money only.",
     "enabled_setups": ["range_breakout_4h"],   # add "range_breakdown_4h" for shorts, only if research.py
                                                # crypto-short is positive out-of-sample
-    "stop": "range-mid",          # range-mid or range-low
-    "target_r": 2.0,
+    # rules v4 (research.py crypto-v4, 2 Nov 2026, 20 coins, 58 days, 70/30 walk-forward): the stop is 1.5 x
+    # ATR(14) of the 15m bars instead of the range middle with a 1% minimum, thin hours are skipped, the hold
+    # is 12h and the exit trails. Out-of-sample: v4 trail 42 trades +0.69R avg, v3 68 trades +0.20R avg.
+    "rules_version": 4,
+    "stop": "atr",                # atr (v4), range-mid or range-low (v3 and older)
+    "stop_atr_k": 1.5,            # stop = entry - k x ATR(14, 15m)
+    "exit": "trail",              # trail: break-even at +trail_arm_r, then trail_atr_k x ATR under the high
+                                  # target: fixed target at target_r
+    "trail_atr_k": 2.0,
+    "trail_arm_r": 1.0,
+    "target_r": 2.0,              # used when exit = target
     "max_chase_r": 0.5,           # skip if price already ran more than this many R past the range high
-    "rules_version": 3,           # v3: volume 1.5x (same out-of-sample edge as 2x, ~20% more trades; research 31 Oct)
-    "min_stop_pct": 1.0,          # the stop must be at least this % below the entry (noise + fees)
+    "min_stop_pct": 0.0,          # v3 used 1.0; v4 sizes the stop from ATR and caps the fee share instead
     "min_vol_x": 1.5,             # breakout candle volume vs the 4h range's average
     "btc_regime": True,           # BTC's last close above the midpoint of its own prior 4h of closes
     "max_fee_r": 0.25,            # skip if the round-trip fee costs more than this many R
+    "skip_hours_utc": [0, 1, 2, 3, 4, 5],  # thin hours (05:30-11:30 IST): breakouts there are skipped
     "sim_paths": 2000,
     "sim_bars": 24,               # 24 x 15 min = 6 hours
     "history_days": 30,
-    "min_sim_avg_r": -99,         # replays are recorded but no longer gate (the backtest never tested them)
+    "min_sim_avg_r": -99,         # replays are recorded but do not gate (the backtest never tested them)
     "min_history_trades": 5,      # history only counts once the rule fired this often
-    "min_history_avg_r": -99,     # history recorded, not a gate (the backtest winner did not use it)
-    "max_hold_hours": 6,          # time stop for open crypto paper trades
+    "min_history_avg_r": -99,     # history recorded, not a gate
+    "max_hold_hours": 12,         # time stop for open crypto paper trades (v4: 12h)
     "seed": None,
 }
 
@@ -110,6 +119,27 @@ def candles(d):
             continue
         rows.append((h, l, c))
     return rows
+
+
+def atr15(sym, bar_end_iso, n=14):
+    """ATR(n) of the coin's completed 15-minute candles up to the breakout candle (inclusive)."""
+    d = C.crypto_chart(sym, "5d", "15m")
+    if not d:
+        return None
+    cut = datetime.fromisoformat(bar_end_iso)
+    bars = []
+    for t, h, l, c in zip(d["t"], d["h"], d["l"], d["c"]):
+        st = datetime.fromtimestamp(t, timezone.utc)
+        if st.minute % C.BAR_MIN or st.second or None in (h, l, c):
+            continue
+        if st + timedelta(minutes=C.BAR_MIN) > cut:
+            continue
+        bars.append((h, l, c))
+    if len(bars) < n + 1:
+        return None
+    trs = [max(bars[j][0] - bars[j][1], abs(bars[j][0] - bars[j - 1][2]), abs(bars[j][1] - bars[j - 1][2]))
+           for j in range(len(bars) - n, len(bars))]
+    return sum(trs) / n
 
 
 def simulate(rows, entry, stop, target, paths, bars, seed):
@@ -242,12 +272,31 @@ def run_one(h, cfg, log):
         return done("skipped", "no live price: %s" % e)
     short = h["setup"] == "range_breakdown_4h"
     mid = (h["range_high"] + h["range_low"]) / 2
+    bar_start = datetime.fromisoformat(h["bar_end"]) - timedelta(minutes=C.BAR_MIN)
+    if bar_start.astimezone(timezone.utc).hour in (cfg.get("skip_hours_utc") or []):
+        return done("skipped", "thin hours: breakout candle at %02d:%02d UTC (rule skips %s UTC)" % (
+            bar_start.hour, bar_start.minute, ",".join(str(x) for x in cfg["skip_hours_utc"])))
+    atr = None
+    if cfg["stop"] == "atr":
+        try:
+            atr = atr15(sym, h["bar_end"])
+        except Exception as e:
+            return done("skipped", "no candles for the ATR stop: %s" % e)
+        if not atr:
+            return done("skipped", "not enough candles for the ATR stop")
+        st["3_atr"] = {"atr14_15m": round(atr, 8), "k": cfg["stop_atr_k"]}
     if short:   # breakdown below the 4h low: short, stop at the range midpoint (or the high), above the entry
-        stop = P.round_px("CRYPTO", h["range_high"] if cfg["stop"] == "range-low" else mid, down=False)
+        if atr:
+            stop = P.round_px("CRYPTO", price + cfg["stop_atr_k"] * atr, down=False)
+        else:
+            stop = P.round_px("CRYPTO", h["range_high"] if cfg["stop"] == "range-low" else mid, down=False)
         trigger, risk = h["range_low"], stop - price
         beyond = trigger - price
     else:
-        stop = P.round_px("CRYPTO", h["range_low"] if cfg["stop"] == "range-low" else mid)
+        if atr:
+            stop = P.round_px("CRYPTO", price - cfg["stop_atr_k"] * atr)
+        else:
+            stop = P.round_px("CRYPTO", h["range_low"] if cfg["stop"] == "range-low" else mid)
         trigger, risk = h["range_high"], price - stop
         beyond = price - trigger
     chase = beyond / risk if risk > 0 else None
@@ -261,15 +310,19 @@ def run_one(h, cfg, log):
     if chase > cfg["max_chase_r"]:
         return done("skipped", "chasing: price is %.2fR past the trigger (max %.2fR)" % (chase, cfg["max_chase_r"]))
 
-    target = P.round_px("CRYPTO", price - cfg["target_r"] * risk if short else price + cfg["target_r"] * risk,
-                        down=short)
+    trail = cfg.get("exit") == "trail" and not short
+    tr_r = 20.0 if trail else cfg["target_r"]  # trailing: a far "target" only for display; the trail exits
+    target = P.round_px("CRYPTO", price - tr_r * risk if short else price + tr_r * risk, down=short)
     fee_pct = P.load_config()["accounts"]["CRYPTO"].get("fee_pct", 0)
-    fee_r = (price + target) * fee_pct / 100 / risk  # buy fee + sell fee at the target, in R
+    if trail:  # buy fee + sell fee near the entry, in R (as research_v4 scores the trailing exit)
+        fee_r = 2 * price * fee_pct / 100 / risk
+    else:      # buy fee + sell fee at the target, in R
+        fee_r = (price + target) * fee_pct / 100 / risk
     stop_pct = risk / price * 100
     st["4_exit"] = {"entry": price, "stop": stop, "target": target, "risk": round(risk, 6),
                     "stop_pct": round(stop_pct, 3), "fee_r": round(fee_r, 3),
-                    "r_multiple": cfg["target_r"], "time_stop_hours": cfg["max_hold_hours"]}
-    if stop_pct < cfg["min_stop_pct"]:
+                    "r_multiple": "trailing" if trail else cfg["target_r"], "time_stop_hours": cfg["max_hold_hours"]}
+    if cfg.get("min_stop_pct") and stop_pct < cfg["min_stop_pct"]:
         return done("skipped", "stop too tight: %.2f%% below the entry (min %.2f%%)" % (stop_pct, cfg["min_stop_pct"]))
     if fee_r > cfg["max_fee_r"]:
         return done("skipped", "fees eat %.2fR of the trade (max %.2fR)" % (fee_r, cfg["max_fee_r"]))
@@ -328,14 +381,21 @@ def run_one(h, cfg, log):
         st["6-8_budget_risk_broker"] = "BLOCK: %s" % e
         return done("blocked", str(e))
     pos = next(p for p in led["open"] if p["key"] == "CRYPTO:" + sym)
+    if trail:  # paper.py check_once moves the stop: break-even at +arm R, then k x ATR under the peak
+        pos.update({"trail_atr": round(atr if atr else risk / max(cfg["stop_atr_k"], 1e-9), 8),
+                    "trail_k": cfg["trail_atr_k"], "trail_arm_r": cfg["trail_arm_r"], "peak": pos["entry"]})
+        P.save_json(P.LEDGER, led)
     st["6-8_budget_risk_broker"] = {"verdict": "PASS, paper %s filled" % ("short" if short else "buy"), "qty": pos["qty"],
                                     "entry": pos["entry"], "stop": pos["stop"], "target": pos["target"],
                                     "max_loss": round(abs(pos["entry"] - pos["stop"]) * pos["qty"] + pos["entry_fee"], 2),
                                     "report": buf.getvalue().strip().splitlines()}
-    st["9_alerts"] = "live.py checks stop %s / target %s every cycle; time stop after %dh" % (
-        pos["stop"], pos["target"], cfg["max_hold_hours"])
-    return done("PAPER SHORT" if short else "PAPER BUY", "%s @ %s, stop %s, target %s; sim avg %+.2fR, history %s"
-                % (P.fmt_qty("CRYPTO", pos["qty"]), pos["entry"], pos["stop"], pos["target"], sim["avg_r"],
+    st["9_alerts"] = ("live.py checks the stop every cycle; it trails (break-even at +%gR, then %g x ATR under the "
+                      "high); time stop after %dh" % (cfg["trail_arm_r"], cfg["trail_atr_k"], cfg["max_hold_hours"])
+                      if trail else "live.py checks stop %s / target %s every cycle; time stop after %dh" % (
+                          pos["stop"], pos["target"], cfg["max_hold_hours"]))
+    return done("PAPER SHORT" if short else "PAPER BUY", "%s @ %s, stop %s, %s; sim avg %+.2fR, history %s"
+                % (P.fmt_qty("CRYPTO", pos["qty"]), pos["entry"], pos["stop"],
+                   "trailing exit" if trail else "target %s" % pos["target"], sim["avg_r"],
                    ("%d trades avg %+.2fR" % (hist["fired"], hist["avg_r"])) if hist.get("fired") else "no past fires"))
 
 

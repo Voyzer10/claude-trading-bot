@@ -51,7 +51,10 @@ router = APIRouter(prefix="/api/py/ops")
 # What the dashboard may change, with limits. Anything else in the files is left alone.
 RULE_FIELDS = {
     "enabled_setups": {"type": "setups", "choices": ["range_breakout_4h", "range_breakdown_4h"]},
-    "stop": {"type": "choice", "choices": ["range-mid", "range-low"]},
+    "stop": {"type": "choice", "choices": ["atr", "range-mid", "range-low"]},
+    "stop_atr_k": {"type": "float", "min": 0.5, "max": 4.0},
+    "exit": {"type": "choice", "choices": ["trail", "target"]},
+    "trail_atr_k": {"type": "float", "min": 0.5, "max": 5.0},
     "target_r": {"type": "float", "min": 1.0, "max": 5.0},
     "max_chase_r": {"type": "float", "min": 0.0, "max": 2.0},
     "min_stop_pct": {"type": "float", "min": 0.0, "max": 5.0},
