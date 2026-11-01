@@ -1,35 +1,46 @@
 """
-research_v4.py - crypto strategy research, round 4: catch the clean breakouts the live rule skips.
+research_v4.py - crypto strategy research, round 4: a "pro trader" breakout setup vs the live rule.
 
-Why: the live rule (v3) puts the stop at the middle of the 4h range and skips the trade when that stop is
-closer than 1% (fees + noise). In quiet markets the 4h range is often only 0.3-0.6% wide, so most breakouts
-from tight ranges are skipped, including ones that then run (TRX, 1 Nov). This tests other ways to trade them:
+Why: since the first day the live rule (v3) has taken no trades. It puts the stop at the middle of the 4h
+range and skips the trade when that stop is closer than 1%, so in quiet markets almost every breakout is
+skipped, including clean ones that then run (TRX, 1 Nov).
 
-  stop    mid      middle of the 4h range (live)
-          atrK     K x ATR(14) of the 15-minute bars below the entry (K = 1.0, 1.5, 2.0): sized to the
-                   coin's own movement, not to how tight the range happened to be
-  exit    2R / 3R  fixed target (live: 2R), time stop at the end of the hold
-          trail    no fixed target: after +1R the stop moves to break-even, then trails 2 x ATR under the
-                   highest high, so a run is ridden instead of cut at 2R
-  hold    6h / 12h
-  range   all breakouts, or only tight ranges (4h range under 0.6% / 1.0% of price): the "squeeze" setups
-  filters volume vs the 4h average (0 / 1.5x / 2x), BTC regime on/off, minimum stop distance (0.5 / 1.0%)
-
-Every trade pays 0.1% per side. Walk-forward as in research.py: the first 70% of days pick, the last 30% judge.
-Read the OUT-sample lines. Run: python research.py crypto-v4
+What a disciplined breakout trader checks, and how this file tests each one:
+  1. Trend      only buy breakouts in an uptrend: price above the 15m EMA50 and EMA50 above EMA200
+                ("ema"), optionally also EMA200 rising ("ema+slope")
+  2. Squeeze    the best breakouts come out of a tight, quiet range: 4h range under 1% of price
+  3. Volume     the breakout candle trades more than the range average (1.5x)
+  4. Market     BTC not falling (BTC above the middle of its own 4h range)
+  5. Session    skip the thin hours (00:00-06:00 UTC = 05:30-11:30 IST), when breakouts fail more often
+  6. Risk       stop where the idea is wrong: 1.5 x ATR(14) under the entry (or the range middle, as live)
+                and size the trade from that stop; skip only if fees eat too much of the risk (0.25R / 0.40R)
+                instead of a fixed 1% minimum stop
+  7. Exit       2R target (live), a trailing stop (break-even at +1R, then 2 x ATR under the high), or
+                "partial": half off at +1R, stop to break-even, the other half trails
+Every combination is scored on the same fresh 4h breakouts, 0.1% fee per side, 70/30 walk-forward.
+The report shows the live rule, the full PRO SETUP, the best combinations and which ingredient helps.
+Run: python research.py crypto-v4   (or the dashboard's Backtest -> Strategy v4)
 """
+import bisect
 import itertools
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 FEE = 0.001  # per side
+UTC = timezone.utc
+
+
+def _ema(values, n):
+    k, out, e = 2 / (n + 1), [], None
+    for v in values:
+        e = v if e is None else e + k * (v - e)
+        out.append(e)
+    return out
 
 
 def _atr(rows, i, n=14):
-    trs = []
-    for j in range(max(1, i - n + 1), i + 1):
-        h, l, pc = rows[j][2], rows[j][3], rows[j - 1][4]
-        trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+    trs = [max(rows[j][2] - rows[j][3], abs(rows[j][2] - rows[j - 1][4]), abs(rows[j][3] - rows[j - 1][4]))
+           for j in range(max(1, i - n + 1), i + 1)]
     return sum(trs) / len(trs) if trs else 0.0
 
 
@@ -44,34 +55,62 @@ def _fixed(path, entry, stop, target_r):
     return ((path[-1][4] if path else entry) - entry) / risk
 
 
-def _trail(path, entry, stop, atr, k_trail=2.0):
+def _trail(path, entry, stop, atr, k=2.0, arm_r=1.0):
+    """Break-even once +arm_r is reached, then trail k x ATR under the highest high."""
     risk = entry - stop
     cur, armed, hi = stop, False, entry
     for b in path:
         if b[3] <= cur:
             return (cur - entry) / risk
         hi = max(hi, b[2])
-        if not armed and hi >= entry + risk:
-            armed = True
-            cur = max(cur, entry)
+        if not armed and hi >= entry + arm_r * risk:
+            armed, cur = True, max(cur, entry)
         if armed:
-            cur = max(cur, hi - k_trail * atr)
+            cur = max(cur, hi - k * atr)
     return ((path[-1][4] if path else entry) - entry) / risk
+
+
+def _partial(path, entry, stop, atr):
+    """Half off at +1R, the rest trails (with its stop at break-even from then on)."""
+    risk = entry - stop
+    one_r = entry + risk
+    for n, b in enumerate(path):
+        if b[3] <= stop:
+            return -1.0
+        if b[2] >= one_r:  # half banked at +1R; the other half continues from this bar with a break-even stop
+            return 0.5 * 1.0 + 0.5 * _trail_from_be(path[n + 1:], entry, risk, atr)
+    return ((path[-1][4] if path else entry) - entry) / risk
+
+
+def _trail_from_be(path, entry, risk, atr, k=2.0):
+    cur, hi = entry, entry + risk
+    for b in path:
+        if b[3] <= cur:
+            return (cur - entry) / risk
+        hi = max(hi, b[2])
+        cur = max(cur, hi - k * atr)
+    return ((path[-1][4] if path else entry) - entry) / risk
+
+
+STOPS = ("mid", "atr1.5")
+EXITS = ("2R", "trail", "partial")
+HOLDS = (24, 48)
 
 
 def events_v4(data, btc, rb=16):
     """Fresh 15-minute closes above the prior 4h high, with every stop / exit / hold variant scored."""
-    from datetime import timezone
-    import bisect
-    UTC = timezone.utc
     btc_close = {t: c for t, c in zip(btc["t"], btc["c"])} if btc else {}
     bt = sorted(btc_close)
     evs = []
     for sym, d in data.items():
-        rows = [(datetime.fromtimestamp(t, UTC), o, h, l, c, v) for t, o, h, l, c, v in
+        rows = [(datetime.fromtimestamp(t, UTC), o, h, l, c, v or 0) for t, o, h, l, c, v in
                 zip(d["t"], d["o"], d["h"], d["l"], d["c"], d["v"])
                 if not datetime.fromtimestamp(t, UTC).minute % 15 and None not in (o, h, l, c)]
-        i = rb + 15
+        if len(rows) < 300:
+            continue
+        closes = [r[4] for r in rows]
+        e50, e200 = _ema(closes, 50), _ema(closes, 200)
+        i = 210
         while i < len(rows) - 48:
             hi = max(r[2] for r in rows[i - rb:i])
             lo = min(r[3] for r in rows[i - rb:i])
@@ -81,35 +120,36 @@ def events_v4(data, btc, rb=16):
                 continue
             entry, mid = rows[i][4], (hi + lo) / 2
             atr = _atr(rows, i)
-            avg_v = sum(r[5] or 0 for r in rows[i - rb:i]) / rb
+            avg_v = sum(r[5] for r in rows[i - rb:i]) / rb
             regime = None
             if bt:
-                ts = int(rows[i][0].timestamp())
-                j = bisect.bisect_right(bt, ts)
+                j = bisect.bisect_right(bt, int(rows[i][0].timestamp()))
                 k = bt[max(0, j - rb - 1):j]
                 if len(k) > rb:
                     w = [btc_close[x] for x in k]
                     regime = w[-1] > (max(w[:-1]) + min(w[:-1])) / 2
-            ev = {"sym": sym, "day": rows[i][0].date().isoformat(), "vol_x": (rows[i][5] or 0) / avg_v if avg_v else 0.0,
-                  "regime": regime, "range_pct": (hi - lo) / entry * 100, "out": {}, "stop_pct": {}}
-            stops = {"mid": mid}
-            for kk in (1.0, 1.5, 2.0):
-                stops["atr%g" % kk] = entry - kk * atr
-            for sname, stop in stops.items():
+            trend = "none"
+            if entry > e50[i] and e50[i] > e200[i]:
+                trend = "ema+slope" if e200[i] > e200[i - 4] else "ema"
+            ev = {"sym": sym, "day": rows[i][0].date().isoformat(), "hour": rows[i][0].hour,
+                  "vol_x": rows[i][5] / avg_v if avg_v else 0.0, "regime": regime, "trend": trend,
+                  "range_pct": (hi - lo) / entry * 100, "out": {}, "stop_pct": {}, "fee_r": {}}
+            for sname, stop in (("mid", mid), ("atr1.5", entry - 1.5 * atr)):
                 risk = entry - stop
                 if risk <= 0:
                     continue
                 ev["stop_pct"][sname] = risk / entry * 100
-                for hold in (24, 48):
+                ev["fee_r"][sname] = 2 * entry * FEE / risk
+                for hold in HOLDS:
                     path = rows[i + 1:i + 1 + hold]
-                    for ex in ("2R", "3R", "trail"):
-                        if ex == "trail":
-                            r = _trail(path, entry, stop, atr)
-                            cost = 2 * entry * FEE / risk
+                    for ex in EXITS:
+                        if ex == "2R":
+                            r = _fixed(path, entry, stop, 2.0)
+                            cost = (2 * entry + 2 * risk) * FEE / risk
+                        elif ex == "trail":
+                            r, cost = _trail(path, entry, stop, atr), ev["fee_r"][sname]
                         else:
-                            tr = float(ex[0])
-                            r = _fixed(path, entry, stop, tr)
-                            cost = (2 * entry + tr * risk) * FEE / risk
+                            r, cost = _partial(path, entry, stop, atr), ev["fee_r"][sname]
                         ev["out"][(sname, ex, hold)] = r - cost
             evs.append(ev)
             i += 24  # one trade at a time per coin (6h), as in research.py
@@ -117,31 +157,45 @@ def events_v4(data, btc, rb=16):
     return evs
 
 
-GRID = {"stop": ["mid", "atr1", "atr1.5", "atr2"], "exit": ["2R", "3R", "trail"], "hold": [24, 48],
-        "min_vol_x": [0.0, 1.5, 2.0], "regime": [False, True], "min_stop_pct": [0.5, 1.0],
-        "max_range_pct": [None, 0.6, 1.0]}
-LIVE = {"stop": "mid", "exit": "2R", "hold": 24, "min_vol_x": 1.5, "regime": True, "min_stop_pct": 1.0,
-        "max_range_pct": None}
+GRID = {"stop": list(STOPS), "exit": list(EXITS), "hold": [48], "min_vol_x": [0.0, 1.5],
+        "regime": [False, True], "trend": ["off", "ema", "ema+slope"], "max_range_pct": [None, 1.0],
+        "session": ["all", "active"], "max_fee_r": [0.25, 0.40]}
+PRO = {"stop": "atr1.5", "exit": "partial", "hold": 48, "min_vol_x": 1.5, "regime": True, "trend": "ema",
+       "max_range_pct": 1.0, "session": "active", "max_fee_r": 0.40}
 
 
-def run(events, split, stats):
-    res = []
-    for combo in itertools.product(*GRID.values()):
-        f = dict(zip(GRID, combo))
-        key = (f["stop"], f["exit"], f["hold"])
-        ins, oos = {}, {}
-        for ev in events:
-            if key not in ev["out"]:
-                continue
-            if ev["vol_x"] < f["min_vol_x"] or (f["regime"] and ev["regime"] is not True):
-                continue
-            if ev["stop_pct"].get(f["stop"], 0) < f["min_stop_pct"]:
-                continue
-            if f["max_range_pct"] is not None and ev["range_pct"] > f["max_range_pct"]:
-                continue
+def keep(ev, f):
+    """Does this breakout pass the filters f? (the live rule uses min_stop_pct instead of max_fee_r)"""
+    s = f["stop"]
+    if s not in ev["stop_pct"]:
+        return False
+    if ev["vol_x"] < f["min_vol_x"] or (f["regime"] and ev["regime"] is not True):
+        return False
+    if f.get("trend", "off") == "ema" and ev["trend"] not in ("ema", "ema+slope"):
+        return False
+    if f.get("trend", "off") == "ema+slope" and ev["trend"] != "ema+slope":
+        return False
+    if f.get("max_range_pct") is not None and ev["range_pct"] > f["max_range_pct"]:
+        return False
+    if f.get("session", "all") == "active" and ev["hour"] < 6:
+        return False
+    if "min_stop_pct" in f and ev["stop_pct"][s] < f["min_stop_pct"]:
+        return False
+    if "max_fee_r" in f and ev["fee_r"][s] > f["max_fee_r"]:
+        return False
+    return True
+
+
+def score(events, f, split, stats):
+    key = (f["stop"], f["exit"], f["hold"])
+    ins, oos = {}, {}
+    for ev in events:
+        if key in ev["out"] and keep(ev, f):
             (ins if ev["day"] < split else oos).setdefault(ev["day"], []).append(ev["out"][key])
-        res.append({"filters": f, "in_sample": stats(ins), "out_of_sample": stats(oos)})
-    return res
+    return {"filters": f, "in_sample": stats(ins), "out_of_sample": stats(oos)}
+
+
+LIVE = {"stop": "mid", "exit": "2R", "hold": 24, "min_vol_x": 1.5, "regime": True, "min_stop_pct": 1.0}
 
 
 def row(r, label=""):
@@ -153,10 +207,19 @@ def row(r, label=""):
         return "%4d tr (%.1f/active day)  win %3.0f%%  avg %+.2fR  total %+6.1fR  worst day %+.1fR  dd %+.1fR" % (
             x["trades"], x["trades"] / max(1, x["days_traded"]), 100 * x["win_rate"], x["avg_r"], x["total_r"],
             x["worst_day_r"], x["max_drawdown_r"])
-    fs = "stop=%s exit=%s hold=%dh vol>=%.1f regime=%s stop>=%.1f%% range<=%s" % (
-        f["stop"], f["exit"], f["hold"] // 4, f["min_vol_x"], "on" if f["regime"] else "off", f["min_stop_pct"],
-        ("%.1f%%" % f["max_range_pct"]) if f["max_range_pct"] else "any")
-    return "%s%s\n     in-sample   %s\n     OUT-sample  %s" % (label, fs, s(i), s(o))
+    parts = ["stop=%s" % f["stop"], "exit=%s" % f["exit"], "hold=%dh" % (f["hold"] // 4),
+             "vol>=%.1f" % f["min_vol_x"], "btc=%s" % ("on" if f["regime"] else "off")]
+    if "trend" in f:
+        parts.append("trend=%s" % f["trend"])
+    if "max_range_pct" in f:
+        parts.append("range<=%s" % (("%.1f%%" % f["max_range_pct"]) if f["max_range_pct"] else "any"))
+    if "session" in f:
+        parts.append("hours=%s" % f["session"])
+    if "max_fee_r" in f:
+        parts.append("fees<=%.2fR" % f["max_fee_r"])
+    if "min_stop_pct" in f:
+        parts.append("stop>=%.1f%%" % f["min_stop_pct"])
+    return "%s%s\n     in-sample   %s\n     OUT-sample  %s" % (label, " ".join(parts), s(i), s(o))
 
 
 def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist):
@@ -169,20 +232,35 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist):
         return 1
     days = sorted({e["day"] for e in events})
     split = days[int(len(days) * 0.7)]
-    res = run(events, split, stats)
-    live = next(r for r in res if r["filters"] == LIVE)
+    live = score(events, LIVE, split, stats)
+    pro = score(events, PRO, split, stats)
+    res = [score(events, dict(zip(GRID, c)), split, stats) for c in itertools.product(*GRID.values())]
     ok = [r for r in res if r["in_sample"].get("trades", 0) >= 20 and r["out_of_sample"].get("trades", 0) >= 8]
     ok.sort(key=lambda r: -r["in_sample"]["avg_r"])
     stable = [r for r in ok if r["in_sample"]["avg_r"] > 0 and r["out_of_sample"]["avg_r"] > 0]
     stable.sort(key=lambda r: -min(r["in_sample"]["avg_r"], r["out_of_sample"]["avg_r"]))
-    tight = [r for r in stable if r["filters"]["max_range_pct"] is not None]
-    trail = [r for r in stable if r["filters"]["exit"] == "trail"]
+
+    # which ingredient helps: average out-of-sample R of all combinations with vs without it
+    def effect(name, on, off):
+        a_ = [r["out_of_sample"]["avg_r"] for r in ok if r["filters"][name] == on]
+        b_ = [r["out_of_sample"]["avg_r"] for r in ok if r["filters"][name] == off]
+        if not a_ or not b_:
+            return "  %-34s not enough trades to compare" % name
+        ma, mb = sum(a_) / len(a_), sum(b_) / len(b_)
+        return "  %-34s %+.2fR vs %+.2fR without  (%s)" % (
+            "%s=%s" % (name, on), ma, mb, "helps" if ma > mb + 0.03 else "hurts" if ma < mb - 0.03 else "no clear effect")
+
     tight_n = sum(1 for e in events if e["range_pct"] <= 1.0)
     lines = ["research.py crypto-v4  %s" % datetime.now(ist).strftime("%Y-%m-%d %H:%M IST"),
-             "%d coins, %d days (%s..%s), %d fresh breakouts (%d from a 4h range under 1%%), %d combinations. "
-             "R after 0.1%% fee each side. Out-of-sample = days from %s." % (
-                 len(data), len(days), days[0], days[-1], len(events), tight_n, len(res), split), "",
+             "%d coins, %d days (%s..%s), %d fresh 4h breakouts (%d from a range under 1%%). R after 0.1%% fee "
+             "each side. Out-of-sample = days from %s." % (len(data), len(days), days[0], days[-1], len(events),
+                                                           tight_n, split), "",
              row(live, "CURRENT LIVE RULE (v3):  "), "",
+             row(pro, "PRO SETUP (all 7 checks): "), "",
+             "WHICH INGREDIENT HELPS (average OUT-sample R of the combinations with it vs without it):",
+             effect("trend", "ema", "off"), effect("max_range_pct", 1.0, None), effect("session", "active", "all"),
+             effect("regime", True, False), effect("min_vol_x", 1.5, 0.0), effect("stop", "atr1.5", "mid"),
+             effect("exit", "partial", "2R"), effect("exit", "trail", "2R"), effect("max_fee_r", 0.40, 0.25), "",
              "TOP 10 BY IN-SAMPLE (the OUT-sample line is the honest one):"]
     for n, r in enumerate(ok[:10], 1):
         lines.append(row(r, "%2d. " % n))
@@ -190,12 +268,8 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist):
         len(stable), len(ok))]
     if stable:
         lines += ["", "MOST CONSISTENT (best of its weaker half):", row(stable[0], "  ")]
-    lines += ["", "Best consistent rule for TIGHT-RANGE breakouts (the ones v3 skips):",
-              row(tight[0], "  ") if tight else "  none was positive both in- and out-of-sample",
-              "", "Best consistent rule with a TRAILING exit (ride the run):",
-              row(trail[0], "  ") if trail else "  none was positive both in- and out-of-sample",
-              "", "Switch the live rule only if a rule beats the CURRENT LIVE RULE out-of-sample with enough trades,",
-              "and is not a lone lucky combination (look for its neighbours doing well too). ~60 days is short.",
+    lines += ["", "Decision rule: switch the live bot to a rule only if it beats the CURRENT LIVE RULE out-of-sample",
+              "with enough trades (20+), and its neighbours (one setting changed) also do well. ~60 days is short.",
               "Not financial advice."]
     report = "\n".join(lines)
     print("\n" + report)

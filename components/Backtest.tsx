@@ -7,7 +7,7 @@ import { timeIST } from "@/lib/format";
 type Job = { id: string; mode: string; status: string; started: string; ended?: string; seconds?: number; exit_code?: number };
 
 const MODE_NAMES: Record<string, string> = {
-  "crypto-v4": "Crypto v4: ATR stops, trailing exit, tight-range breakouts",
+  "crypto-v4": "Crypto v4 pro setup: trend, squeeze, session, ATR stop, partial/trailing exit",
   "crypto-live": "Crypto live rule: entry timing (close vs +1 min vs +5 min)",
   crypto: "Crypto long (4h breakout, the live rule)",
   "crypto-5m": "Crypto on 5-minute charts (4h and 1h ranges)",

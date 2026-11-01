@@ -8,7 +8,7 @@ combination, and check the winners on days they were NOT chosen on (walk-forward
     python research.py crypto             # trader/universe_crypto.txt, 60 days of 15m bars
     python research.py crypto-5m          # the same rule on 5-minute bars (4h and 1h ranges)
     python research.py crypto-live        # the live rule with live entry timing: close vs +1 min vs +5 min
-    python research.py crypto-v4          # ATR stops, trailing exits, tight-range (squeeze) breakouts
+    python research.py crypto-v4          # "pro" breakout setup: trend, squeeze, session, ATR stop, partial/trailing exits
 
 Bars are cached in trader/research/cache/ (delete it to refetch). Reports:
 trader/research/report_<mode>.txt and .json.
