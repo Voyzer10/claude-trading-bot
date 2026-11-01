@@ -404,9 +404,11 @@ function RulesSection({ snap }: { snap: Snapshot }) {
   const rows: [string, string][] = [
     ["Setups traded", String((r.enabled_setups as string[] | undefined)?.join(", ") ?? "—")],
     ["Volume at least", r.min_vol_x !== undefined ? `${r.min_vol_x}× the 4h average` : "—"],
-    ["Stop at least", r.min_stop_pct !== undefined ? `${r.min_stop_pct}% from the entry` : "—"],
+    ["Stop", r.stop === "atr" ? `${r.stop_atr_k ?? 1.5} × ATR(14) under the entry` : r.min_stop_pct ? `${r.stop}, at least ${r.min_stop_pct}% away` : String(r.stop ?? "—")],
+    ["Exit", r.exit === "trail" ? `trailing: break-even at +${r.trail_arm_r ?? 1}R, then ${r.trail_atr_k ?? 2} × ATR under the high` : r.target_r !== undefined ? `target ${r.target_r}R` : "—"],
+    ["Fees at most", r.max_fee_r !== undefined ? `${r.max_fee_r}R of the risk` : "—"],
     ["BTC regime", r.btc_regime ? "on (long only when BTC is above its 4h midpoint)" : "off"],
-    ["Target", r.target_r !== undefined ? `${r.target_r}R` : "—"],
+    ["Thin hours skipped", Array.isArray(r.skip_hours_utc) && r.skip_hours_utc.length ? `${(r.skip_hours_utc as number[])[0]}:00–${(r.skip_hours_utc as number[]).slice(-1)[0] + 1}:00 UTC` : "none"],
     ["Max chase", r.max_chase_r !== undefined ? `${r.max_chase_r}R past the trigger` : "—"],
     ["Time stop", r.max_hold_hours !== undefined ? `${r.max_hold_hours} hours` : "—"],
     ["Rules version", String(r.rules_version ?? "—")],

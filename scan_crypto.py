@@ -87,7 +87,13 @@ def universe():
     return list(TOP), "built-in top 20"
 
 
-SETTLE_MIN = 5  # Yahoo fills a crypto candle's volume a few minutes after it closes: wait before using it
+# Decide about a candle ~1 minute after it closes (research.py crypto-live, 2 Nov 2026: entering 5 minutes late
+# cost about 40% of the edge: +0.16R vs +0.27R per trade over 60 days). Yahoo often fills the just-closed
+# candle's volume a few minutes late; for breakout candles whose volume is not in yet, intraday_scan asks
+# Coinbase, then retries Yahoo a few times (see fill_volume) instead of delaying every scan.
+SETTLE_MIN = 1
+VOLUME_RETRIES = 3          # extra Yahoo tries, 45 s apart, only for breakout candles still missing volume
+VOLUME_RETRY_SECONDS = 45
 
 
 def last_bar_close(now_utc):
@@ -143,6 +149,29 @@ def sig(x):
     return float("%.6g" % x)
 
 
+def fill_volume(sym, r, cutoff):
+    """The breakout candle's volume ratio when Yahoo has not filled it yet: Coinbase first (coins it lists),
+    then a few short Yahoo retries. Returns (vol_ratio or None, source)."""
+    try:
+        d = coinbase_chart(sym, "2d", "15m")
+        r2 = intraday_one(d, cutoff) if d else None
+        if r2 and r2["bar_end"] == r["bar_end"] and r2["vol_ratio"]:
+            return r2["vol_ratio"], "coinbase"
+    except Exception:
+        pass
+    import time
+    for _ in range(VOLUME_RETRIES):
+        time.sleep(VOLUME_RETRY_SECONDS)
+        try:
+            d = S.yahoo_chart(sym, "2d", "15m", SUFFIX)
+            r2 = intraday_one(d, cutoff) if d else None
+            if r2 and r2["bar_end"] == r["bar_end"] and r2["vol_ratio"]:
+                return r2["vol_ratio"], "yahoo (retry)"
+        except Exception:
+            pass
+    return None, "not reported"
+
+
 def intraday_scan(symbols, now_utc, workers=6, quiet=False):
     data, failed = S.fetch_many(symbols, "2d", "15m", workers, SUFFIX, quiet, fetcher=crypto_chart)
     cutoff = last_bar_close(now_utc)
@@ -152,6 +181,8 @@ def intraday_scan(symbols, now_utc, workers=6, quiet=False):
         if r is None:
             coins[s] = {"usable": False}
             continue
+        if r["vol_ratio"] is None and any(t in ("range_breakout_4h", "range_breakdown_4h") for t in r["tags"]):
+            r["vol_ratio"], r["vol_source"] = fill_volume(s, r, cutoff)
         usable += 1
         coins[s] = {"usable": True, "price": sig(r["price"]), "range_high": sig(r["range_high"]),
                     "range_low": sig(r["range_low"]), "pct_vs_high": r["pct_vs_high"],

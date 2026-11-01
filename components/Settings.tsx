@@ -18,10 +18,13 @@ type SettingsDoc = {
 
 const RULE_LABELS: Record<string, [string, string]> = {
   enabled_setups: ["Setups traded", "Long = 4h breakout. Short = 4h breakdown (failed its backtest: keep off)."],
-  stop: ["Stop", "range-mid: middle of the 4h range (backtested). range-low: bottom of the range."],
-  target_r: ["Target (R)", "Take profit at this many times the risk."],
+  stop: ["Stop", "atr: 1.5 x ATR under the entry (v4, backtested). range-mid / range-low: the older v3 stops."],
+  stop_atr_k: ["ATR stop (x ATR)", "How many ATRs below the entry the stop sits (stop = atr)."],
+  exit: ["Exit", "trail: break-even at +1R, then the stop follows the high (v4). target: fixed target at Target (R)."],
+  trail_atr_k: ["Trail distance (x ATR)", "How far under the highest price the trailing stop follows."],
+  target_r: ["Target (R)", "Take profit at this many times the risk (exit = target only)."],
   max_chase_r: ["Max chase (R)", "Skip if price already ran this far past the breakout."],
-  min_stop_pct: ["Min stop distance (%)", "Tighter stops get eaten by noise and fees."],
+  min_stop_pct: ["Min stop distance (%)", "0 = off (v4 uses the fee cap instead). v3 used 1%."],
   min_vol_x: ["Min breakout volume (x)", "Breakout candle volume vs the 4h average."],
   btc_regime: ["BTC filter", "Only buy when BTC is above the middle of its own 4h range."],
   max_fee_r: ["Max fees (R)", "Skip if the round-trip fee costs more than this."],

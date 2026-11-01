@@ -331,10 +331,12 @@ def next_wake(now, a):
 
 
 def crypto_wake(now, a):
-    """Every --interval (min 5 min), 30 s after a 5-minute mark: paper stops get checked, and the
-    15-minute scan reruns whenever a new candle has closed."""
+    """Every --interval (min 5 min), 75 s after a 5-minute mark: paper stops get checked, and the
+    15-minute scan runs about a minute after each candle closes (scan_crypto.SETTLE_MIN)."""
     nxt = now + timedelta(seconds=max(300, a.interval))
-    nxt = nxt.replace(minute=nxt.minute - nxt.minute % 5, second=30, microsecond=0)
+    nxt = nxt.replace(minute=nxt.minute - nxt.minute % 5, second=0, microsecond=0) + timedelta(seconds=75)
+    while nxt - now > timedelta(seconds=max(300, a.interval)):
+        nxt -= timedelta(minutes=5)
     return nxt if nxt > now else nxt + timedelta(minutes=5)
 
 
