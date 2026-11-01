@@ -1,7 +1,9 @@
 # One-click Claude Code setup on the VPS: Actions -> "Claude Code on VPS" -> Run workflow -> pick a step.
 # Uses the same SSH secrets as deploy.yml (VPS_HOST, VPS_USER, VPS_SSH_KEY, VPS_KNOWN_HOSTS, VPS_REPO_DIR).
-# The sign-in step (`login`) needs your own claude.ai login in a terminal, so it is not here:
-#   ssh root@<VPS> then: sudo bash ~/claude-trading-bot/deploy/claude-code.sh login
+# Sign-in without a terminal: step login-begin opens Claude Code in a hidden terminal on the VPS and prints its
+# screen in the log; answer with step keys (text plus <Enter>, <Up>, <Down>, <Esc>, <Tab>, <C-c>), repeat;
+# step screen shows it again. The sign-in link appears in the log: open it on your phone, sign in, then send the
+# code it gives you with step keys, e.g.  ABC123...<Enter>
 # Remove this file once Claude Code is set up; deploy/claude-code.sh stays for later use.
 name: Claude Code on VPS
 
@@ -9,10 +11,15 @@ on:
   workflow_dispatch:
     inputs:
       step:
-        description: "install = set up user + Claude Code; start/status/stop = Remote Control (start needs login first)"
+        description: "install -> login-begin -> keys (repeat) -> start. screen = show the terminal, status/stop = Remote Control"
         type: choice
-        options: [install, status, start, stop]
+        options: [install, login-begin, keys, screen, start, status, stop]
         default: install
+      keys:
+        description: "for step keys: what to type, e.g. <Enter>   or   /login<Enter>   or   THE-CODE<Enter>   or   y<Enter>"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -33,6 +40,7 @@ jobs:
       KNOWN: ${{ secrets.VPS_KNOWN_HOSTS }}
       DIR: ${{ secrets.VPS_REPO_DIR }}
       STEP: ${{ inputs.step }}
+      KEYS: ${{ inputs.keys }}
     steps:
       - name: Set up SSH
         run: |
@@ -42,11 +50,18 @@ jobs:
           if [ -n "$KNOWN" ]; then printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts; else ssh-keyscan -T 15 "$HOST" > ~/.ssh/known_hosts; fi
       - name: Run deploy/claude-code.sh ${{ inputs.step }} on the VPS
         run: |
-          case "$STEP" in install|status|start|stop) ;; *) echo "bad step"; exit 1 ;; esac
+          case "$STEP" in install|login-begin|keys|screen|status|start|stop) ;; *) echo "bad step"; exit 1 ;; esac
+          ARG=""
+          if [ "$STEP" = keys ]; then
+            [ -n "$KEYS" ] || { echo "::error::step keys needs the keys input"; exit 1; }
+            ARG="$(printf '%s' "$KEYS" | base64 -w0)"   # base64: safe to pass through ssh and the shell
+          fi
           REMOTE_DIR="${DIR:-claude-trading-bot}"
+          SYNC="git fetch --quiet origin main; git checkout --quiet main; git reset --hard --quiet origin/main;"
+          case "$STEP" in keys|screen) SYNC="" ;; esac   # do not touch the repo between login steps
           ssh -i ~/.ssh/deploy_key -o BatchMode=yes "${USER_NAME:-root}@$HOST" \
-            "set -e; cd '$REMOTE_DIR'; git fetch --quiet origin main; git checkout --quiet main; git reset --hard --quiet origin/main; sudo bash deploy/claude-code.sh $STEP"
+            "set -e; cd '$REMOTE_DIR'; $SYNC sudo bash deploy/claude-code.sh $STEP $ARG"
       - name: Next step
         if: success() && inputs.step == 'install'
         run: |
-          echo "::notice::Installed. Now sign in once over SSH: sudo bash ~/claude-trading-bot/deploy/claude-code.sh login, then run this workflow with step=start."
+          echo "::notice::Installed. Next: run this workflow with step login-begin."

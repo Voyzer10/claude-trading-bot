@@ -71,7 +71,8 @@ sudo bash deploy/claude-code.sh start    # Remote Control, restarts by itself af
 sudo bash deploy/claude-code.sh status   # running? last lines of its terminal
 ```
 Or without SSH for the non-interactive steps: GitHub -> Actions -> **Claude Code on VPS** -> Run workflow ->
-`install` / `start` / `status` / `stop` (uses the deploy secrets). Only `login` needs a terminal.
+`install` -> `login-begin` -> `keys` (repeat: answer what the screen in the log asks; the sign-in link shows
+up there, open it on your phone and send back the code) -> `start`. `screen` shows the terminal again.
 `CLAUDE.md` tells that session where everything is and the rules (no edits on the VPS; changes go through GitHub).
 
 ## CI / CD (GitHub Actions)
