@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Trader bot: one-command install on a fresh Ubuntu 22.04 / 24.04 VPS.
+# Trader bot: one-command install on a fresh Ubuntu 22.04 / 24.04 or Debian 12 / 13 VPS.
 #
 #   sudo bash deploy/install.sh                          # dashboard on http://<VPS-IP>:3000 (password, plain HTTP)
 #   sudo bash deploy/install.sh --tailscale              # dashboard only inside your Tailscale network (recommended)
@@ -73,7 +73,7 @@ sudo -u trader env NEXT_TELEMETRY_DISABLED=1 npm run build
 say "Settings ($ENVF)"
 mkdir -p /etc/trader
 if [ ! -f "$ENVF" ]; then
-  PW="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)"
+  PW="$(python3 -c 'import secrets; print(secrets.token_urlsafe(12))')"
   cat > "$ENVF" <<EOF
 # Trader bot settings. After editing: sudo systemctl restart trader-runner trader-api trader-web
 DASHBOARD_PASSWORD=$PW
@@ -98,7 +98,11 @@ systemctl enable --now trader-api trader-web trader-runner >/dev/null 2>&1
 systemctl restart trader-api trader-web trader-runner
 
 say "Firewall"
-ufw allow OpenSSH >/dev/null
+# keep SSH open on whatever port sshd really listens on, before the firewall is switched on
+SSH_PORT="$(sshd -T 2>/dev/null | awk '/^port /{print $2; exit}')"
+SSH_PORT="${SSH_PORT:-22}"
+ufw allow "$SSH_PORT"/tcp >/dev/null
+echo "SSH stays open on port $SSH_PORT"
 case "$MODE" in
   open) ufw allow 3000/tcp >/dev/null ;;
   tailscale) ufw delete allow 3000/tcp >/dev/null 2>&1 || true ;;

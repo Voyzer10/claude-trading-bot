@@ -38,7 +38,7 @@ Development without the .bat: `npm install`, `pip install fastapi uvicorn`, `npm
 
 ## Run it on a VPS (24x7, PC can be off)
 
-Ubuntu 22.04/24.04, 2 vCPU / 4 GB is plenty. Copy this folder to the VPS (or push it to a private GitHub repo
+Ubuntu 22.04/24.04 or Debian 12/13, 2 vCPU / 4 GB is plenty. Copy this folder to the VPS (or push it to a private GitHub repo
 and `git clone` it there), then from that folder:
 
 ```
