@@ -59,6 +59,7 @@ export default function Dashboard() {
           <h1>Trader Bot Dashboard</h1>
           <div className="muted small">Testing phase: paper trading (no broker connected yet) · times in IST</div>
         </div>
+        <a className="btn primary" href="#backtest">Run a backtest</a>
         <nav className="nav" aria-label="Sections">
           <a href="#performance">Performance</a>
           <a href="#control">Control</a>

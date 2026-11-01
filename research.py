@@ -6,6 +6,8 @@ combination, and check the winners on days they were NOT chosen on (walk-forward
     python research.py nse                # Nifty 500 (trader/universe_nse.txt), 60 days of 5m bars
     python research.py nse --limit 100    # faster: the first 100 symbols
     python research.py crypto             # trader/universe_crypto.txt, 60 days of 15m bars
+    python research.py crypto-5m          # the same rule on 5-minute bars (4h and 1h ranges)
+    python research.py crypto-live        # the live rule with live entry timing: close vs +1 min vs +5 min
 
 Bars are cached in trader/research/cache/ (delete it to refetch). Reports:
 trader/research/report_<mode>.txt and .json.
@@ -164,10 +166,12 @@ def nse_events(data, nifty):
 
 # ------------------------------------------------------------------ crypto events
 
-def crypto_events(data, btc, short=False):
-    """Fresh 4h breakouts (long) or, with short=True, fresh 4h breakdowns traded short: the bars are
-    mirrored (price -> -price) so the same long-only rule and outcome() score the short."""
-    rb, hold = 16, 24
+def crypto_events(data, btc, short=False, step=15, rb=16, hold=24, tag=None):
+    """Fresh breakouts of the prior `rb` bars (long) or, with short=True, fresh breakdowns traded short: the
+    bars are mirrored (price -> -price) so the same long-only rule and outcome() score the short.
+    Defaults = the live rule: 15-minute bars, 4h range (16 bars), 6h hold (24 bars). step/rb/hold let the
+    same rule run on 5-minute bars (crypto-5m)."""
+    day_bars = 1440 // step
     btc_close = {}
     if btc:
         for t, c in zip(btc["t"], btc["c"]):
@@ -177,7 +181,7 @@ def crypto_events(data, btc, short=False):
     for sym, d in data.items():
         rows = [(datetime.fromtimestamp(t, UTC), o, h, l, c, v) for t, o, h, l, c, v in
                 zip(d["t"], d["o"], d["h"], d["l"], d["c"], d["v"])
-                if not datetime.fromtimestamp(t, UTC).minute % 15]
+                if not datetime.fromtimestamp(t, UTC).minute % step]
         if short:
             rows = [mirror(r) for r in rows]
         i = rb + 1
@@ -203,18 +207,19 @@ def crypto_events(data, btc, short=False):
                     w = [btc_close[x] for x in k]
                     up = w[-1] > (max(w[:-1]) + min(w[:-1])) / 2
                     regime = (not up) if short else up   # "with the trade": BTC weak for a short
-                k = bt[max(0, j - 96):j]
-                if len(k) == 96:  # BTC vs its own 24-hour average: the bigger trend
+                k = bt[max(0, j - day_bars):j]
+                if len(k) == day_bars:  # BTC vs its own 24-hour average: the bigger trend
                     w = [btc_close[x] for x in k]
-                    above = w[-1] > sum(w) / 96
+                    above = w[-1] > sum(w) / day_bars
                     btc_trend = (not above) if short else above
             coin_trend = None
-            if i >= 96:  # the coin vs its own 24-hour average (rows are mirrored for shorts, so this is "with the trade")
-                coin_trend = rows[i][4] > sum(r[4] for r in rows[i - 96:i]) / 96
+            if i >= day_bars:  # the coin vs its own 24-hour average (rows are mirrored for shorts: "with the trade")
+                coin_trend = rows[i][4] > sum(r[4] for r in rows[i - day_bars:i]) / day_bars
             ev = {"sym": sym, "day": rows[i][0].date().isoformat(), "time": rows[i][0].strftime("%H:%M"),
                   "vol_x": rows[i][5] / avg_v if avg_v else 0.0, "gap": 0.0, "regime": regime,
                   "stop_pct": risk / abs(entry) * 100, "hour": rows[i][0].hour, "out": {},
-                  "btc_trend": btc_trend, "coin_trend": coin_trend}
+                  "btc_trend": btc_trend, "coin_trend": coin_trend, "range": tag,
+                  "_end": ts + step * 60, "_hi": hi, "_mid": mid, "_entry": entry}
             path = rows[i + 1:i + 1 + hold]
             fill_outcomes(ev, path, entry, mid)
             events.append(ev)
@@ -339,6 +344,8 @@ def run_grid(events, grid, split_day, max_per_day):
         for ev in events:
             if ev["time"] > f["entry_end"] or ev["vol_x"] < f["min_vol_x"]:
                 continue
+            if "range" in f and ev.get("range") != f["range"]:
+                continue
             if not widen and ev["stop_pct"] < f["min_stop_pct"]:
                 continue
             if abs(ev["gap"]) > f["max_gap"]:
@@ -368,7 +375,8 @@ def fmt_row(r, label=""):
     fs = "until %s vol>=%.1f stop>=%.1f%% gap<=%s regime=%s hist>=%s tgt=%gR BE=%s%s" % (
         f["entry_end"], f["min_vol_x"], f["min_stop_pct"], f["max_gap"], "on" if f["regime"] else "off",
         f["min_hist_r"], f["target_r"], "on" if f["breakeven"] else "off",
-        ((" trend=%s" % f["trend"]) if "trend" in f else "") + ((" stops=%s" % f["stop_mode"]) if "stop_mode" in f else ""))
+        ((" trend=%s" % f["trend"]) if "trend" in f else "") + ((" stops=%s" % f["stop_mode"]) if "stop_mode" in f else "")
+        + ((" range=%s" % f["range"]) if "range" in f else ""))
     def s(x):
         if not x.get("trades"):
             return "no trades".ljust(56)
@@ -486,9 +494,127 @@ def fno_main(a):
     return 0
 
 
+# ------------------------------------------------------------------ crypto: live entry timing
+
+LIVE_V3 = {"min_vol_x": 1.5, "min_stop_pct": 1.0, "regime": True, "target_r": 2.0, "max_chase_r": 0.5,
+           "max_fee_r": 0.25, "fee": 0.001, "hold_min": 360}
+
+
+def bars5(d):
+    rows = [(t, o, h, l, c, v) for t, o, h, l, c, v in zip(d["t"], d["o"], d["h"], d["l"], d["c"], d["v"])
+            if not datetime.fromtimestamp(t, UTC).minute % 5 and None not in (o, h, l, c)]
+    rows.sort()
+    return rows
+
+
+def live_timing(events, data5, rules=LIVE_V3):
+    """Each live-rule breakout (15-minute signal) scored three ways, all on 5-minute bars after the entry:
+         close    enter at the breakout candle's close (what the plain backtest assumes)
+         fast     enter at the first price after the close (open of the next 5-minute bar): a runner that
+                  decides within ~1 minute
+         plus5    enter 5 minutes after the close (close of that 5-minute bar): today's live runner, which
+                  waits SETTLE_MIN = 5 for Yahoo's volume
+       The live entry checks run on the entry price: moved back inside the range -> skip, more than
+       max_chase_r past the trigger -> skip, stop closer than min_stop_pct -> skip, fees > max_fee_r -> skip."""
+    idx = {}
+    for sym, d in data5.items():
+        rows = bars5(d)
+        idx[sym] = (rows, [r[0] for r in rows])
+    out = {"close": [], "fast": [], "plus5": []}
+    for ev in events:
+        if ev["vol_x"] < rules["min_vol_x"] or (rules["regime"] and ev["regime"] is not True):
+            continue
+        if ev["sym"] not in idx:
+            continue
+        rows, ts = idx[ev["sym"]]
+        j = bisect.bisect_left(ts, ev["_end"])  # first 5-minute bar starting at/after the 15m close
+        if j >= len(rows) or rows[j][0] != ev["_end"]:
+            continue
+        for model in out:
+            if model == "close":
+                px, k = ev["_entry"], j
+            elif model == "fast":
+                px, k = rows[j][1], j
+            else:
+                px, k = rows[j][4], j + 1
+            hi, stop = ev["_hi"], ev["_mid"]
+            risk = px - stop
+            rec = {"day": ev["day"], "sym": ev["sym"]}
+            if risk <= 0:
+                rec["skip"] = "past the stop"
+            elif px < hi:
+                rec["skip"] = "moved back inside"
+            elif (px - hi) / risk > rules["max_chase_r"]:
+                rec["skip"] = "chasing"
+            elif risk / px * 100 < rules["min_stop_pct"]:
+                rec["skip"] = "stop too tight"
+            else:
+                tgt = px + rules["target_r"] * risk
+                fee_r = (px + tgt) * rules["fee"] / risk
+                if fee_r > rules["max_fee_r"]:
+                    rec["skip"] = "fees too high"
+                else:
+                    path = [(datetime.fromtimestamp(r[0], UTC),) + tuple(r[1:]) for r in rows[k:k + rules["hold_min"] // 5]]
+                    rec["r"] = outcome(path, px, stop, rules["target_r"], False, fee_r)[0]
+            out[model].append(rec)
+    return out
+
+
+def live_timing_main(a, syms, src):
+    print("Fetching 60 days of 15-minute AND 5-minute bars for %d coins (%s)..." % (len(syms), src), flush=True)
+    data, failed = fetch_all(syms, "-USD", "15m", a.workers)
+    data5, failed5 = fetch_all(syms, "-USD", "5m", a.workers)
+    btc = data.get("BTC") or fetch("BTC", "-USD", "15m")
+    events = crypto_events(data, btc)
+    res = live_timing(events, data5)
+    if not res["close"]:
+        print("No events: no data came back (check the internet / Yahoo).")
+        return 1
+    days = sorted({r["day"] for r in res["close"]})
+    split = days[int(len(days) * 0.7)]
+    names = {"close": "Enter at the candle close (plain backtest)",
+             "fast": "Enter ~1 min after the close (fast runner)",
+             "plus5": "Enter 5 min after the close (TODAY'S LIVE RUNNER)"}
+    lines = ["research.py crypto-live  %s" % datetime.now(IST).strftime("%Y-%m-%d %H:%M IST"),
+             "Live rules v3 (volume >= 1.5x, BTC regime, stop >= 1%%, target 2R, chase <= 0.5R, fees <= 0.25R, "
+             "6h time stop), %d coins, %d days (%s..%s). Out-of-sample = days from %s. R after 0.1%% fee each side."
+             % (len(data), len(days), days[0], days[-1], split), ""]
+    for m in ("close", "fast", "plus5"):
+        rows = res[m]
+        taken = [r for r in rows if "r" in r]
+        skips = {}
+        for r in rows:
+            if "skip" in r:
+                skips[r["skip"]] = skips.get(r["skip"], 0) + 1
+        ins = {}
+        oos = {}
+        for r in taken:
+            (ins if r["day"] < split else oos).setdefault(r["day"], []).append(r["r"])
+        def s(x):
+            if not x.get("trades"):
+                return "no trades"
+            return "%4d tr  win %3.0f%%  avg %+.2fR  total %+6.1fR  worst day %+.1fR  dd %+.1fR" % (
+                x["trades"], 100 * x["win_rate"], x["avg_r"], x["total_r"], x["worst_day_r"], x["max_drawdown_r"])
+        lines += [names[m],
+                  "     signals %d, taken %d (%.1f a day), skipped: %s" % (
+                      len(rows), len(taken), len(taken) / max(1, len(days)),
+                      ", ".join("%s %d" % kv for kv in sorted(skips.items(), key=lambda x: -x[1])) or "none"),
+                  "     in-sample   " + s(stats(ins)),
+                  "     OUT-sample  " + s(stats(oos)), ""]
+    lines += ["How to read it: if 'fast' beats 'plus5' out-of-sample, the 5-minute wait is costing money and the",
+              "runner should decide faster (volume from Coinbase instead of waiting for Yahoo). If 'plus5' holds up,",
+              "the live runner is fine as it is. ~60 days is a short sample. Not financial advice."]
+    report = "\n".join(lines)
+    print("\n" + report)
+    with open(os.path.join(OUT, "report_crypto-live.txt"), "w", encoding="utf-8") as fh:
+        fh.write(report)
+    print("\nWrote %s" % os.path.join(OUT, "report_crypto-live.txt"))
+    return 0
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description="Walk-forward backtest of the breakout rules. Not financial advice.")
-    p.add_argument("mode", choices=["nse", "crypto", "crypto-short", "crypto-mr", "fno"])
+    p.add_argument("mode", choices=["nse", "crypto", "crypto-short", "crypto-mr", "crypto-5m", "crypto-live", "fno"])
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--workers", type=int, default=6)
     p.add_argument("--top", type=int, default=10)
@@ -524,10 +650,17 @@ def main(argv=None):
             src = a.universe
         if a.limit:
             syms = syms[:a.limit]
-        print("Fetching 60 days of 15-minute bars for %d coins (%s)..." % (len(syms), src), flush=True)
-        data, failed = fetch_all(syms, "-USD", "15m", a.workers)
-        btc = data.get("BTC") or fetch("BTC", "-USD", "15m")
-        if a.mode == "crypto-mr":
+        if a.mode == "crypto-live":
+            return live_timing_main(a, syms, src)
+        iv = "5m" if a.mode == "crypto-5m" else "15m"
+        print("Fetching 60 days of %s bars for %d coins (%s)..." % (iv, len(syms), src), flush=True)
+        data, failed = fetch_all(syms, "-USD", iv, a.workers)
+        btc = data.get("BTC") or fetch("BTC", "-USD", iv)
+        if a.mode == "crypto-5m":  # the same breakout rule on 5-minute bars: 4h range (48 bars) and 1h range (12)
+            events = (crypto_events(data, btc, step=5, rb=48, hold=72, tag="4h")
+                      + crypto_events(data, btc, step=5, rb=12, hold=72, tag="1h"))
+            events.sort(key=lambda e: (e["day"], e["time"]))
+        elif a.mode == "crypto-mr":
             events = mr_events(data, btc)
         else:
             events = crypto_events(data, btc, short=(a.mode == "crypto-short"))
@@ -535,9 +668,16 @@ def main(argv=None):
                 "max_gap": [99], "regime": [False, True], "min_hist_r": [None, 0.0],
                 "target_r": [1.0, 1.5, 2.0, 3.0], "breakeven": [False, True],
                 "trend": ["off", "btc"], "stop_mode": ["skip", "widen"]}
-        # the live long rules (v2); for crypto-short, the same filters applied to breakdowns
-        live = {"entry_end": "23:59", "min_vol_x": 2.0, "min_stop_pct": 1.0, "max_gap": 99, "regime": True,
+        if a.mode == "crypto-5m":
+            grid = {"entry_end": ["23:59"], "min_vol_x": [0.0, 1.5, 2.0, 3.0], "min_stop_pct": [0.3, 0.5, 1.0],
+                    "max_gap": [99], "regime": [False, True], "min_hist_r": [None],
+                    "target_r": [1.0, 1.5, 2.0, 3.0], "breakeven": [False, True],
+                    "trend": ["off", "btc"], "stop_mode": ["skip"], "range": ["4h", "1h"]}
+        # the live long rules (v3); for crypto-short, the same filters applied to breakdowns
+        live = {"entry_end": "23:59", "min_vol_x": 1.5, "min_stop_pct": 1.0, "max_gap": 99, "regime": True,
                 "min_hist_r": None, "target_r": 2.0, "breakeven": False, "trend": "off", "stop_mode": "skip"}
+        if a.mode == "crypto-5m":  # the live filters on 5-minute bars with a 4h range
+            live = dict(live, range="4h")
         max_per_day = a.max_per_day or 10**6
 
     if not events:
@@ -552,7 +692,8 @@ def main(argv=None):
                                                     "min_stop_pct": grid["min_stop_pct"][0], "max_gap": 99 if 99 in grid["max_gap"] else grid["max_gap"][-1],
                                                     "regime": False, "min_hist_r": None, "target_r": 2.0, "breakeven": False,
                                                     **({"trend": "off"} if "trend" in grid else {}),
-                                                    **({"stop_mode": "skip"} if "stop_mode" in grid else {})})
+                                                    **({"stop_mode": "skip"} if "stop_mode" in grid else {}),
+                                                    **({"range": "4h"} if "range" in grid else {})})
     cur = next((r for r in res if r["filters"] == live), None)
     min_is = 30 if a.mode == "nse" else 20
     ok = [r for r in res if r["in_sample"].get("trades", 0) >= min_is and r["out_of_sample"].get("trades", 0) >= 8]

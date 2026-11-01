@@ -7,7 +7,9 @@ import { timeIST } from "@/lib/format";
 type Job = { id: string; mode: string; status: string; started: string; ended?: string; seconds?: number; exit_code?: number };
 
 const MODE_NAMES: Record<string, string> = {
+  "crypto-live": "Crypto live rule: entry timing (close vs +1 min vs +5 min)",
   crypto: "Crypto long (4h breakout, the live rule)",
+  "crypto-5m": "Crypto on 5-minute charts (4h and 1h ranges)",
   "crypto-short": "Crypto short (4h breakdown)",
   "crypto-mr": "Crypto oversold bounce",
   nse: "NSE stocks (opening-range breakout)",
@@ -18,7 +20,7 @@ const MODE_NAMES: Record<string, string> = {
 export default function Backtest() {
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [modes, setModes] = useState<string[]>([]);
-  const [mode, setMode] = useState("crypto");
+  const [mode, setMode] = useState("crypto-live");
   const [sel, setSel] = useState<string | null>(null);
   const [out, setOut] = useState<{ job: Job; output: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -48,10 +50,10 @@ export default function Backtest() {
 
   if (unavailable || !jobs) return null;
 
-  async function start() {
+  async function start(m: string = mode) {
     setErr(null);
     try {
-      const r = await postJSON<{ id: string }>(`${OPS}/backtest`, { mode });
+      const r = await postJSON<{ id: string }>(`${OPS}/backtest`, { mode: m });
       setSel(r.id);
       await load();
     } catch (e) { setErr(errText(e)); }
@@ -73,9 +75,16 @@ export default function Backtest() {
         <select id="bt-mode" value={mode} onChange={(e) => setMode(e.target.value)}>
           {modes.map((m) => <option key={m} value={m}>{MODE_NAMES[m] ?? m}</option>)}
         </select>
-        <button className="btn primary" onClick={start} disabled={running}>{running ? "A backtest is running…" : "Run backtest"}</button>
+        <button className="btn primary" onClick={() => start()} disabled={running}>{running ? "A backtest is running…" : "Run backtest"}</button>
+      </div>
+      <div className="actions">
+        <span className="small muted" style={{ alignSelf: "center" }}>Quick:</span>
+        <button className="btn" onClick={() => start("crypto-live")} disabled={running}>Live entry timing</button>
+        <button className="btn" onClick={() => start("crypto-5m")} disabled={running}>5-minute charts</button>
+        <button className="btn" onClick={() => start("crypto")} disabled={running}>Crypto 15m (all filters)</button>
       </div>
       {err && <div className="notice bad" style={{ marginTop: 10 }}>{err}</div>}
+      {jobs.length === 0 && <p className="small muted" style={{ marginTop: 10 }}>No backtests yet. Each one takes a few minutes; the report appears here.</p>}
       {jobs.length > 0 && (
         <div className="bt-grid">
           <ul className="joblist" aria-label="Past backtests">
