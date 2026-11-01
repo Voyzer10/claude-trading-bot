@@ -82,7 +82,7 @@ export default function ControlPanel() {
           const on = Boolean(c[m.key]) && cloud && !c.paused;
           return (
             <label key={m.key} className={`stat stripe toggle ${on ? "s-good" : ""}`} htmlFor={`ctl-${m.key}`}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div className="stat-head nowrap">
                 <span style={{ fontWeight: 600 }}>{m.name}</span>
                 <input
                   type="checkbox"

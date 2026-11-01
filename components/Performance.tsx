@@ -78,7 +78,7 @@ export default function Performance({ refreshKey }: { refreshKey: number }) {
 
       {Object.keys(p.accounts).length > 0 && (
         <div className="tablewrap" style={{ marginTop: 14 }}>
-          <table>
+          <table className="rtable">
             <thead>
               <tr><th>Account</th><th>Trades</th><th>Win rate</th><th>Avg R</th><th>Today</th><th>7 days</th><th>All</th><th>Best / worst</th></tr>
             </thead>
@@ -87,14 +87,14 @@ export default function Performance({ refreshKey }: { refreshKey: number }) {
                 const cur = currencyOf(name);
                 return (
                   <tr key={name}>
-                    <td>{name}</td>
-                    <td className="num">{a.trades}</td>
-                    <td className="num">{a.win_rate !== null ? `${a.win_rate}%` : "—"}</td>
-                    <td className={`num ${tone(a.avg_r ?? 0)}`}>{a.avg_r !== null ? `${a.avg_r > 0 ? "+" : ""}${a.avg_r}R` : "—"}</td>
-                    <td className={`num ${tone(a.today)}`}>{money(a.today, cur)}</td>
-                    <td className={`num ${tone(a.d7)}`}>{money(a.d7, cur)}</td>
-                    <td className={`num ${tone(a.pnl)}`}>{money(a.pnl, cur)}</td>
-                    <td className="num">{money(a.best, cur)} / {money(a.worst, cur)}</td>
+                    <td data-label="Account">{name}</td>
+                    <td data-label="Trades" className="num">{a.trades}</td>
+                    <td data-label="Win rate" className="num">{a.win_rate !== null ? `${a.win_rate}%` : "—"}</td>
+                    <td data-label="Avg R" className={`num ${tone(a.avg_r ?? 0)}`}>{a.avg_r !== null ? `${a.avg_r > 0 ? "+" : ""}${a.avg_r}R` : "—"}</td>
+                    <td data-label="Today" className={`num ${tone(a.today)}`}>{money(a.today, cur)}</td>
+                    <td data-label="7 days" className={`num ${tone(a.d7)}`}>{money(a.d7, cur)}</td>
+                    <td data-label="All" className={`num ${tone(a.pnl)}`}>{money(a.pnl, cur)}</td>
+                    <td data-label="Best / worst" className="num">{money(a.best, cur)} / {money(a.worst, cur)}</td>
                   </tr>
                 );
               })}
