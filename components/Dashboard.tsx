@@ -55,12 +55,13 @@ export default function Dashboard() {
   return (
     <div className="wrap">
       <header className="topbar">
-        <div>
+        <div className="titleblock">
           <h1>Trader Bot Dashboard</h1>
           <div className="muted small">Testing phase: paper trading (no broker connected yet) · times in IST</div>
         </div>
-        <a className="btn primary" href="#backtest">Run a backtest</a>
-        <nav className="nav" aria-label="Sections">
+        <a className="btn primary topbar-cta" href="#backtest">Run a backtest</a>
+      </header>
+      <nav className="nav" aria-label="Sections">
           <a href="#performance">Performance</a>
           <a href="#control">Control</a>
           <a href="#runner">Runner</a>
@@ -73,8 +74,7 @@ export default function Dashboard() {
           <a href="#operations">Operations</a>
           <a href="#backtest">Backtest</a>
           <a href="#alerts">Alerts</a>
-        </nav>
-      </header>
+      </nav>
 
       {error && (
         <div className="notice bad">
@@ -260,7 +260,7 @@ function MarketsStrip({ snap }: { snap: Snapshot }) {
     <section className="markets" aria-label="Markets">
       {cards.map((c) => (
         <div key={c.name} className={`stat stripe ${c.mode?.startsWith("auto") ? "s-good" : c.mode?.startsWith("log") ? "s-warn" : ""}`}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+          <div className="stat-head">
             <span className="label" style={{ color: "var(--ink)", fontWeight: 600, fontSize: 14 }}>
               {c.name}
             </span>
@@ -490,7 +490,7 @@ function DecisionsSection({ decisions }: { decisions: Decision[] }) {
         </div>
       </div>
       <div className="scroll">
-        <table>
+        <table className="rtable">
           <thead>
             <tr>
               <th>Time</th>
@@ -512,19 +512,19 @@ function DecisionsSection({ decisions }: { decisions: Decision[] }) {
             )}
             {rows.map((d, i) => (
               <tr key={i}>
-                <td className="num">{timeIST(d.time, true)}</td>
-                <td className="num">{d.symbol}</td>
-                <td>{resultChip(d.result)}</td>
-                <td className="why">
+                <td data-label="Time" className="num">{timeIST(d.time, true)}</td>
+                <td data-label="Symbol" className="num">{d.symbol}</td>
+                <td data-label="Result">{resultChip(d.result)}</td>
+                <td data-label="Reason" className="why">
                   <b>{d.category}</b>
                   <div className="muted small">{d.why}</div>
                 </td>
-                <td className="num">{price(d.price)}</td>
-                <td className="num">
+                <td data-label="Price" className="num">{price(d.price)}</td>
+                <td data-label="Stop" className="num">
                   {price(d.stop)}
                   {d.stop_pct !== null && <div className="muted small">{d.stop_pct}%</div>}
                 </td>
-                <td className="num">{d.vol !== null ? `${d.vol}×` : "—"}</td>
+                <td data-label="Vol" className="num">{d.vol !== null ? `${d.vol}×` : "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -559,7 +559,7 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
           </p>
         </div>
       </div>
-      <div className="markets" style={{ marginBottom: 14 }}>
+      <div className="accounts" style={{ marginBottom: 14 }}>
         {Object.entries(accounts).map(([name, a]) => {
           const d = a.cash - a.start_capital;
           const cur = currencyOf(name);
@@ -586,22 +586,22 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
           </div>
           {err && <div className="notice bad" style={{ marginBottom: 8 }}>{err}</div>}
           <div className="tablewrap" style={{ marginBottom: 14 }}>
-            <table>
+            <table className="rtable">
               <thead>
                 <tr><th>Instrument</th><th>Side</th><th>Qty</th><th>Entry</th><th>Stop</th><th>Target</th><th>Opened</th>{available && <th><span className="sr-only">Action</span></th>}</tr>
               </thead>
               <tbody>
                 {open.map((p) => (
                   <tr key={p.key}>
-                    <td className="num">{p.key}</td>
-                    <td>{p.side ?? "long"}</td>
-                    <td className="num">{p.qty}</td>
-                    <td className="num">{price(p.entry)}</td>
-                    <td className="num">{price(p.stop)}</td>
-                    <td className="num">{price(p.target)}</td>
-                    <td className="num">{timeIST(p.entry_time, true)}</td>
+                    <td data-label="Instrument" className="num">{p.key}</td>
+                    <td data-label="Side">{p.side ?? "long"}</td>
+                    <td data-label="Qty" className="num">{p.qty}</td>
+                    <td data-label="Entry" className="num">{price(p.entry)}</td>
+                    <td data-label="Stop" className="num">{price(p.stop)}</td>
+                    <td data-label="Target" className="num">{price(p.target)}</td>
+                    <td data-label="Opened" className="num">{timeIST(p.entry_time, true)}</td>
                     {available && (
-                      <td>
+                      <td data-label="Action">
                         <button className="btn small-btn" onClick={() => close(p.key)} disabled={waiting(p.key)}>
                           {waiting(p.key) ? "Closing…" : "Close"}
                         </button>
@@ -615,7 +615,7 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
         </>
       )}
       <div className="tablewrap">
-        <table>
+        <table className="rtable">
           <thead>
             <tr><th>Closed</th><th>Instrument</th><th>Entry → exit</th><th>P&amp;L</th><th>R</th><th>Exit</th></tr>
           </thead>
@@ -625,12 +625,12 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
             )}
             {closed.slice().reverse().map((c, i) => (
               <tr key={i}>
-                <td className="num">{timeIST(c.exit_time, true)}</td>
-                <td className="num">{c.key}</td>
-                <td className="num">{price(c.entry)} → {price(c.exit)}</td>
-                <td className={`num ${(c.pnl ?? 0) > 0 ? "pos" : "neg"}`}>{money(c.pnl, currencyOf(acctOf(c.market)))}</td>
-                <td className={`num ${(c.r ?? 0) > 0 ? "pos" : "neg"}`}>{c.r !== undefined ? `${c.r > 0 ? "+" : ""}${c.r}` : "—"}</td>
-                <td>{c.reason}</td>
+                <td data-label="Closed" className="num">{timeIST(c.exit_time, true)}</td>
+                <td data-label="Instrument" className="num">{c.key}</td>
+                <td data-label="Entry → exit" className="num">{price(c.entry)} → {price(c.exit)}</td>
+                <td data-label="P&L" className={`num ${(c.pnl ?? 0) > 0 ? "pos" : "neg"}`}>{money(c.pnl, currencyOf(acctOf(c.market)))}</td>
+                <td data-label="R" className={`num ${(c.r ?? 0) > 0 ? "pos" : "neg"}`}>{c.r !== undefined ? `${c.r > 0 ? "+" : ""}${c.r}` : "—"}</td>
+                <td data-label="Exit">{c.reason}</td>
               </tr>
             ))}
           </tbody>

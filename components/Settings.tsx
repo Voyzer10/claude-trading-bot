@@ -191,7 +191,7 @@ function RiskForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) {
         </div>
         <span className="small muted">Capital {cur}{doc.risk[acct]?.capital?.toLocaleString("en-IN")} (paper)</span>
       </div>
-      <div className="form-grid">
+      <div className="form-grid compact">
         {fields.map(([k, f]) => (
           <div key={k} className="field">
             <label htmlFor={`risk-${k}`} className="field-label">
@@ -249,7 +249,7 @@ function PrefsForm({ prefs, onSaved, onError }: { prefs: SettingsDoc["prefs"] } 
   return (
     <fieldset className="formblock">
       <legend>Goal and currency</legend>
-      <div className="form-grid">
+      <div className="form-grid compact">
         <div className="field">
           <label htmlFor="pref-goal" className="field-label">Daily goal (₹)</label>
           <input id="pref-goal" type="number" inputMode="decimal" value={v.daily_goal_inr} onChange={(e) => setV({ ...v, daily_goal_inr: e.target.value })} />

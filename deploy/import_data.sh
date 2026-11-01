@@ -5,7 +5,7 @@
 set -euo pipefail
 [ "$(id -u)" = 0 ] || { echo "Run with sudo."; exit 1; }
 FROM="${1:?usage: import_data.sh /tmp/trader-data}"
-[ -f "$FROM/paper/ledger.json" ] || [ -d "$FROM/live" ] || { echo "$FROM does not look like D:\\trader\\trader"; exit 1; }
+[ -f "$FROM/paper/ledger.json" ] || [ -d "$FROM/live" ] || { echo "$FROM does not look like the PC trader data folder (it needs paper/ledger.json or live/)"; exit 1; }
 APP=/opt/trader
 systemctl stop trader-runner
 if [ -d "$APP/trader" ]; then cp -a "$APP/trader" "$APP/trader.before-import.$(date +%Y%m%d-%H%M%S)"; fi

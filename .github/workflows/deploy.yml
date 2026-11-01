@@ -1,0 +1,64 @@
+# Deploys main to the VPS after CI passes: ssh in, git pull, deploy/update.sh (rebuild + restart services).
+#
+# One-time setup (GitHub repo -> Settings -> Secrets and variables -> Actions -> New repository secret):
+#   VPS_HOST         the VPS IP or hostname, e.g. 45.13.239.239
+#   VPS_USER         the SSH user, e.g. root
+#   VPS_SSH_KEY      a PRIVATE key whose public half is in that user's ~/.ssh/authorized_keys on the VPS
+#                    (make a separate key for GitHub: ssh-keygen -t ed25519 -f gh_deploy -N "")
+#   VPS_REPO_DIR     optional, where the repo is cloned on the VPS (default: claude-trading-bot in the user's home)
+#   VPS_KNOWN_HOSTS  optional but recommended: the output of `ssh-keyscan <VPS_HOST>` run from your PC
+# Without VPS_HOST / VPS_SSH_KEY the job prints a note and skips, so forks and new clones stay green.
+# It can also be started by hand: Actions -> Deploy to VPS -> Run workflow.
+name: Deploy to VPS
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      HOST: ${{ secrets.VPS_HOST }}
+      USER_NAME: ${{ secrets.VPS_USER }}
+      KEY: ${{ secrets.VPS_SSH_KEY }}
+      KNOWN: ${{ secrets.VPS_KNOWN_HOSTS }}
+      DIR: ${{ secrets.VPS_REPO_DIR }}
+    steps:
+      - name: Check secrets
+        id: cfg
+        run: |
+          if [ -z "$HOST" ] || [ -z "$KEY" ]; then
+            echo "::notice::VPS_HOST / VPS_SSH_KEY are not set: skipping the deploy (see the comment at the top of deploy.yml)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Set up SSH
+        if: steps.cfg.outputs.skip != 'true'
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          if [ -n "$KNOWN" ]; then printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts; else ssh-keyscan -T 15 "$HOST" > ~/.ssh/known_hosts; fi
+      - name: Pull and update on the VPS
+        if: steps.cfg.outputs.skip != 'true'
+        run: |
+          REMOTE_DIR="${DIR:-claude-trading-bot}"   # relative paths start in the SSH user's home on the VPS
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes "${USER_NAME:-root}@$HOST" \
+            "set -e; cd '$REMOTE_DIR'; git fetch --quiet origin main; git checkout --quiet main; git reset --hard --quiet origin/main; sudo bash deploy/update.sh"
+      - name: Check the services
+        if: steps.cfg.outputs.skip != 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes "${USER_NAME:-root}@$HOST" \
+            "for s in trader-runner trader-api trader-web; do printf '%-14s %s\n' \$s \$(systemctl is-active \$s); systemctl is-active --quiet \$s || exit 1; done"
