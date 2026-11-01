@@ -8,6 +8,11 @@
 #   sudo bash deploy/claude-code.sh attach     #    look at the Remote Control terminal (leave: Ctrl+B then D)
 #   sudo bash deploy/claude-code.sh stop       #    stop Remote Control
 #
+# No terminal? The login can also be done step by step from GitHub Actions ("Claude Code on VPS"):
+#   login-begin   opens Claude Code in a hidden terminal (tmux) and shows its screen
+#   keys <b64>    types into that terminal: text plus <Enter> <Esc> <Up> <Down> <Tab> <C-c>, base64-encoded
+#   screen        shows the screen again
+#
 # Needs a Pro, Max, Team or Enterprise plan (Remote Control does not work with an API key).
 #
 # Safety: Claude runs as its own user "claudeops", NOT root. It can read the bot (/opt/trader: code, logs,
@@ -133,6 +138,61 @@ status() {
   fi
 }
 
+# ------------------------------------------------------------------ login without a terminal (GitHub Actions)
+
+has() { sudo -u "$U" tmux has-session -t "$1" 2>/dev/null; }
+
+screen() {
+  local shown=0 s
+  for s in login rc; do
+    if has "$s"; then
+      shown=1
+      echo "=================== screen: $s ==================="
+      sudo -u "$U" tmux capture-pane -p -J -t "$s" | sed 's/[[:space:]]*$//' | grep -v '^$' | tail -n 45
+      echo "=================================================="
+    fi
+  done
+  [ "$shown" = 1 ] || echo "No Claude terminal is open. Start one: step login-begin (or start, for Remote Control)."
+}
+
+login_begin() {
+  [ -x "$CLAUDE" ] || { echo "Claude Code is not installed: run step install first."; exit 1; }
+  if has login; then sudo -u "$U" tmux kill-session -t login; fi
+  sudo -u "$U" tmux new-session -d -s login -x 220 -y 50 -c "$APP" \
+    "env PATH=$H/.local/bin:/usr/local/bin:/usr/bin:/bin $CLAUDE"
+  sleep 10
+  screen
+  echo
+  echo 'Next: read the screen above and answer it with step "keys", for example:'
+  echo '  <Enter>          accept the highlighted choice (theme, "Claude account with subscription", trust folder)'
+  echo '  /login<Enter>    if it shows a prompt instead of a sign-in screen'
+  echo '  THE-CODE<Enter>  after opening the sign-in link and copying the code it gives you'
+  echo '  /exit<Enter>     when it says you are signed in'
+}
+
+keys() {
+  local b64="$1" text target tok rest
+  [ -n "$b64" ] || { echo "keys: nothing to type"; exit 1; }
+  text="$(printf '%s' "$b64" | base64 -d)" || { echo "keys: not base64"; exit 1; }
+  if has login; then target=login; elif has rc; then target=rc; else echo "No Claude terminal is open (step login-begin)."; exit 1; fi
+  local re='^<(Enter|Esc|Up|Down|Left|Right|Tab|Space|BSpace|C-c)>(.*)$'
+  while [ -n "$text" ]; do
+    if [[ "$text" =~ $re ]]; then
+      tok="${BASH_REMATCH[1]}"; rest="${BASH_REMATCH[2]}"
+      sudo -u "$U" tmux send-keys -t "$target" "$tok"
+      text="$rest"
+    else
+      tok="${text%%<*}"
+      [ -n "$tok" ] || tok="<"
+      sudo -u "$U" tmux send-keys -t "$target" -l -- "$tok"
+      text="${text:${#tok}}"
+    fi
+    sleep 0.5
+  done
+  sleep 6
+  screen
+}
+
 attach() { echo "Leave with Ctrl+B then D (do not press Ctrl+C: that stops it)."; sleep 2; sudo -u "$U" tmux attach -t rc; }
 stop() { systemctl stop "$UNIT"; systemctl disable "$UNIT" >/dev/null 2>&1; echo "stopped"; }
 
@@ -143,5 +203,8 @@ case "$CMD" in
   status) status ;;
   attach) attach ;;
   stop) stop ;;
-  *) sed -n '2,10p' "$0"; exit 1 ;;
+  login-begin) login_begin ;;
+  keys) keys "${2:-}" ;;
+  screen) screen ;;
+  *) sed -n '2,15p' "$0"; exit 1 ;;
 esac
