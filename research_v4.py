@@ -196,6 +196,9 @@ def score(events, f, split, stats):
 
 
 LIVE = {"stop": "mid", "exit": "2R", "hold": 24, "min_vol_x": 1.5, "regime": True, "min_stop_pct": 1.0}
+# the rule the live bot runs since rules v4 (auto_crypto.py DEFAULTS)
+LIVE_V4 = {"stop": "atr1.5", "exit": "trail", "hold": 48, "min_vol_x": 1.5, "regime": True, "trend": "off",
+           "max_range_pct": None, "session": "active", "max_fee_r": 0.25}
 
 
 def row(r, label=""):
@@ -255,7 +258,16 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist):
              "%d coins, %d days (%s..%s), %d fresh 4h breakouts (%d from a range under 1%%). R after 0.1%% fee "
              "each side. Out-of-sample = days from %s." % (len(data), len(days), days[0], days[-1], len(events),
                                                            tight_n, split), "",
-             row(live, "CURRENT LIVE RULE (v3):  "), "",
+             row(live, "OLD LIVE RULE (v3):      "), "",
+             row(score(events, LIVE_V4, split, stats), "LIVE RULE NOW (v4):      "), "",
+             "V4 NEIGHBOURS (one setting changed at a time; a robust rule has neighbours that also do well):"]
+    for k, vals in GRID.items():
+        for v in vals:
+            if v == LIVE_V4[k]:
+                continue
+            f = dict(LIVE_V4, **{k: v})
+            lines.append(row(score(events, f, split, stats), "  %s=%s -> " % (k, v)))
+    lines += ["",
              row(pro, "PRO SETUP (all 7 checks): "), "",
              "WHICH INGREDIENT HELPS (average OUT-sample R of the combinations with it vs without it):",
              effect("trend", "ema", "off"), effect("max_range_pct", 1.0, None), effect("session", "active", "all"),
