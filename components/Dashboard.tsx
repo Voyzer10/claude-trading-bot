@@ -485,7 +485,7 @@ function RulesSection({ snap }: { snap: Snapshot }) {
     ["Max chase", r.max_chase_r ? `${r.max_chase_r}R past the trigger` : "off"],
     ["Time stop", r.max_hold_hours !== undefined ? `${r.max_hold_hours} hours` : "—"],
     ...((r.enabled_setups as string[] | undefined)?.some((x) => x.startsWith("smc_sweep"))
-      ? [["SMC sweep", `stop ${r.smc_stop ?? "sweep"}, exit ${r.smc_exit ?? "2R"}, volume ≥ ${r.smc_min_vol_x ?? 0}×, BTC filter ${r.smc_regime ? "on" : "off"}`] as [string, string]]
+      ? [["SMC sweep", `${r.smc_variant ?? "any"} sweeps, stop ${r.smc_stop ?? "sweep"}, exit ${r.smc_exit ?? "2R"}, volume ≥ ${r.smc_min_vol_x ?? 0}×, BTC filter ${r.smc_regime ? "on" : "off"}`] as [string, string]]
       : []),
     ["Rules version", String(r.rules_version ?? "—")],
   ];

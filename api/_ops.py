@@ -63,6 +63,7 @@ RULE_FIELDS = {
     "btc_regime": {"type": "bool"},
     "max_fee_r": {"type": "float", "min": 0.05, "max": 1.0},
     "max_hold_hours": {"type": "float", "min": 1, "max": 48},
+    "smc_variant": {"type": "choice", "choices": ["any", "wick", "2bar"]},
     "smc_stop": {"type": "choice", "choices": ["sweep", "atr1.5"]},
     "smc_exit": {"type": "choice", "choices": ["2R", "mid", "trail"]},
     "smc_min_vol_x": {"type": "float", "min": 0.0, "max": 10.0},
