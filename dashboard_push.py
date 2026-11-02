@@ -57,6 +57,7 @@ def _tail(path, n):
 # ------------------------------------------------------------------ reasons
 
 CATEGORIES = [
+    ("thin hours", "Thin hours"),
     ("volume not reported", "Volume not reported yet"),
     ("breakout volume", "Low volume"),
     ("stop too tight", "Stop too tight"),
