@@ -27,6 +27,22 @@ export type Coin = {
   range_low: number | null;
   daily: string[];
   seen_today: string[];
+  profile?: CoinProfile | null;
+};
+
+/** How a coin behaved over the last 30 days (coin_profile.py). Display only, not a trading filter. */
+export type CoinProfile = {
+  symbol: string;
+  style: string;
+  why?: string;
+  notes: string[];
+  candles?: number;
+  trend?: { label: string; vr_4h: number | null; z_4h: number | null; vr_16h: number | null; z_16h: number | null };
+  breakouts?: { follow_pct: number | null; n: number };
+  levels?: { hold_pct: number | null; n: number };
+  volume?: { continue_pct: number | null; n: number };
+  btc_corr?: number | null;
+  atr_pct_15m?: number | null;
 };
 
 export type Decision = {
@@ -74,6 +90,8 @@ export type Snapshot = {
     scanned: number | null;
     failed: number | null;
     daily_closes_through: string | null;
+    profiles_as_of?: string | null;
+    profiles_days?: number | null;
   };
   markets: Record<string, Record<string, unknown> & { mode?: string }>;
   rules: Record<string, Record<string, unknown> | null>;

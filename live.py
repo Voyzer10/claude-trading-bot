@@ -151,6 +151,12 @@ def crypto_cycle(state, a):
         except Exception as e:
             state["errors"].append("CRYPTO daily: %s" % e)
             log("CRYPTO daily scan failed: %s" % e)
+    try:  # each coin's behaviour over 30 days, once a UTC day, in a background thread (display only)
+        import coin_profile
+        if coin_profile.due():
+            coin_profile.refresh_async(syms, log)
+    except Exception as e:
+        log("CRYPTO coin profiles not started: %s" % e)
     if (ms.get("intraday") or {}).get("as_of") == C.last_bar_close(utc).isoformat():
         return  # no new 15-minute candle yet
     try:

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Coin, Decision, Snapshot, SnapshotResponse } from "@/lib/types";
+import type { Coin, CoinProfile, Decision, Snapshot, SnapshotResponse } from "@/lib/types";
 import { ago, currencyOf, duration, money, pct, price, timeIST } from "@/lib/format";
 import ControlPanel from "@/components/ControlPanel";
 import Performance from "@/components/Performance";
@@ -314,10 +314,75 @@ function CoinsSection({ snap }: { snap: Snapshot }) {
       </div>
       <p className="muted small" style={{ margin: "10px 0 0" }}>
         The bar under each price is the last 4 hours&apos; range (low to high) and where the price sits in it. A long
-        needs a close above the high with volume ≥ the rule&apos;s minimum, a stop ≥ 1% away and BTC above its own 4h
-        midpoint.
+        needs a fresh close above the high with volume ≥ the rule&apos;s minimum, fees ≤ the rule&apos;s cap and BTC above
+        its own 4h midpoint.
       </p>
+      <CoinBehaviour coins={c.coins} asOf={c.profiles_as_of ?? null} days={c.profiles_days ?? 30} />
     </section>
+  );
+}
+
+// ------------------------------------------------------------------ coin behaviour (coin_profile.py)
+
+const STYLE_SHORT: Record<string, string> = {
+  "breakout / trend follower": "Trend follower",
+  "range trader (respects support / resistance)": "Respects S/R",
+  "fakeout-prone (breakouts fail)": "Fakeout-prone",
+  trending: "Trending",
+  "mean-reverting": "Mean-reverting",
+  "no clear style": "No clear style",
+};
+const shortStyle = (s: string) => STYLE_SHORT[s] ?? s;
+const styleTone = (s: string) =>
+  s.startsWith("breakout") || s === "trending" ? "t-good" : s.startsWith("fakeout") ? "t-bad" : s.startsWith("range") || s === "mean-reverting" ? "t-warn" : "";
+const share = (x: { n: number; follow_pct?: number | null; hold_pct?: number | null; continue_pct?: number | null } | undefined,
+  k: "follow_pct" | "hold_pct" | "continue_pct") => (x && x.n ? `${x[k]}% of ${x.n}` : "—");
+
+function CoinBehaviour({ coins, asOf, days }: { coins: Coin[]; asOf: string | null; days: number }) {
+  const rows = coins.map((c) => c.profile).filter((p): p is CoinProfile => Boolean(p));
+  return (
+    <details className="behaviour">
+      <summary>
+        <b>How each coin behaves</b>{" "}
+        <span className="muted small">
+          {asOf ? `last ${days} days of 15m candles · updated ${timeIST(asOf, true)}` : "first update runs once the runner has this version (takes a minute)"}
+        </span>
+      </summary>
+      <p className="muted small">
+        Measured from each coin&apos;s own candles: do breakouts above the 4h high carry on (gain 1 ATR before losing 1),
+        does price turn back at its 24h high or low, do big-volume candles continue (a rough proxy for large
+        players; real order flow is not in free data), and how closely it follows BTC. 50% is a coin flip; a style is only
+        named when the numbers are clearly beyond that. It describes the past and is not a trading filter.
+      </p>
+      {rows.length > 0 && (
+        <div className="tablewrap">
+          <table className="rtable">
+            <thead>
+              <tr>
+                <th>Coin</th><th>Style</th><th>Breakouts carried on</th><th>Turned at 24h high/low</th>
+                <th>Big-volume moves continued</th><th>BTC corr.</th><th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((p) => (
+                <tr key={p.symbol}>
+                  <td data-label="Coin" className="mono">{p.symbol}</td>
+                  <td data-label="Style" className="why">
+                    <span className={`style-line ${styleTone(p.style)}`}>{shortStyle(p.style)}</span>
+                    {p.why && <div className="muted small">{p.why}</div>}
+                  </td>
+                  <td data-label="Breakouts carried on" className="num">{share(p.breakouts, "follow_pct")}</td>
+                  <td data-label="Turned at 24h high/low" className="num">{share(p.levels, "hold_pct")}</td>
+                  <td data-label="Big-volume moves continued" className="num">{share(p.volume, "continue_pct")}</td>
+                  <td data-label="BTC corr." className="num">{p.btc_corr ?? "—"}</td>
+                  <td data-label="Notes">{p.notes.join(", ") || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </details>
   );
 }
 
@@ -342,6 +407,11 @@ function CoinCard({ c }: { c: Coin }) {
       <div className="meta">
         {pct(c.pct_vs_high)} vs 4h high · vol {c.vol_ratio !== null ? `${c.vol_ratio}×` : "—"}
       </div>
+      {c.profile && (
+        <div className={`meta style-line ${styleTone(c.profile.style)}`} title={c.profile.why}>
+          {shortStyle(c.profile.style)}
+        </div>
+      )}
       {(c.daily.length > 0 || c.seen_today.length > 0) && (
         <div className="meta" style={{ color: "var(--ink)" }}>
           {c.daily.map((d) => d.replace(/_/g, " ")).join(", ")}
