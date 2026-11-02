@@ -61,10 +61,10 @@ DEFAULT_CONFIG = {
         "INDIA":  {"capital": 50000, "max_loss_per_trade": 500, "max_loss_per_trade_fno": 1500,
                    "max_position_pct": 25, "max_position_pct_fno": 40, "daily_loss_limit": 2500,
                    "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
-                   "futures_margin_pct": 12.0, "breakeven_at_r": 1.0},
+                   "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": True},
         "US":     {"capital": 5000, "max_loss_per_trade": 50, "max_position_pct": 25,
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
-                   "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None},
+                   "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True},
         "CRYPTO": {"capital": 1000, "max_loss_per_trade": 10, "max_position_pct": 25,
                    "daily_loss_limit": 30, "max_trades_per_day": 10, "min_reward_risk": 1.0,
                    "flat_by": None, "fee_pct": 0.1, "breakeven_at_r": None, "allow_short": True},
@@ -389,7 +389,7 @@ def round_px(m, x, down=True):
 def close_position(led, cfg, pos, price, reason, utc):
     m = pos["market"]
     book = book_of(led, m)
-    fee = charges(cfg, m, pos["symbol"], "sell", pos["qty"] * price)
+    fee = charges(cfg, m, pos["symbol"], "buy" if is_short(pos) else "sell", pos["qty"] * price)  # a short buys back
     gross = pnl_of(pos, price)
     if pos.get("margin") is not None:
         book["cash"] += pos["margin"] + gross - fee
@@ -482,8 +482,9 @@ def cmd_buy(a, cfg, led):
     equity = book["cash"] + sum(held_value(p) for p in led["open"] if account_of(p["market"]) == account_of(m))
     unit_cost = entry * acc.get("futures_margin_pct", 12) / 100 if kind == "futures" else entry
     # charges for one unit, round trip at the stop (the loss case), used in sizing
-    fee_unit_stop = (charges(cfg, m, t, "buy", entry * lot) + charges(cfg, m, t, "sell", stop * lot)) / lot
-    fee_unit_tgt = (charges(cfg, m, t, "buy", entry * lot) + charges(cfg, m, t, "sell", target * lot)) / lot
+    open_side, close_side = ("sell", "buy") if short else ("buy", "sell")  # a short sells first (STT), buys back
+    fee_unit_stop = (charges(cfg, m, t, open_side, entry * lot) + charges(cfg, m, t, close_side, stop * lot)) / lot
+    fee_unit_tgt = (charges(cfg, m, t, open_side, entry * lot) + charges(cfg, m, t, close_side, target * lot)) / lot
     if fee_unit_tgt >= 0.5 * risk_ps and not force:
         raise PaperError("stop too tight: charges (%s a unit round trip) are %.0f%% of the risk (%s a unit). "
                          "Widen the stop or skip the trade." % (money(m, fee_unit_tgt), 100 * fee_unit_tgt / risk_ps,
@@ -520,7 +521,7 @@ def cmd_buy(a, cfg, led):
                                  lot, money(m, one), money(m, max_loss), money(m, need), money(m, book["cash"])))
         raise PaperError("0 units fit: the stop is %s away and your max loss is %s. "
                          "Tighten the stop or skip the trade." % (money(m, risk_ps), money(m, max_loss)))
-    fee = charges(cfg, m, t, "buy", q * entry)
+    fee = charges(cfg, m, t, open_side, q * entry)
     margin = round(q * unit_cost, 2) if kind == "futures" else None
     book["cash"] -= (margin if margin is not None else q * entry) + fee
     pos = {"key": k, "market": m, "symbol": t, "qty": q, "entry": round(entry, 6), "stop": stop, "risk_stop": stop,
@@ -729,7 +730,7 @@ def main(argv=None):
     s.add_argument("--price", help="fill price instead of the quote (e.g. what your broker app shows)")
     s.add_argument("--note")
     s.add_argument("--force", action="store_true", help="allow outside market hours / below min reward:risk")
-    s.add_argument("--side", choices=["long", "short"], default="long", help="short: crypto paper only (stop above, target below)")
+    s.add_argument("--side", choices=["long", "short"], default="long", help="short: paper accounts with allow_short (CRYPTO, US, INDIA equity intraday); stop above, target below")
     s = sub.add_parser("sell"); s.add_argument("symbol"); s.add_argument("--price")
     s = sub.add_parser("check"); s.add_argument("--watch", type=int, default=0, help="repeat every N seconds")
     s = sub.add_parser("status"); s.add_argument("--all", action="store_true")

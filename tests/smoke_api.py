@@ -57,6 +57,11 @@ r = c.post("/api/py/ops/autobuy", json={"market": "NSE", "on": True})
 check("autobuy on", r.status_code == 200 and c.get("/api/py/ops/autobuy").json()["NSE"]["on"]
       and json.load(open("trader/live/auto_nse_config.json"))["auto_buy"] is True)
 r = c.post("/api/py/ops/autobuy", json={"market": "BSE", "on": True}); check("autobuy bad market", r.status_code == 400)
+r = c.post("/api/py/ops/autobuy", json={"market": "US_SHORT", "on": False})
+check("us shorts off", r.status_code == 200 and c.get("/api/py/ops/autobuy").json()["US_SHORT"]["on"] is False
+      and json.load(open("trader/live/auto_us_config.json"))["allow_short"] is False)
+r = c.post("/api/py/ops/autobuy", json={"market": "NSE_SHORT", "on": True})
+check("nse shorts on", r.status_code == 200 and json.load(open("trader/live/auto_nse_config.json"))["allow_short"] is True)
 r = c.get("/api/py/ops/download/trades.csv"); check("trades csv", r.status_code == 200)
 
 shutil.rmtree(work, ignore_errors=True)

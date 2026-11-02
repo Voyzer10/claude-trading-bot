@@ -20,6 +20,17 @@ FRESH breakout (triggered within `fresh_minutes`) goes through the pack's own sc
  10 analyst      run by hand: python us\\us_flow.py analyst TICKER (needs sec_user_agent)
  11 pelosi       run by hand: python us\\us_flow.py pelosi
 
+SHORTS (allow_short, on by default since 2 Nov 2026): the scanner also reports opening-range BREAKDOWNS
+(a 5-minute close below the range low). The pack's entry / exit / time machine / budget / risk scripts are
+long-only, so a breakdown goes through this file's own short path instead:
+  3 entry        live price still below the range low (else "reversed"); chase at most max_chase_r R past
+                 it; market regime: SPY below its own opening-range midpoint and its open (short_regime)
+  4 exit         stop at the range midpoint (above the entry), target 2R below, min_stop_pct
+  5 timemachine  n/a (the pack's is long-only): not a gate
+  6-8            paper.py short in the US account (sizes to max loss; daily loss, trades/day, position cap)
+  9 alerts       live.py's paper check: stop, target, 3:55 PM ET flat-by
+Not backtested yet: paper only, judge it on its paper results.
+
 Rules: trader/live/auto_us_config.json (made on first run). Decisions: trader/live/decisions.jsonl.
 """
 import json
@@ -48,6 +59,10 @@ DEFAULTS = {
     "min_mc_avg_r": 0.0,         # time machine replays must average at least this
     "min_history_trades": 10,
     "min_history_avg_r": 0.0,
+    "allow_short": True,         # also trade opening-range breakdowns, on paper (see the docstring)
+    "short_regime": True,        # shorts only while SPY is below its opening-range midpoint and its open
+    "max_chase_r": 0.5,          # shorts: skip if price already ran this many R below the range low
+    "or_minutes": 15,
 }
 
 
@@ -94,7 +109,111 @@ def parse_at(at, day):
     return day.replace(hour=t.hour, minute=t.minute, second=0, microsecond=0)
 
 
+def spy_weak(or_minutes=15, utc=None):
+    """True if SPY's last completed 5-minute close is below its opening-range midpoint and below its open."""
+    import scan_nse as S
+    d = S.yahoo_chart("SPY", "1d", "5m", "")
+    if not d or not d.get("t"):
+        return None
+    utc = utc or datetime.now(timezone.utc)
+    off = P.us_offset(utc)
+    bars = []
+    for t, o, h, l, c in zip(d["t"], d["o"], d["h"], d["l"], d["c"]):
+        et = datetime.fromtimestamp(t, timezone(off))
+        if et.minute % 5 or et.second or not (9 * 60 + 30 <= et.hour * 60 + et.minute < 16 * 60):
+            continue
+        if datetime.fromtimestamp(t, timezone.utc) + timedelta(minutes=5) > utc:
+            continue  # still forming
+        bars.append((et, o, h, l, c))
+    n = or_minutes // 5
+    if len(bars) <= n:
+        return None
+    rng = bars[:n]
+    mid = (max(b[2] for b in rng) + min(b[3] for b in rng)) / 2
+    last = bars[-1][4]
+    return last < mid and last < bars[0][1]
+
+
+def run_short(tk, hit, cfg, log, auto):
+    """An opening-range breakdown, sold short on paper (see the docstring)."""
+    import contextlib
+    import io
+    rec = {"time": datetime.now(P.IST).isoformat(), "symbol": "US:" + tk, "setup": "orb_short", "steps": {},
+           "result": None}
+    st = rec["steps"]
+    st["1_scanner"] = hit
+
+    def done(result, why):
+        rec["result"], rec["why"] = result, why
+        st["10_analyst"] = "by hand: python us\\us_flow.py analyst %s" % tk
+        st["11_pelosi"] = "by hand: python us\\us_flow.py pelosi"
+        record(rec)
+        log("AUTO US %s: %s (%s)" % (tk, result, why))
+        return rec
+
+    _, out = sh([os.path.join("trader-news", "news.py"), "--tickers", tk, "--hours", "12", "--no-sec", "--all"])
+    st["2_news"] = tail(out, 8)
+    try:
+        price, _ = P.fetch_price("US", tk)
+    except Exception as e:
+        return done("skipped", "no live price: %s" % e)
+    lo, hi = float(hit["or_low"]), float(hit["or_high"])
+    stop = P.round_px("US", (hi + lo) / 2, down=False)
+    risk = stop - price
+    chase = (lo - price) / risk if risk > 0 else None
+    st["3_entry"] = {"side": "short", "price_now": price, "trigger": lo,
+                     "chase_r": round(chase, 2) if chase is not None else None}
+    if price >= lo:
+        return done("skipped", "price %s moved back inside the opening range (low %s): reversed" % (price, lo))
+    if risk <= 0:
+        return done("skipped", "price %s is already past the stop %s" % (price, stop))
+    if cfg.get("max_chase_r") and chase > cfg["max_chase_r"]:
+        return done("skipped", "chasing: price is %.2fR below the range low (max %.2fR)" % (chase, cfg["max_chase_r"]))
+    if cfg.get("short_regime"):
+        try:
+            weak = spy_weak(cfg.get("or_minutes", 15))
+        except Exception as e:
+            weak = None
+            st["regime"] = "unavailable: %s" % e
+        st["regime"] = weak
+        if weak is None:
+            return done("skipped", "market regime unknown (no SPY bars)")
+        if not weak:
+            return done("skipped", "market regime: SPY is not below its opening-range midpoint and its open (no shorts)")
+    target = P.round_px("US", price - 2 * risk, down=True)
+    stop_pct = risk / price * 100
+    st["4_exit"] = {"entry": price, "stop": stop, "target": target, "stop_pct": round(stop_pct, 2),
+                    "r_multiple": 2.0}
+    if stop_pct < cfg["min_stop_pct"]:
+        return done("skipped", "stop too tight: %.2f%% (min %.2f%%)" % (stop_pct, cfg["min_stop_pct"]))
+    st["5_timemachine"] = "n/a for shorts (the pack's time machine is long-only): not a gate"
+    if not auto:
+        return done("ready", "all checks passed; auto paper is off")
+    pcfg = P.load_config()
+    led = P.load_ledger(pcfg)
+    args = type("A", (), {"symbol": "US:" + tk, "stop": str(stop), "target": str(target), "qty": None, "lots": None,
+                          "price": str(price), "note": "auto_us: orb short", "force": False, "side": "short"})()
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            P.cmd_buy(args, pcfg, led)
+        P.save_json(P.LEDGER, led)
+    except P.PaperError as e:
+        st["6-8_budget_risk_broker"] = "BLOCK: %s" % e
+        return done("blocked", str(e))
+    pos = next(p for p in led["open"] if p["key"] == "US:" + tk)
+    st["6-8_budget_risk_broker"] = {"verdict": "PASS, paper short filled", "qty": pos["qty"], "entry": pos["entry"],
+                                    "stop": pos["stop"], "target": pos["target"],
+                                    "max_loss": round((pos["stop"] - pos["entry"]) * pos["qty"], 2),
+                                    "report": buf.getvalue().strip().splitlines()}
+    st["9_alerts"] = "live.py checks stop %s / target %s every cycle; flat by 3:55 PM ET" % (pos["stop"], pos["target"])
+    return done("PAPER SHORT", "%s sh @ %s, stop %s, target %s (opening-range breakdown, SPY weak)" % (
+        pos["qty"], pos["entry"], pos["stop"], pos["target"]))
+
+
 def run_one(tk, hit, cfg, log, auto):
+    if hit.get("side") == "short":
+        return run_short(tk, hit, cfg, log, auto)
     rec = {"time": datetime.now(P.IST).isoformat(), "symbol": "US:" + tk, "setup": "orb", "steps": {}, "result": None}
     st = rec["steps"]
     st["1_scanner"] = hit
@@ -188,8 +307,8 @@ def process(state, log, auto=True):
         sh([os.path.join("trader-scanner", "scan.py"), "universe"], timeout=300)
     log("US scan starting (whole universe, a few minutes)...")
     try:
-        rc, out = sh([os.path.join("trader-scanner", "scan.py"), "orb", "--max-confirm", str(cfg["max_confirm"])],
-                     timeout=900)
+        rc, out = sh([os.path.join("trader-scanner", "scan.py"), "orb", "--max-confirm", str(cfg["max_confirm"]),
+                      "--side", "both" if cfg.get("allow_short") else "long"], timeout=900)
     except subprocess.TimeoutExpired:
         log("US scan timed out")
         return
@@ -216,7 +335,8 @@ def process(state, log, auto=True):
                "status": "scanned", "summary": tail(out, 1)})
     log("US ORB @%s: %d hits, %d new, %d fresh (<= %d min)%s" % (
         wl.get("as_of"), len(hits), len(new), len(fresh), cfg["fresh_minutes"],
-        ("; FRESH: " + ", ".join(h["symbol"] for h in fresh[:15])) if fresh else ""))
+        ("; FRESH: " + ", ".join(h["symbol"] + (" (short)" if h.get("side") == "short" else "") for h in fresh[:15]))
+        if fresh else ""))
     fresh.sort(key=lambda h: (-h.get("bar_index", 0), h["symbol"]))
     out_recs = []
     for h in fresh[:cfg["max_new_per_cycle"]]:

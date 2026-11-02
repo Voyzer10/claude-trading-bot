@@ -260,7 +260,14 @@ def cycle(state, a, markets):
         if prev.get("as_of") == cutoff.isoformat():
             continue  # no new completed bar since the last scan
         try:
-            res = S.orb_scan(syms, m, now, cutoff, a.or_minutes, a.min_price, a.workers, quiet=True)
+            side = "long"
+            if m == "NSE" and a.auto_paper:  # breakdowns too, for the NSE short path (auto_nse allow_short)
+                try:
+                    import auto_nse
+                    side = "both" if auto_nse.load_cfg().get("allow_short") else "long"
+                except Exception:
+                    pass
+            res = S.orb_scan(syms, m, now, cutoff, a.or_minutes, a.min_price, a.workers, quiet=True, side=side)
         except Exception as e:
             state["errors"].append("%s orb: %s" % (m, e))
             log("%s ORB scan failed: %s" % (m, e))
