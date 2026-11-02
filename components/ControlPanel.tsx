@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { getJSON, postJSON, OPS, errText } from "@/lib/api";
 
 type Control = { CRYPTO: boolean; US: boolean; NSE: boolean; FNO: boolean; paused: boolean };
-type AutoBuy = Record<"NSE" | "FNO", { on: boolean; entry_start: string; entry_end: string }>;
+type AutoBuy = Record<"NSE" | "FNO" | "US_SHORT", { on: boolean; entry_start?: string; entry_end?: string }>;
 type ControlResponse = { control: Control; cloud_markets: string[]; can_change: boolean; mode?: "local" | "cloud" };
 
 const MARKETS: { key: keyof Control; name: string; note: string }[] = [
   { key: "CRYPTO", name: "Crypto", note: "20 coins, 4h breakouts, auto paper trades" },
-  { key: "US", name: "US stocks", note: "~5,900 stocks, opening-range breakouts" },
+  { key: "US", name: "US stocks", note: "~5,900 stocks, opening-range breakouts (and breakdowns, short)" },
   { key: "NSE", name: "NSE stocks", note: "Backtest found no edge: log-only unless paper buys are on" },
   { key: "FNO", name: "Nifty / Bank Nifty F&O", note: "Backtest found no edge: log-only unless paper buys are on" },
 ];
@@ -26,13 +26,17 @@ export default function ControlPanel() {
     getJSON<AutoBuy>(`${OPS}/autobuy`).then(setAb).catch(() => setAb(null)); // ops API: PC/VPS only
   }, []);
 
-  async function setBuy(m: "NSE" | "FNO", on: boolean) {
+  async function setBuy(m: "NSE" | "FNO" | "US_SHORT", on: boolean) {
     if (!ab) return;
     setBusy(`buy-${m}`);
     setMsg(null);
     try {
       await postJSON(`${OPS}/autobuy`, { market: m, on });
       setAb({ ...ab, [m]: { ...ab[m], on } });
+      if (m === "US_SHORT") {
+        setMsg(on ? "US shorts on: opening-range breakdowns are sold short on paper (from 9:50 AM ET, SPY must be weak)." : "US shorts off: US trades long only.");
+        return;
+      }
       setMsg(on ? `${m} paper buys on: candidates that pass every agent are bought on paper (entries ${ab[m].entry_start}-${ab[m].entry_end} IST).` : `${m} paper buys off: candidates are logged only.`);
     } catch (e) {
       setMsg(`Not saved: ${errText(e)}`);
@@ -132,10 +136,11 @@ export default function ControlPanel() {
       {ab && (
         <div className="paperbuys">
           <div>
-            <b>Paper buys for India (forward test)</b>
+            <b>Forward tests (paper)</b>
             <p className="small muted">
-              Off: a candidate that passes every agent is only logged. On: it is bought on paper. The 31 Oct backtests
-              found no edge after charges, so treat these trades as a test, not as proof. The filters do not change.
+              India: off logs a candidate that passes every agent, on buys it on paper (the backtests found no edge
+              after charges). US shorts: opening-range breakdowns sold short on paper while SPY is weak; not backtested
+              yet. Treat these trades as tests, not as proof.
             </p>
           </div>
           {(["NSE", "FNO"] as const).map((m) => (
@@ -153,6 +158,21 @@ export default function ControlPanel() {
               </span>
             </label>
           ))}
+          {ab.US_SHORT && (
+            <label className="switch-row" htmlFor="buy-US_SHORT">
+              <input
+                type="checkbox"
+                role="switch"
+                id="buy-US_SHORT"
+                checked={ab.US_SHORT.on}
+                disabled={busy !== null || !c.US}
+                onChange={(e) => setBuy("US_SHORT", e.target.checked)}
+              />
+              <span>
+                US shorts <span className="muted small">breakdowns, 9:50 AM-3:30 PM ET</span>
+              </span>
+            </label>
+          )}
         </div>
       )}
       {msg && <p className="small muted" style={{ margin: "10px 0 0" }}>{msg}</p>}

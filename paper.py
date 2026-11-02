@@ -64,7 +64,7 @@ DEFAULT_CONFIG = {
                    "futures_margin_pct": 12.0, "breakeven_at_r": 1.0},
         "US":     {"capital": 5000, "max_loss_per_trade": 50, "max_position_pct": 25,
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
-                   "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None},
+                   "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True},
         "CRYPTO": {"capital": 1000, "max_loss_per_trade": 10, "max_position_pct": 25,
                    "daily_loss_limit": 30, "max_trades_per_day": 10, "min_reward_risk": 1.0,
                    "flat_by": None, "fee_pct": 0.1, "breakeven_at_r": None, "allow_short": True},
@@ -729,7 +729,7 @@ def main(argv=None):
     s.add_argument("--price", help="fill price instead of the quote (e.g. what your broker app shows)")
     s.add_argument("--note")
     s.add_argument("--force", action="store_true", help="allow outside market hours / below min reward:risk")
-    s.add_argument("--side", choices=["long", "short"], default="long", help="short: crypto paper only (stop above, target below)")
+    s.add_argument("--side", choices=["long", "short"], default="long", help="short: CRYPTO and US paper accounts (allow_short); stop above, target below")
     s = sub.add_parser("sell"); s.add_argument("symbol"); s.add_argument("--price")
     s = sub.add_parser("check"); s.add_argument("--watch", type=int, default=0, help="repeat every N seconds")
     s = sub.add_parser("status"); s.add_argument("--all", action="store_true")

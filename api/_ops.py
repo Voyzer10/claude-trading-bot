@@ -894,12 +894,13 @@ def agents():
 # NSE stocks (auto_nse.py) and Nifty/Bank Nifty F&O (auto_fno.py) are evaluated by the agents either way. With
 # auto_buy off a candidate that passes every agent is only logged ("LOG ONLY"); with it on it is bought on paper.
 # The code default stays off (the 31 Oct backtests found no edge after charges); this switch is a forward test.
-AUTOBUY = {"NSE": ("auto_nse", os.path.join(LIVE, "auto_nse_config.json")),
-           "FNO": ("auto_fno", os.path.join(LIVE, "auto_fno_config.json"))}
+AUTOBUY = {"NSE": ("auto_nse", os.path.join(LIVE, "auto_nse_config.json"), "auto_buy"),
+           "FNO": ("auto_fno", os.path.join(LIVE, "auto_fno_config.json"), "auto_buy"),
+           "US_SHORT": ("auto_us", os.path.join(LIVE, "auto_us_config.json"), "allow_short")}
 
 
 def _autobuy_cfg(m):
-    mod, path = AUTOBUY[m]
+    mod, path, _ = AUTOBUY[m]
     if ROOT not in sys.path:
         sys.path.insert(0, ROOT)
     try:
@@ -915,7 +916,7 @@ def autobuy_get():
     out = {}
     for m in AUTOBUY:
         cfg, _ = _autobuy_cfg(m)
-        out[m] = {"on": bool(cfg.get("auto_buy")), "entry_start": cfg.get("entry_start"), "entry_end": cfg.get("entry_end")}
+        out[m] = {"on": bool(cfg.get(AUTOBUY[m][2])), "entry_start": cfg.get("entry_start"), "entry_end": cfg.get("entry_end")}
     return out
 
 
@@ -924,12 +925,16 @@ async def autobuy_set(request: Request):
     body = await request.json()
     m, on = body.get("market"), bool(body.get("on"))
     if m not in AUTOBUY:
-        raise HTTPException(400, "market must be NSE or FNO")
+        raise HTTPException(400, "market must be NSE, FNO or US_SHORT")
     cfg, path = _autobuy_cfg(m)
-    if bool(cfg.get("auto_buy")) != on:
-        cfg["auto_buy"] = on
-        cfg["_edited"] = "auto_buy %s from the dashboard %s" % ("on" if on else "off", _now().strftime("%Y-%m-%d %H:%M"))
+    k = AUTOBUY[m][2]
+    if bool(cfg.get(k)) != on:
+        cfg[k] = on
+        cfg["_edited"] = "%s %s from the dashboard %s" % (k, "on" if on else "off", _now().strftime("%Y-%m-%d %H:%M"))
         _write_json(path, cfg)
+        if m == "US_SHORT":
+            audit("US shorts %s (opening-range breakdowns, paper; not backtested)" % ("ON" if on else "off"))
+            return {"ok": True, "market": m, "on": on}
         audit("%s paper buys %s%s" % (m, "ON (forward test: the backtest found no edge after charges)" if on else "off",
                                       "" if not on else "; entries %s-%s IST" % (cfg.get("entry_start"), cfg.get("entry_end"))))
     return {"ok": True, "market": m, "on": on}
