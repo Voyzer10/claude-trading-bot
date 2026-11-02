@@ -220,8 +220,9 @@ def is_session(now):
 
 # ---------------------------------------------------------------- ORB
 
-def orb_one(d, day, cutoff, or_minutes):
-    """Opening-range breakout on today's 5-minute bars. Returns hit dict, 'none', or None (unusable)."""
+def orb_one(d, day, cutoff, or_minutes, side="long"):
+    """Opening-range breakout (close above the range high) or, with side "short"/"both", breakdown (close
+    below the range low) on today's 5-minute bars. Returns hit dict, 'none', or None (unusable)."""
     o_start = at(day, OPEN)
     o_end = o_start + timedelta(minutes=or_minutes)
     bars = []
@@ -251,7 +252,9 @@ def orb_one(d, day, cutoff, or_minutes):
             first_open = o
             break
     for i, b in enumerate(after):
-        if b[4] > hi:
+        up = side in ("long", "both") and b[4] > hi
+        down = side in ("short", "both") and b[4] < lo
+        if up or down:
             # volume vs the bars just before the breakout (the 9:15 bars are the day's loudest, so
             # comparing an 11:00 bar to them rejects almost everything)
             prior = (rng + after[:i])[-6:]
@@ -259,7 +262,8 @@ def orb_one(d, day, cutoff, or_minutes):
             return {"time": b[1].strftime("%H:%M"), "price": round(b[4], 2),
                     "vol_x_recent": round(b[5] / base, 2) if base else None,
                     "range_high": round(hi, 2), "range_low": round(lo, 2),
-                    "pct_over": round((b[4] / hi - 1) * 100, 2),
+                    "pct_over": round((b[4] / hi - 1) * 100, 2) if up else round((b[4] / lo - 1) * 100, 2),
+                    "side": "long" if up else "short",
                     "last": round(bars[-1][4], 2), "turnover": bars[-1][4] * vol,
                     "vol_x": round(b[5] / rng_vol, 2) if rng_vol else None,
                     "day_open": round(first_open, 2) if first_open else None}
@@ -276,21 +280,23 @@ def orb_ready(cutoff, or_minutes):
     return cutoff.weekday() < 5 and cutoff >= at(cutoff, OPEN) + timedelta(minutes=or_minutes + 5)
 
 
-def orb_scan(symbols, market, now, cutoff, or_minutes=15, min_price=20.0, workers=8, quiet=False):
+def orb_scan(symbols, market, now, cutoff, or_minutes=15, min_price=20.0, workers=8, quiet=False, side="long"):
     """Fetch and scan. Returns a dict (never prints)."""
     data, failed = fetch_many(symbols, "1d", "5m", workers, SUFFIX[market], quiet)
     hits, usable = [], 0
     for s, d in data.items():
-        r = orb_one(d, now, cutoff, or_minutes)
+        r = orb_one(d, now, cutoff, or_minutes, side)
         if r is None:
             continue
         usable += 1
         if r != "none" and r["price"] >= min_price:
             pc = (d.get("meta") or {}).get("chartPreviousClose") or (d.get("meta") or {}).get("previousClose")
-            r.update({"symbol": s, "market": market, "setup": "orb", "prev_close": pc,
+            short = r.get("side") == "short"
+            ref = r["range_low"] if short else r["range_high"]
+            r.update({"symbol": s, "market": market, "setup": "orb_short" if short else "orb", "prev_close": pc,
                       "gap_pct": round((r["day_open"] / pc - 1) * 100, 2) if pc and r.get("day_open") else None,
-                      "holding": r["last"] > r["range_high"],
-                      "pct_now": round((r["last"] / r["range_high"] - 1) * 100, 2)})
+                      "holding": r["last"] < r["range_low"] if short else r["last"] > r["range_high"],
+                      "pct_now": round((r["last"] / ref - 1) * 100, 2)})
             hits.append(r)
     hits.sort(key=lambda h: h["time"])
     return {"mode": "orb", "market": market, "as_of": cutoff.isoformat(), "universe": len(symbols),

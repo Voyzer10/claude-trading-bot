@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { getJSON, postJSON, OPS, errText } from "@/lib/api";
 
 type Control = { CRYPTO: boolean; US: boolean; NSE: boolean; FNO: boolean; paused: boolean };
-type AutoBuy = Record<"NSE" | "FNO" | "US_SHORT", { on: boolean; entry_start?: string; entry_end?: string }>;
+type AbKey = "NSE" | "FNO" | "US_SHORT" | "NSE_SHORT";
+type AutoBuy = Partial<Record<AbKey, { on: boolean; entry_start?: string; entry_end?: string }>>;
 type ControlResponse = { control: Control; cloud_markets: string[]; can_change: boolean; mode?: "local" | "cloud" };
 
 const MARKETS: { key: keyof Control; name: string; note: string }[] = [
@@ -26,18 +27,22 @@ export default function ControlPanel() {
     getJSON<AutoBuy>(`${OPS}/autobuy`).then(setAb).catch(() => setAb(null)); // ops API: PC/VPS only
   }, []);
 
-  async function setBuy(m: "NSE" | "FNO" | "US_SHORT", on: boolean) {
+  async function setBuy(m: AbKey, on: boolean) {
     if (!ab) return;
     setBusy(`buy-${m}`);
     setMsg(null);
     try {
       await postJSON(`${OPS}/autobuy`, { market: m, on });
       setAb({ ...ab, [m]: { ...ab[m], on } });
+      if (m === "NSE_SHORT") {
+        setMsg(on ? "NSE shorts on: breakdowns go through the agents as intraday shorts (bought only when NSE paper buys are on)." : "NSE shorts off: NSE is long only.");
+        return;
+      }
       if (m === "US_SHORT") {
         setMsg(on ? "US shorts on: opening-range breakdowns are sold short on paper (from 9:50 AM ET, SPY must be weak)." : "US shorts off: US trades long only.");
         return;
       }
-      setMsg(on ? `${m} paper buys on: candidates that pass every agent are bought on paper (entries ${ab[m].entry_start}-${ab[m].entry_end} IST).` : `${m} paper buys off: candidates are logged only.`);
+      setMsg(on ? `${m} paper buys on: candidates that pass every agent are bought on paper (entries ${ab[m]?.entry_start}-${ab[m]?.entry_end} IST).` : `${m} paper buys off: candidates are logged only.`);
     } catch (e) {
       setMsg(`Not saved: ${errText(e)}`);
     } finally {
@@ -139,25 +144,41 @@ export default function ControlPanel() {
             <b>Forward tests (paper)</b>
             <p className="small muted">
               India: off logs a candidate that passes every agent, on buys it on paper (the backtests found no edge
-              after charges). US shorts: opening-range breakdowns sold short on paper while SPY is weak; not backtested
-              yet. Treat these trades as tests, not as proof.
+              after charges). Shorts: opening-range breakdowns sold short on paper while Nifty / SPY is weak (NSE shorts
+              need NSE paper buys on); not backtested yet. Crypto shorts: Settings, setup range_breakdown_4h. F&O
+              breakdowns buy a put. Treat these trades as tests, not as proof.
             </p>
           </div>
-          {(["NSE", "FNO"] as const).map((m) => (
+          {(["NSE", "FNO"] as const).filter((m) => ab[m]).map((m) => (
             <label key={m} className="switch-row" htmlFor={`buy-${m}`}>
               <input
                 type="checkbox"
                 role="switch"
                 id={`buy-${m}`}
-                checked={ab[m].on}
+                checked={Boolean(ab[m]?.on)}
                 disabled={busy !== null || !c[m]}
                 onChange={(e) => setBuy(m, e.target.checked)}
               />
               <span>
-                {m === "NSE" ? "NSE stocks" : "F&O"} <span className="muted small">entries {ab[m].entry_start}-{ab[m].entry_end}</span>
+                {m === "NSE" ? "NSE stocks" : "F&O"} <span className="muted small">entries {ab[m]?.entry_start}-{ab[m]?.entry_end}</span>
               </span>
             </label>
           ))}
+          {ab.NSE_SHORT && (
+            <label className="switch-row" htmlFor="buy-NSE_SHORT">
+              <input
+                type="checkbox"
+                role="switch"
+                id="buy-NSE_SHORT"
+                checked={ab.NSE_SHORT.on}
+                disabled={busy !== null || !c.NSE}
+                onChange={(e) => setBuy("NSE_SHORT", e.target.checked)}
+              />
+              <span>
+                NSE shorts <span className="muted small">breakdowns, intraday</span>
+              </span>
+            </label>
+          )}
           {ab.US_SHORT && (
             <label className="switch-row" htmlFor="buy-US_SHORT">
               <input

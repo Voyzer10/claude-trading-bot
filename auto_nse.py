@@ -59,6 +59,9 @@ DEFAULTS = {
     "min_history_avg_r": 0.10,
     "sim_paths": 2000,
     "max_new_per_cycle": 3,
+    "allow_short": True,          # also evaluate opening-range BREAKDOWNS (close below the range low) as
+                                  # intraday shorts: mirror rules (Nifty bearish, stop above, target below,
+                                  # time machine "down"); bought only when auto_buy is on. Not backtested.
     "auto_buy": False,            # research.py nse (31 Oct 2026): no filter combination had an edge after
                                   # charges over 60 days, so candidates are evaluated and logged, not bought
 }
@@ -123,11 +126,13 @@ def record(rec):
 
 
 def run_one(h, cfg, reg, now, log):
+    short = h.get("side") == "short"
     sym = h["symbol"]
-    rec = {"time": datetime.now(S.IST).isoformat(), "symbol": "NSE:" + sym, "setup": "orb", "steps": {}, "result": None}
+    rec = {"time": datetime.now(S.IST).isoformat(), "symbol": "NSE:" + sym, "setup": "orb_short" if short else "orb",
+           "steps": {}, "result": None}
     st = rec["steps"]
     st["1_scanner"] = {k: h.get(k) for k in ("time", "price", "range_high", "range_low", "pct_over", "last",
-                                             "vol_x", "vol_x_recent", "gap_pct")}
+                                             "vol_x", "vol_x_recent", "gap_pct", "side")}
 
     def done(result, why):
         rec["result"], rec["why"] = result, why
@@ -144,9 +149,10 @@ def run_one(h, cfg, reg, now, log):
 
     if cfg["regime_filter"]:
         st["regime"] = reg
-        if not reg or not reg["bullish"]:
-            return done("skipped", "market regime: Nifty is not above its range midpoint and its open" if reg
-                        else "market regime unknown (no Nifty data)")
+        if not reg or not reg["bearish" if short else "bullish"]:
+            return done("skipped", ("market regime: Nifty is not below its range midpoint and its open (no shorts)"
+                                    if short else "market regime: Nifty is not above its range midpoint and its open")
+                        if reg else "market regime unknown (no Nifty data)")
     vx = h.get("vol_x_recent", h.get("vol_x"))
     if vx is not None and vx < cfg["min_vol_x"]:
         return done("skipped", "breakout volume %.2fx the 6 bars before it (min %.2fx)" % (vx, cfg["min_vol_x"]))
@@ -157,23 +163,31 @@ def run_one(h, cfg, reg, now, log):
         price, _ = P.fetch_price("NSE", sym)
     except Exception as e:
         return done("skipped", "no live price: %s" % e)
-    stop = h["range_low"] if cfg["stop"] == "range-low" else (h["range_high"] + h["range_low"]) / 2
-    stop = P.round_px("NSE", stop)
-    risk = price - stop
-    st["3_entry"] = {"price_now": price, "trigger": h["range_high"],
-                     "chase_r": round((price - h["range_high"]) / risk, 2) if risk > 0 else None}
+    mid = (h["range_high"] + h["range_low"]) / 2
+    if short:   # mirror: stop above (range middle, or the range high for "range-low"), trigger is the range low
+        stop = P.round_px("NSE", h["range_high"] if cfg["stop"] == "range-low" else mid, down=False)
+        trigger, risk, beyond = h["range_low"], stop - price, h["range_low"] - price
+    else:
+        stop = P.round_px("NSE", h["range_low"] if cfg["stop"] == "range-low" else mid)
+        trigger, risk, beyond = h["range_high"], price - stop, price - h["range_high"]
+    st["3_entry"] = {"side": "short" if short else "long", "price_now": price, "trigger": trigger,
+                     "chase_r": round(beyond / risk, 2) if risk > 0 else None}
     if risk <= 0:
-        return done("skipped", "price %s is at/below the stop %s" % (price, stop))
-    if price < h["range_high"]:
-        return done("skipped", "price %s fell back under the range high %s" % (price, h["range_high"]))
-    if (price - h["range_high"]) / risk > cfg["max_chase_r"]:
-        return done("skipped", "chasing: %.2fR past the trigger (max %.2fR)" % ((price - h["range_high"]) / risk, cfg["max_chase_r"]))
+        return done("skipped", "price %s is already past the stop %s" % (price, stop))
+    if beyond < 0:
+        return done("skipped", "price %s moved back inside the range (%s %s)" % (
+            price, "low" if short else "high", trigger))
+    if beyond / risk > cfg["max_chase_r"]:
+        return done("skipped", "chasing: %.2fR past the trigger (max %.2fR)" % (beyond / risk, cfg["max_chase_r"]))
     stop_pct = risk / price * 100
-    target = P.round_px("NSE", price + cfg["target_r"] * risk, down=False)
+    target = P.round_px("NSE", price - cfg["target_r"] * risk if short else price + cfg["target_r"] * risk, down=short)
     pcfg = P.load_config()
     acc = pcfg["accounts"]["INDIA"]
     q_est = max(1, int(min(acc["max_loss_per_trade"] / risk, acc["capital"] * acc["max_position_pct"] / 100 / price)))
-    cost = P.charges(pcfg, "NSE", sym, "buy", q_est * price) + P.charges(pcfg, "NSE", sym, "sell", q_est * target)
+    if short:   # sell first (STT on the sell), buy back at the target
+        cost = P.charges(pcfg, "NSE", sym, "sell", q_est * price) + P.charges(pcfg, "NSE", sym, "buy", q_est * target)
+    else:
+        cost = P.charges(pcfg, "NSE", sym, "buy", q_est * price) + P.charges(pcfg, "NSE", sym, "sell", q_est * target)
     cost_r = cost / (q_est * risk)
     st["4_exit"] = {"entry": price, "stop": stop, "target": target, "stop_pct": round(stop_pct, 2),
                     "charges_r": round(cost_r, 3), "flat_by": acc["flat_by"]}
@@ -186,8 +200,9 @@ def run_one(h, cfg, reg, now, log):
         return done("skipped", "time machine: no history (%s)" % e)
     if not d:
         return done("skipped", "time machine: no history")
-    hist = TM.history(d, "up", cfg["target_r"], 15, cfg["entry_end"], acc["flat_by"], cost_r, before=now.date())
-    sim = TM.replay(d, price, stop, target, now, "up", acc["flat_by"], cfg["sim_paths"], None, cost_r)
+    dirn = "down" if short else "up"
+    hist = TM.history(d, dirn, cfg["target_r"], 15, cfg["entry_end"], acc["flat_by"], cost_r, before=now.date())
+    sim = TM.replay(d, price, stop, target, now, dirn, acc["flat_by"], cfg["sim_paths"], None, cost_r)
     st["5_timemachine"] = {"history": hist, "replay": sim}
     if sim is None:
         return done("skipped", "time machine: too little history or no time left")
@@ -200,11 +215,13 @@ def run_one(h, cfg, reg, now, log):
         st["5_timemachine"]["note"] = "history too short to judge (%d fires); replays only" % hist.get("fired", 0)
 
     if not cfg.get("auto_buy", False):
-        return done("LOG ONLY", "would paper-buy @ %s, stop %s, target %s; replays %+.2fR (auto_buy is off: "
-                    "the backtest found no edge for this rule)" % (price, stop, target, sim["avg_r"]))
+        return done("LOG ONLY", "would paper-%s @ %s, stop %s, target %s; replays %+.2fR (auto_buy is off: "
+                    "the backtest found no edge for this rule)" % ("short" if short else "buy", price, stop, target,
+                                                                   sim["avg_r"]))
     led = P.load_ledger(pcfg)
     args = type("A", (), {"symbol": "NSE:" + sym, "stop": str(stop), "target": str(target), "qty": None, "lots": None,
-                          "price": str(price), "note": "auto_nse: orb", "force": False})()
+                          "price": str(price), "note": "auto_nse: orb short" if short else "auto_nse: orb",
+                          "force": False, "side": "short" if short else "long"})()
     buf = io.StringIO()
     try:
         with contextlib.redirect_stdout(buf):
@@ -213,10 +230,11 @@ def run_one(h, cfg, reg, now, log):
     except P.PaperError as e:
         st["6-8_budget_risk_broker"] = "BLOCK: %s" % e
         return done("blocked", str(e))
-    st["6-8_budget_risk_broker"] = {"verdict": "PASS, paper buy filled", "report": buf.getvalue().strip().splitlines()}
+    st["6-8_budget_risk_broker"] = {"verdict": "PASS, paper %s filled" % ("short" if short else "buy"),
+                                    "report": buf.getvalue().strip().splitlines()}
     st["9_alerts"] = "live.py checks stop %s (breakeven at +%sR) / target %s every cycle; flat by %s" % (
         pos["stop"], acc.get("breakeven_at_r"), pos["target"], acc["flat_by"])
-    return done("PAPER BUY", "%d sh @ %s, stop %s, target %s; replays %+.2fR, history %s" % (
+    return done("PAPER SHORT" if short else "PAPER BUY", "%d sh @ %s, stop %s, target %s; replays %+.2fR, history %s" % (
         pos["qty"], pos["entry"], pos["stop"], pos["target"], sim["avg_r"],
         ("%d fires %+.2fR" % (hist["fired"], hist["avg_r"])) if hist.get("fired") else "none"))
 

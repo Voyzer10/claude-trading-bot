@@ -896,7 +896,8 @@ def agents():
 # The code default stays off (the 31 Oct backtests found no edge after charges); this switch is a forward test.
 AUTOBUY = {"NSE": ("auto_nse", os.path.join(LIVE, "auto_nse_config.json"), "auto_buy"),
            "FNO": ("auto_fno", os.path.join(LIVE, "auto_fno_config.json"), "auto_buy"),
-           "US_SHORT": ("auto_us", os.path.join(LIVE, "auto_us_config.json"), "allow_short")}
+           "US_SHORT": ("auto_us", os.path.join(LIVE, "auto_us_config.json"), "allow_short"),
+           "NSE_SHORT": ("auto_nse", os.path.join(LIVE, "auto_nse_config.json"), "allow_short")}
 
 
 def _autobuy_cfg(m):
@@ -925,15 +926,15 @@ async def autobuy_set(request: Request):
     body = await request.json()
     m, on = body.get("market"), bool(body.get("on"))
     if m not in AUTOBUY:
-        raise HTTPException(400, "market must be NSE, FNO or US_SHORT")
+        raise HTTPException(400, "market must be NSE, FNO, US_SHORT or NSE_SHORT")
     cfg, path = _autobuy_cfg(m)
     k = AUTOBUY[m][2]
     if bool(cfg.get(k)) != on:
         cfg[k] = on
         cfg["_edited"] = "%s %s from the dashboard %s" % (k, "on" if on else "off", _now().strftime("%Y-%m-%d %H:%M"))
         _write_json(path, cfg)
-        if m == "US_SHORT":
-            audit("US shorts %s (opening-range breakdowns, paper; not backtested)" % ("ON" if on else "off"))
+        if m in ("US_SHORT", "NSE_SHORT"):
+            audit("%s shorts %s (opening-range breakdowns, paper; not backtested)" % (m[:-6], "ON" if on else "off"))
             return {"ok": True, "market": m, "on": on}
         audit("%s paper buys %s%s" % (m, "ON (forward test: the backtest found no edge after charges)" if on else "off",
                                       "" if not on else "; entries %s-%s IST" % (cfg.get("entry_start"), cfg.get("entry_end"))))
