@@ -199,9 +199,9 @@ def score(events, f, split, stats):
 
 
 LIVE = {"stop": "mid", "exit": "2R", "hold": 24, "min_vol_x": 1.5, "regime": True, "min_stop_pct": 1.0}
-# the rule the live bot runs since rules v4 (auto_crypto.py DEFAULTS)
+# the rule the live bot runs (auto_crypto.py DEFAULTS, rules v5 = v4 without the chase skip)
 LIVE_V4 = {"stop": "atr1.5", "exit": "trail", "hold": 48, "min_vol_x": 1.5, "regime": True, "trend": "off",
-           "max_range_pct": None, "session": "active", "max_fee_r": 0.25, "max_chase_r": 0.5}
+           "max_range_pct": None, "session": "active", "max_fee_r": 0.25, "max_chase_r": None}
 
 
 def row(r, label=""):
@@ -264,8 +264,8 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist):
              "each side. Out-of-sample = days from %s." % (len(data), len(days), days[0], days[-1], len(events),
                                                            tight_n, split), "",
              row(live, "OLD LIVE RULE (v3):      "), "",
-             row(score(events, LIVE_V4, split, stats), "LIVE RULE NOW (v4):      "), "",
-             "V4 NEIGHBOURS (one setting changed at a time; a robust rule has neighbours that also do well):"]
+             row(score(events, LIVE_V4, split, stats), "LIVE RULE NOW (v5):      "), "",
+             "LIVE RULE NEIGHBOURS (one setting changed at a time; a robust rule has neighbours that also do well):"]
     for k, vals in GRID.items():
         for v in vals:
             if v == LIVE_V4[k]:

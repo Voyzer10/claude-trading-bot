@@ -409,7 +409,7 @@ function RulesSection({ snap }: { snap: Snapshot }) {
     ["Fees at most", r.max_fee_r !== undefined ? `${r.max_fee_r}R of the risk` : "—"],
     ["BTC regime", r.btc_regime ? "on (long only when BTC is above its 4h midpoint)" : "off"],
     ["Thin hours skipped", Array.isArray(r.skip_hours_utc) && r.skip_hours_utc.length ? `${(r.skip_hours_utc as number[])[0]}:00–${(r.skip_hours_utc as number[]).slice(-1)[0] + 1}:00 UTC` : "none"],
-    ["Max chase", r.max_chase_r !== undefined ? `${r.max_chase_r}R past the trigger` : "—"],
+    ["Max chase", r.max_chase_r ? `${r.max_chase_r}R past the trigger` : "off"],
     ["Time stop", r.max_hold_hours !== undefined ? `${r.max_hold_hours} hours` : "—"],
     ["Rules version", String(r.rules_version ?? "—")],
   ];
