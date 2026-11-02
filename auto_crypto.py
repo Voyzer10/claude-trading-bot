@@ -79,6 +79,7 @@ DEFAULTS = {
     # Smart Money "liquidity sweep and reclaim" (smc.py), used when "smc_sweep_long" / "smc_sweep_short" is in
     # enabled_setups (off by default). Test it first: python research.py crypto-smc, then set these to the
     # report's most consistent combination. Thin hours, the fee cap and the time stop above apply too.
+    "smc_variant": "any",         # any | wick (one candle sweeps and closes back in) | 2bar (failed breakdown)
     "smc_stop": "sweep",          # sweep: beyond the sweep's extreme (0.1 ATR buffer) | atr1.5: 1.5 x ATR
     "smc_exit": "2R",             # 2R target | mid: target the 4h range's middle | trail (longs; shorts use 2R)
     "smc_min_vol_x": 0.0,         # sweep candle volume vs the 4h average
@@ -280,6 +281,8 @@ def run_smc(h, cfg, log):
 
     if not s:
         return done("skipped", "scanner sent no sweep details")
+    if cfg.get("smc_variant", "any") != "any" and s.get("variant") != cfg["smc_variant"]:
+        return done("skipped", "SMC variant: a %s sweep (rule takes %s only)" % (s.get("variant"), cfg["smc_variant"]))
     try:
         st["2_news"] = headlines(sym)
     except Exception as e:
