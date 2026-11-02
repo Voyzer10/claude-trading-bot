@@ -624,18 +624,67 @@ DOWNLOADS = {"ledger.json": LEDGER, "log.txt": LOG, "decisions.jsonl": os.path.j
              "auto_config.json": RULES, "paper_config.json": PAPER_CFG}
 
 
+def _trades_csv(led):
+    cols = ["exit_date", "market", "symbol", "side", "qty", "entry", "exit", "stop", "target", "pnl", "r",
+            "reason", "note", "entry_time", "exit_time"]
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(cols)
+    for c in led.get("closed") or []:
+        w.writerow([c.get(k, "long" if k == "side" else "") for k in cols])
+    return buf.getvalue()
+
+
+def _setup_of(note):
+    n = (note or "").replace("auto:", "").replace("auto_us:", "").replace("auto_nse:", "").strip()
+    return n.split()[0] if n else "manual"
+
+
+def _summary(led):
+    """Quick totals for the analyst: closed trades by account and setup, and every decision by result/reason."""
+    by = {}
+    for c in led.get("closed") or []:
+        k = "%s | %s | %s" % (c.get("market"), _setup_of(c.get("note")), c.get("side", "long"))
+        x = by.setdefault(k, {"trades": 0, "wins": 0, "pnl": 0.0, "r_sum": 0.0})
+        x["trades"] += 1
+        x["wins"] += (c.get("pnl") or 0) > 0
+        x["pnl"] = round(x["pnl"] + (c.get("pnl") or 0), 4)
+        x["r_sum"] = round(x["r_sum"] + (c.get("r") or 0), 3)
+    for x in by.values():
+        x["avg_r"] = round(x["r_sum"] / x["trades"], 3) if x["trades"] else None
+    dec = {"by_result": {}, "by_reason": {}, "by_day": {}}
+    try:
+        import dashboard_push as D
+        cat = D.category
+    except Exception:
+        cat = lambda res, why: res or "?"
+    try:
+        with open(os.path.join(LIVE, "decisions.jsonl"), encoding="utf-8", errors="replace") as fh:
+            for ln in fh:
+                try:
+                    r = json.loads(ln)
+                except ValueError:
+                    continue
+                res, day = r.get("result") or "?", (r.get("time") or "")[:10]
+                mk = (r.get("symbol") or "?").split(":")[0]
+                dec["by_result"][res] = dec["by_result"].get(res, 0) + 1
+                c = "%s | %s" % (mk, cat(res, r.get("why")))
+                dec["by_reason"][c] = dec["by_reason"].get(c, 0) + 1
+                d = dec["by_day"].setdefault(day, {})
+                d[res] = d.get(res, 0) + 1
+    except OSError:
+        pass
+    return {"closed_by_market_setup_side": by, "open_positions": len(led.get("open") or []),
+            "accounts": led.get("accounts"), "decisions": dec}
+
+
 @router.get("/download/{name}")
 def download(name: str):
+    if name == "all.zip":
+        return _download_all()
     if name == "trades.csv":
         led = _read_json(LEDGER, {"closed": []})
-        cols = ["exit_date", "market", "symbol", "side", "qty", "entry", "exit", "stop", "target", "pnl", "r",
-                "reason", "entry_time", "exit_time"]
-        buf = io.StringIO()
-        w = csv.writer(buf)
-        w.writerow(cols)
-        for c in led.get("closed") or []:
-            w.writerow([c.get(k, "long" if k == "side" else "") for k in cols])
-        return Response(buf.getvalue(), media_type="text/csv",
+        return Response(_trades_csv(led), media_type="text/csv",
                         headers={"Content-Disposition": "attachment; filename=paper_trades.csv"})
     path = DOWNLOADS.get(name)
     if not path:
@@ -643,6 +692,70 @@ def download(name: str):
     if not os.path.exists(path):
         raise HTTPException(404, "%s does not exist yet" % name)
     return FileResponse(path, filename=name)
+
+
+# Files that never go into the export: secrets (Telegram token) and bulky caches.
+_EXPORT_SKIP = {"alerts.json"}
+
+
+def _download_all():
+    """Everything the bot knows, in one zip, for review: ledger, trades, decisions, logs, rules, state,
+    coin profiles, backtest reports. No secrets: alerts.json (Telegram token) is left out, and the dashboard
+    password lives outside the app folder (/etc/trader/trader.env) and is never read here."""
+    import zipfile
+    now = _now()
+    led = _read_json(LEDGER, {"accounts": {}, "open": [], "closed": []})
+    mem = io.BytesIO()
+    added = []
+    with zipfile.ZipFile(mem, "w", zipfile.ZIP_DEFLATED) as z:
+        def add_file(path, arc):
+            if os.path.isfile(path) and os.path.basename(path) not in _EXPORT_SKIP:
+                z.write(path, arc)
+                added.append((arc, os.path.getsize(path)))
+
+        for name in sorted(os.listdir(LIVE)) if os.path.isdir(LIVE) else []:
+            if name.endswith((".json", ".jsonl", ".txt")) and not name.endswith(".tmp"):
+                add_file(os.path.join(LIVE, name), "live/" + name)
+            elif ".bak" in name:
+                add_file(os.path.join(LIVE, name), "live/" + name)
+        add_file(LEDGER, "paper/ledger.json")
+        add_file(PAPER_CFG, "paper/config.json")
+        add_file(UNIVERSE, "universe_crypto.txt")
+        add_file(PREFS, "dashboard_prefs.json")
+        rdir = os.path.join(T, "research")
+        if os.path.isdir(rdir):
+            for name in sorted(os.listdir(rdir)):
+                if name.startswith("report_") and name.endswith(".txt"):
+                    add_file(os.path.join(rdir, name), "research/" + name)
+        if os.path.isdir(JOBS):
+            for name in sorted(os.listdir(JOBS)):
+                if name.endswith((".log", ".json")):
+                    add_file(os.path.join(JOBS, name), "research/jobs/" + name)
+        z.writestr("trades.csv", _trades_csv(led))
+        summary = _summary(led)
+        z.writestr("summary.json", json.dumps(summary, indent=1, default=str))
+        state = _read_json(os.path.join(LIVE, "state.json"), {})
+        readme = [
+            "Trader bot export, %s IST" % now.strftime("%Y-%m-%d %H:%M"),
+            "Host %s. Paper trading only. Runner status: %s." % (
+                os.uname().nodename if hasattr(os, "uname") else "?", state.get("status")),
+            "",
+            "summary.json    totals: closed trades by market | setup | side, decisions by result / reason / day",
+            "trades.csv      every closed paper trade (note = which agent/setup opened it)",
+            "paper/          ledger.json (accounts, open and closed trades), config.json (risk limits, fees)",
+            "live/           decisions.jsonl (every candidate and why), log.txt (runner log), state.json,",
+            "                auto_*config.json (rules per market), coin_profiles.json, control.json, backups",
+            "research/       backtest reports and job logs",
+            "",
+            "Left out on purpose: alerts.json (Telegram token); the dashboard password is not in the app folder.",
+            "",
+            "Files:",
+        ] + ["  %-48s %10s bytes" % (a, "{:,}".format(s)) for a, s in added]
+        z.writestr("README.txt", "\n".join(readme) + "\n")
+    audit("export: all data downloaded (%d files)" % (len(added) + 3))
+    fname = "trader-export-%s.zip" % now.strftime("%Y%m%d-%H%M")
+    return Response(mem.getvalue(), media_type="application/zip",
+                    headers={"Content-Disposition": "attachment; filename=%s" % fname})
 
 
 # ------------------------------------------------------------------ agents (the day-trader skill pipeline)
