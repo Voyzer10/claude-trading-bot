@@ -23,7 +23,7 @@ const RULE_LABELS: Record<string, [string, string]> = {
   exit: ["Exit", "trail: break-even at +1R, then the stop follows the high (v4). target: fixed target at Target (R)."],
   trail_atr_k: ["Trail distance (x ATR)", "How far under the highest price the trailing stop follows."],
   target_r: ["Target (R)", "Take profit at this many times the risk (exit = target only)."],
-  max_chase_r: ["Max chase (R)", "Skip if price already ran this far past the breakout."],
+  max_chase_r: ["Max chase (R)", "0 = off (v5: skipping strong breakout candles hurt in the backtest). >0 skips a breakout that already ran this far."],
   min_stop_pct: ["Min stop distance (%)", "0 = off (v4 uses the fee cap instead). v3 used 1%."],
   min_vol_x: ["Min breakout volume (x)", "Breakout candle volume vs the 4h average."],
   btc_regime: ["BTC filter", "Only buy when BTC is above the middle of its own 4h range."],

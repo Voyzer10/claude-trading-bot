@@ -48,7 +48,11 @@ DEFAULTS = {
     # rules v4 (research.py crypto-v4, 2 Nov 2026, 20 coins, 58 days, 70/30 walk-forward): the stop is 1.5 x
     # ATR(14) of the 15m bars instead of the range middle with a 1% minimum, thin hours are skipped, the hold
     # is 12h and the exit trails. Out-of-sample: v4 trail 42 trades +0.69R avg, v3 68 trades +0.20R avg.
-    "rules_version": 4,
+    # rules v5 (2 Nov 2026, same data, v4 neighbours): the 0.5R "chasing" skip is off. With it the v4 rule took
+    # 20 out-of-sample trades at +0.52R (in-sample 110 at +0.45R); without it 42 at +0.69R (in-sample 168 at
+    # +0.41R): the strongest breakout candles were being thrown away. The thin-hours skip stays: trading those
+    # hours added 23 in-sample trades that lost about -0.37R each.
+    "rules_version": 5,
     "stop": "atr",                # atr (v4), range-mid or range-low (v3 and older)
     "stop_atr_k": 1.5,            # stop = entry - k x ATR(14, 15m)
     "exit": "trail",              # trail: break-even at +trail_arm_r, then trail_atr_k x ATR under the high
@@ -56,7 +60,7 @@ DEFAULTS = {
     "trail_atr_k": 2.0,
     "trail_arm_r": 1.0,
     "target_r": 2.0,              # used when exit = target
-    "max_chase_r": 0.5,           # skip if price already ran more than this many R past the range high
+    "max_chase_r": 0,             # 0 = off (v5). >0: skip if price already ran this many R past the range high
     "min_stop_pct": 0.0,          # v3 used 1.0; v4 sizes the stop from ATR and caps the fee share instead
     "min_vol_x": 1.5,             # breakout candle volume vs the 4h range's average
     "btc_regime": True,           # BTC's last close above the midpoint of its own prior 4h of closes
@@ -307,7 +311,7 @@ def run_one(h, cfg, log):
     if beyond < 0:
         return done("skipped", "price %s moved back inside the 4h range (%s %s)" % (
             price, "low" if short else "high", trigger))
-    if chase > cfg["max_chase_r"]:
+    if cfg.get("max_chase_r") and chase > cfg["max_chase_r"]:
         return done("skipped", "chasing: price is %.2fR past the trigger (max %.2fR)" % (chase, cfg["max_chase_r"]))
 
     trail = cfg.get("exit") == "trail" and not short
