@@ -211,6 +211,28 @@ def run_short(tk, hit, cfg, log, auto):
         pos["qty"], pos["entry"], pos["stop"], pos["target"]))
 
 
+def sync_pack_config():
+    """The pack's budget and risk scripts read us/trader/config.json; give them the paper US account's numbers
+    (2 Nov: budget was unset, so every long that passed the time machine failed at the budget step)."""
+    path = os.path.join(US, "trader", "config.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            c = json.load(fh)
+    except Exception:
+        c = {}
+    pcfg = P.load_config()
+    acc = pcfg["accounts"]["US"]
+    led = P.load_ledger(pcfg)
+    want = {"budget": round(float(led["accounts"]["US"]["cash"]), 2), "max_loss_per_trade_usd": acc["max_loss_per_trade"],
+            "max_daily_loss_usd": acc["daily_loss_limit"], "max_trades_per_day": acc["max_trades_per_day"],
+            "max_position_pct": acc["max_position_pct"]}
+    if any(c.get(k) != v for k, v in want.items()):
+        c.update(want)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(c, fh, indent=2)
+
+
 def run_one(tk, hit, cfg, log, auto):
     if hit.get("side") == "short":
         return run_short(tk, hit, cfg, log, auto)
@@ -258,6 +280,10 @@ def run_one(tk, hit, cfg, log, auto):
     if (hist.get("triggered") or 0) >= cfg["min_history_trades"] and (hist.get("avg_R") or 0) < cfg["min_history_avg_r"]:
         return done("skipped", "time machine: this rule averaged %+.2fR over %d past fires" % (hist["avg_R"], hist["triggered"]))
 
+    try:
+        sync_pack_config()
+    except Exception as ex:
+        log("AUTO US: could not sync the pack's budget config: %s" % ex)
     rc, out = sh([os.path.join("trader-budget", "size.py"), "--write"])
     st["6_budget"] = tail(out, 4)
     orders = (us_json(os.path.join("trader", "orders.json")) or {}).get("orders", [])
