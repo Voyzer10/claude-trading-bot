@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getJSON, postJSON, OPS, errText } from "@/lib/api";
 
 type Control = { CRYPTO: boolean; US: boolean; NSE: boolean; FNO: boolean; paused: boolean };
+type AutoBuy = Record<"NSE" | "FNO", { on: boolean; entry_start: string; entry_end: string }>;
 type ControlResponse = { control: Control; cloud_markets: string[]; can_change: boolean; mode?: "local" | "cloud" };
 
 const MARKETS: { key: keyof Control; name: string; note: string }[] = [
   { key: "CRYPTO", name: "Crypto", note: "20 coins, 4h breakouts, auto paper trades" },
   { key: "US", name: "US stocks", note: "~5,900 stocks, opening-range breakouts" },
-  { key: "NSE", name: "NSE stocks", note: "Backtest found no edge: log-only" },
-  { key: "FNO", name: "Nifty / Bank Nifty F&O", note: "Backtest found no edge: log-only" },
+  { key: "NSE", name: "NSE stocks", note: "Backtest found no edge: log-only unless paper buys are on" },
+  { key: "FNO", name: "Nifty / Bank Nifty F&O", note: "Backtest found no edge: log-only unless paper buys are on" },
 ];
 
 /** Market on/off switches. Local mode (PC): written to trader/live/control.json, which live.py reads before every
@@ -18,6 +20,26 @@ export default function ControlPanel() {
   const [data, setData] = useState<ControlResponse | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [ab, setAb] = useState<AutoBuy | null>(null);
+
+  useEffect(() => {
+    getJSON<AutoBuy>(`${OPS}/autobuy`).then(setAb).catch(() => setAb(null)); // ops API: PC/VPS only
+  }, []);
+
+  async function setBuy(m: "NSE" | "FNO", on: boolean) {
+    if (!ab) return;
+    setBusy(`buy-${m}`);
+    setMsg(null);
+    try {
+      await postJSON(`${OPS}/autobuy`, { market: m, on });
+      setAb({ ...ab, [m]: { ...ab[m], on } });
+      setMsg(on ? `${m} paper buys on: candidates that pass every agent are bought on paper (entries ${ab[m].entry_start}-${ab[m].entry_end} IST).` : `${m} paper buys off: candidates are logged only.`);
+    } catch (e) {
+      setMsg(`Not saved: ${errText(e)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
 
   useEffect(() => {
     fetch("/api/py/control", { cache: "no-store" })
@@ -107,6 +129,32 @@ export default function ControlPanel() {
           );
         })}
       </div>
+      {ab && (
+        <div className="paperbuys">
+          <div>
+            <b>Paper buys for India (forward test)</b>
+            <p className="small muted">
+              Off: a candidate that passes every agent is only logged. On: it is bought on paper. The 31 Oct backtests
+              found no edge after charges, so treat these trades as a test, not as proof. The filters do not change.
+            </p>
+          </div>
+          {(["NSE", "FNO"] as const).map((m) => (
+            <label key={m} className="switch-row" htmlFor={`buy-${m}`}>
+              <input
+                type="checkbox"
+                role="switch"
+                id={`buy-${m}`}
+                checked={ab[m].on}
+                disabled={busy !== null || !c[m]}
+                onChange={(e) => setBuy(m, e.target.checked)}
+              />
+              <span>
+                {m === "NSE" ? "NSE stocks" : "F&O"} <span className="muted small">entries {ab[m].entry_start}-{ab[m].entry_end}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
       {msg && <p className="small muted" style={{ margin: "10px 0 0" }}>{msg}</p>}
     </section>
   );

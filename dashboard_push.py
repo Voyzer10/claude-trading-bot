@@ -159,6 +159,8 @@ def build(state=None):
     for h in daily.get("hits", []):
         daily_by.setdefault(h["symbol"], []).append(h["setup"])
     seen = cm.get("seen") or {}
+    prof_doc = _json(os.path.join(LIVE, "coin_profiles.json"), {}) or {}
+    profiles = prof_doc.get("coins") or {}
     coins = []
     for sym in universe:
         c = (intr.get("coins") or {}).get(sym) or {}
@@ -169,7 +171,8 @@ def build(state=None):
                       "pct_vs_low": c.get("pct_vs_low"), "rsi_15m": c.get("rsi_15m"), "vol_ratio": c.get("vol_ratio"),
                       "range_high": c.get("range_high"), "range_low": c.get("range_low"),
                       "daily": daily_by.get(sym, []),
-                      "seen_today": sorted(k.split("/", 1)[1] for k in seen if k.split("/", 1)[0] == sym)})
+                      "seen_today": sorted(k.split("/", 1)[1] for k in seen if k.split("/", 1)[0] == sym),
+                      "profile": profiles.get(sym)})
 
     decisions = []
     for ln in _tail(DECISIONS, 4000):
@@ -210,6 +213,7 @@ def build(state=None):
                    "uptime_24h_hours": round(up24, 2),
                    "segments": [{"start": a.isoformat(), "end": b.isoformat()} for a, b in segs[-30:]]},
         "crypto": {"universe": universe, "coins": coins, "scan_as_of": intr.get("as_of"),
+                   "profiles_as_of": prof_doc.get("as_of"), "profiles_days": prof_doc.get("days"),
                    "usable": intr.get("usable"), "scanned": intr.get("scanned"), "failed": intr.get("failed"),
                    "daily_closes_through": daily.get("closes_through")},
         "markets": {
