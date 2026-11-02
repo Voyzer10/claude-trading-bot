@@ -17,7 +17,11 @@ type SettingsDoc = {
 };
 
 const RULE_LABELS: Record<string, [string, string]> = {
-  enabled_setups: ["Setups traded", "Long = 4h breakout. Short = 4h breakdown (failed its backtest: keep off)."],
+  enabled_setups: ["Setups traded", "4h breakout (backtested, live). 4h breakdown: failed its backtest. SMC sweeps: run the Crypto SMC backtest first; untick the breakout to use SMC instead of it."],
+  smc_stop: ["SMC stop", "sweep: just beyond the sweep's wick (0.1 ATR buffer). atr1.5: 1.5 x ATR from the entry."],
+  smc_exit: ["SMC exit", "2R target, mid (target the 4h range's middle), or trail (longs only; shorts use 2R)."],
+  smc_min_vol_x: ["SMC min sweep volume (x)", "Sweep candle volume vs the 4h average. 0 = off."],
+  smc_regime: ["SMC BTC filter", "Long only while BTC is above its 4h midpoint, short only below."],
   stop: ["Stop", "atr: 1.5 x ATR under the entry (v4, backtested). range-mid / range-low: the older v3 stops."],
   stop_atr_k: ["ATR stop (x ATR)", "How many ATRs below the entry the stop sits (stop = atr)."],
   exit: ["Exit", "trail: break-even at +1R, then the stop follows the high (v4). target: fixed target at Target (R)."],
@@ -38,7 +42,12 @@ const RISK_LABELS: Record<string, string> = {
   max_position_pct: "Max position (% of capital)",
   fee_pct: "Fee per side % (CoinDCX futures taker + GST: 0.059)",
 };
-const SETUP_NAMES: Record<string, string> = { range_breakout_4h: "Long (breakout)", range_breakdown_4h: "Short (breakdown)" };
+const SETUP_NAMES: Record<string, string> = {
+  range_breakout_4h: "Long (4h breakout)",
+  range_breakdown_4h: "Short (4h breakdown)",
+  smc_sweep_long: "SMC long (swept 4h low, reclaimed)",
+  smc_sweep_short: "SMC short (swept 4h high, reclaimed)",
+};
 
 export default function Settings() {
   const [doc, setDoc] = useState<SettingsDoc | null>(null);

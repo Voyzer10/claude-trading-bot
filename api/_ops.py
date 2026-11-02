@@ -50,7 +50,8 @@ router = APIRouter(prefix="/api/py/ops")
 
 # What the dashboard may change, with limits. Anything else in the files is left alone.
 RULE_FIELDS = {
-    "enabled_setups": {"type": "setups", "choices": ["range_breakout_4h", "range_breakdown_4h"]},
+    "enabled_setups": {"type": "setups", "choices": ["range_breakout_4h", "range_breakdown_4h", "smc_sweep_long",
+                                                     "smc_sweep_short"]},
     "stop": {"type": "choice", "choices": ["atr", "range-mid", "range-low"]},
     "stop_atr_k": {"type": "float", "min": 0.5, "max": 4.0},
     "exit": {"type": "choice", "choices": ["trail", "target"]},
@@ -62,6 +63,10 @@ RULE_FIELDS = {
     "btc_regime": {"type": "bool"},
     "max_fee_r": {"type": "float", "min": 0.05, "max": 1.0},
     "max_hold_hours": {"type": "float", "min": 1, "max": 48},
+    "smc_stop": {"type": "choice", "choices": ["sweep", "atr1.5"]},
+    "smc_exit": {"type": "choice", "choices": ["2R", "mid", "trail"]},
+    "smc_min_vol_x": {"type": "float", "min": 0.0, "max": 10.0},
+    "smc_regime": {"type": "bool"},
 }
 RISK_FIELDS = {
     "max_loss_per_trade": {"type": "float", "min": 0.01},
@@ -74,7 +79,7 @@ RISK_FIELDS = {
 PREF_FIELDS = {"usd_inr": {"type": "float", "min": 50, "max": 200},
                "daily_goal_inr": {"type": "float", "min": 0, "max": 1e7}}
 PREF_DEFAULT = {"usd_inr": 88.0, "daily_goal_inr": 500.0}
-BACKTEST_MODES = ["crypto-v4", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
+BACKTEST_MODES = ["crypto-v4", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
 
 
 # ------------------------------------------------------------------ small helpers

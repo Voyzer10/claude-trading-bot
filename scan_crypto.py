@@ -104,13 +104,13 @@ def last_bar_close(now_utc):
 
 def intraday_one(d, cutoff):
     bars = []
-    for t, h, l, c, v in zip(d["t"], d["h"], d["l"], d["c"], d["v"]):
+    for t, o, h, l, c, v in zip(d["t"], d.get("o") or d["c"], d["h"], d["l"], d["c"], d["v"]):
         start = datetime.fromtimestamp(t, timezone.utc)
         if start.minute % BAR_MIN or start.second:
             continue  # the live tick, off the 15-minute grid
         if start + timedelta(minutes=BAR_MIN) > cutoff:
             continue  # still forming
-        bars.append((start, h, l, c, v))
+        bars.append((start, h, l, c, v, o))
     if len(bars) < RANGE_BARS + 2:
         return None
     last = bars[-1]
@@ -134,10 +134,17 @@ def intraday_one(d, cutoff):
         tags.append("range_breakdown_4h")
     if rsi is not None and rsi < 30:
         tags.append("oversold_15m")
+    # Smart Money "liquidity sweep and reclaim" of the 4h range (smc.py), on the candle that just closed
+    import smc
+    sw = smc.sweep_at([(b[5] if b[5] is not None else b[3], b[1], b[2], b[3], b[4] or 0) for b in bars], len(bars) - 1)
+    if sw:
+        tags.append("smc_sweep_long" if sw["side"] == "long" else "smc_sweep_short")
+        fresh["smc_sweep_long"] = fresh["smc_sweep_short"] = True
     return {"price": last[3], "bar_end": (last[0] + timedelta(minutes=BAR_MIN)).isoformat(),
             "range_high": hi, "range_low": lo, "pct_vs_high": round((last[3] / hi - 1) * 100, 2),
             "rsi_15m": round(rsi, 1) if rsi is not None else None,
-            "vol_ratio": (round(last[4] / avg_v, 2) if avg_v and last[4] else None), "tags": tags, "fresh": fresh}
+            "vol_ratio": (round(last[4] / avg_v, 2) if avg_v and last[4] else None), "tags": tags, "fresh": fresh,
+            "smc": sw}
 
 
 def sig(x):
@@ -193,7 +200,8 @@ def intraday_scan(symbols, now_utc, workers=6, quiet=False):
                          "range_high": sig(r["range_high"]), "range_low": sig(r["range_low"]),
                          "pct_vs_high": r["pct_vs_high"], "rsi_15m": r["rsi_15m"],
                          "vol_ratio": r["vol_ratio"], "bar_end": r["bar_end"],
-                         "fresh": r.get("fresh", {}).get(tag, True)})
+                         "fresh": r.get("fresh", {}).get(tag, True),
+                         **({"smc": r["smc"]} if tag.startswith("smc_sweep") and r.get("smc") else {})})
     hits.sort(key=lambda h: (h["setup"], -h["pct_vs_high"]))
     return {"mode": "intraday", "market": "CRYPTO", "as_of": cutoff.isoformat(), "universe": len(symbols),
             "scanned": len(data), "failed": len(failed), "failed_symbols": failed, "usable": usable,
