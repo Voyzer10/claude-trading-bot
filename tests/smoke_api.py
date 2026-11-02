@@ -53,6 +53,10 @@ check("command queued", r.status_code == 200 and os.path.exists("trader/live/com
 r = c.get("/api/py/ops/performance"); check("performance", r.status_code == 200)
 r = c.get("/api/py/ops/system"); check("system", r.status_code == 200 and "disk" in r.json())
 r = c.get("/api/py/ops/agents"); check("agents", r.status_code == 200 and len(r.json()["agents"]) == 11)
+r = c.post("/api/py/ops/autobuy", json={"market": "NSE", "on": True})
+check("autobuy on", r.status_code == 200 and c.get("/api/py/ops/autobuy").json()["NSE"]["on"]
+      and json.load(open("trader/live/auto_nse_config.json"))["auto_buy"] is True)
+r = c.post("/api/py/ops/autobuy", json={"market": "BSE", "on": True}); check("autobuy bad market", r.status_code == 400)
 r = c.get("/api/py/ops/download/trades.csv"); check("trades csv", r.status_code == 200)
 
 shutil.rmtree(work, ignore_errors=True)

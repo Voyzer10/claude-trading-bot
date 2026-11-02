@@ -239,6 +239,9 @@ textarea { resize: vertical; }
 .stat .value { overflow-wrap: anywhere; }
 
 /* tables become labelled cards on narrow screens */
+.paperbuys { margin-top: 12px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
+.paperbuys > div { flex: 1 1 280px; min-width: 0; }
+.paperbuys p { margin: 2px 0 0; }
 /* agents: the day-trader skill pipeline. Cards in pipeline order; a candidate's path is a row of steps. */
 .agents { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 10px; }
 .agent { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--panel-2); display: grid; gap: 6px; align-content: start; min-width: 0; }
