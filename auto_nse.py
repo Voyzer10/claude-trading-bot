@@ -50,7 +50,8 @@ DEFAULTS = {
     "stop": "range-mid",
     "min_stop_pct": 0.4,
     "max_chase_r": 0.5,
-    "min_vol_x": 1.5,
+    "min_vol_x": 1.0,             # 2 Nov 2026, owner's decision (was 1.5); research.py nse-v2: 1.0 vs 1.5 no
+                                  # clear effect out-of-sample (-0.06R vs -0.08R), every combination negative
     "max_gap_pct": 3.0,
     "regime_filter": True,
     "min_sim_avg_r": 0.10,
@@ -70,7 +71,12 @@ def load_cfg():
             json.dump(DEFAULTS, fh, indent=2)
     cfg = dict(DEFAULTS)
     with open(CFG_FILE, encoding="utf-8") as fh:
-        cfg.update(json.load(fh))
+        saved = json.load(fh)
+    if not saved.get("_vol_1x"):  # one-time move to volume >= 1.0x; keeps every other saved setting (auto_buy...)
+        saved["min_vol_x"], saved["_vol_1x"] = 1.0, True
+        with open(CFG_FILE, "w", encoding="utf-8") as fh:
+            json.dump(saved, fh, indent=2)
+    cfg.update(saved)
     return cfg
 
 

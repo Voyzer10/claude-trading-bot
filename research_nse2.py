@@ -36,7 +36,7 @@ GRID = {"range": [15, 30], "stop": list(STOPS), "exit": list(EXITS), "entry_end"
         "min_vol_x": [0.0, 1.0, 1.5], "regime": [False, True], "max_cost_r": [0.15, 0.25, None],
         "max_chase_r": [None, 0.5]}
 # what the live bot runs now (auto_nse.py DEFAULTS), minus the time machine gate
-LIVE = {"range": 15, "stop": "mid", "exit": "2R", "entry_end": "11:30", "min_vol_x": 1.5, "regime": True,
+LIVE = {"range": 15, "stop": "mid", "exit": "2R", "entry_end": "11:30", "min_vol_x": 1.0, "regime": True,
         "max_cost_r": None, "max_chase_r": 0.5, "min_stop_pct": 0.4}
 
 
