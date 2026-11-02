@@ -63,6 +63,18 @@ check("us shorts off", r.status_code == 200 and c.get("/api/py/ops/autobuy").jso
 r = c.post("/api/py/ops/autobuy", json={"market": "NSE_SHORT", "on": True})
 check("nse shorts on", r.status_code == 200 and json.load(open("trader/live/auto_nse_config.json"))["allow_short"] is True)
 r = c.get("/api/py/ops/download/trades.csv"); check("trades csv", r.status_code == 200)
+with open("trader/alerts.json", "w") as fh:
+    json.dump({"telegram_token": "123456:SECRET", "enabled": False}, fh)
+os.makedirs("trader/paper", exist_ok=True)
+with open("trader/paper/ledger.json", "w") as fh:
+    json.dump({"accounts": {}, "open": [], "closed": [{"market": "CRYPTO", "symbol": "SOL", "pnl": 5.0, "r": 0.5,
+                                                       "note": "auto: range_breakout_4h", "exit_date": "2026-11-02"}]}, fh)
+r = c.get("/api/py/ops/download/all.zip")
+import io as _io, zipfile as _zf
+names = _zf.ZipFile(_io.BytesIO(r.content)).namelist() if r.status_code == 200 else []
+blob = b"".join(_zf.ZipFile(_io.BytesIO(r.content)).read(n) for n in names) if names else b""
+check("export zip", r.status_code == 200 and {"README.txt", "summary.json", "trades.csv", "paper/ledger.json"} <= set(names)
+      and b"SECRET" not in blob and not any(n.endswith("alerts.json") for n in names), str(names)[:120])
 
 shutil.rmtree(work, ignore_errors=True)
 print("\n%d failed" % len(fails) if fails else "\nall passed")

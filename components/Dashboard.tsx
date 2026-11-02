@@ -60,7 +60,10 @@ export default function Dashboard() {
           <h1>Trader Bot Dashboard</h1>
           <div className="muted small">Testing phase: paper trading (no broker connected yet) · times in IST</div>
         </div>
-        <a className="btn primary topbar-cta" href="#backtest">Run a backtest</a>
+        <div className="topbar-cta topbar-actions">
+          <a className="btn" href="/api/py/ops/download/all.zip">Download all data</a>
+          <a className="btn primary" href="#backtest">Run a backtest</a>
+        </div>
       </header>
       <nav className="nav" aria-label="Sections">
           <a href="#performance">Performance</a>

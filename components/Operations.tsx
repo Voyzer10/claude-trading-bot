@@ -171,6 +171,9 @@ export default function Operations({ onChange }: { onChange: () => void }) {
 
         <div className="formblock">
           <h3 className="h3">Downloads</h3>
+          <a className="btn primary" href={`${OPS}/download/all.zip`} style={{ marginBottom: 10 }}>
+            Download all data (.zip)
+          </a>
           <ul className="downloads">
             <li><a href={`${OPS}/download/trades.csv`}>Closed paper trades (CSV)</a></li>
             <li><a href={`${OPS}/download/ledger.json`}>Paper ledger (JSON)</a></li>
