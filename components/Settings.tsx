@@ -36,6 +36,7 @@ const RISK_LABELS: Record<string, string> = {
   daily_loss_limit: "Daily loss limit",
   max_trades_per_day: "Max trades per day",
   max_position_pct: "Max position (% of capital)",
+  fee_pct: "Fee per side % (CoinDCX futures taker + GST: 0.059)",
 };
 const SETUP_NAMES: Record<string, string> = { range_breakout_4h: "Long (breakout)", range_breakdown_4h: "Short (breakdown)" };
 
