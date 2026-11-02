@@ -67,7 +67,9 @@ DEFAULT_CONFIG = {
                    "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True},
         "CRYPTO": {"capital": 1000, "max_loss_per_trade": 10, "max_position_pct": 25,
                    "daily_loss_limit": 30, "max_trades_per_day": 10, "min_reward_risk": 1.0,
-                   "flat_by": None, "fee_pct": 0.1, "breakeven_at_r": None, "allow_short": True},
+                   "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True},
+        # CRYPTO fee_pct: CoinDCX USDT futures taker 0.05% + 18% GST = 0.059% a side (2 Nov 2026; maker 0.02%).
+        # The bot enters and stops out with market orders, so taker. Funding (every 8 h) is not modelled.
     },
     "india_charges": {
         "_note": "Percents of the order value. Brokerage is the smaller of the flat fee and brokerage_pct "
@@ -115,6 +117,11 @@ def load_config():
         if cfg.get("accounts", {}).get(name) != merged:
             changed = True
         cfg.setdefault("accounts", {})[name] = merged
+    crypto = cfg["accounts"].get("CRYPTO", {})
+    if not cfg.get("_fees_coindcx") and crypto.get("fee_pct") == 0.1:  # one-time: the old generic 0.1% -> CoinDCX
+        crypto["fee_pct"] = DEFAULT_CONFIG["accounts"]["CRYPTO"]["fee_pct"]
+        cfg["_fees_coindcx"] = True
+        changed = True
     if "india_charges" not in cfg:
         cfg["india_charges"] = DEFAULT_CONFIG["india_charges"]
         changed = True

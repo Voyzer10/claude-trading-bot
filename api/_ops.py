@@ -69,6 +69,7 @@ RISK_FIELDS = {
     "daily_loss_limit": {"type": "float", "min": 0.01},
     "max_trades_per_day": {"type": "int", "min": 1, "max": 50},
     "max_position_pct": {"type": "float", "min": 1, "max": 100},
+    "fee_pct": {"type": "float", "min": 0.0, "max": 1.0, "accounts": ["CRYPTO"]},
 }
 PREF_FIELDS = {"usd_inr": {"type": "float", "min": 50, "max": 200},
                "daily_goal_inr": {"type": "float", "min": 0, "max": 1e7}}

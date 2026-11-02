@@ -17,7 +17,8 @@ What a disciplined breakout trader checks, and how this file tests each one:
                 instead of a fixed 1% minimum stop
   7. Exit       2R target (live), a trailing stop (break-even at +1R, then 2 x ATR under the high), or
                 "partial": half off at +1R, stop to break-even, the other half trails
-Every combination is scored on the same fresh 4h breakouts, 0.1% fee per side, 70/30 walk-forward.
+Every combination is scored on the same fresh 4h breakouts, 70/30 walk-forward, with the paper CRYPTO account's
+fee per side (trader/paper/config.json fee_pct: CoinDCX futures taker + GST = 0.059% since 2 Nov 2026; 0.1% before).
 The report shows the live rule, the full PRO SETUP, the best combinations and which ingredient helps.
 Run: python research.py crypto-v4   (or the dashboard's Backtest -> Strategy v4)
 """
@@ -26,7 +27,16 @@ import itertools
 import os
 from datetime import datetime, timezone
 
-FEE = 0.001  # per side
+def _fee():
+    """Fee per side as a fraction, from the paper CRYPTO account (what the live bot is charged)."""
+    try:
+        import paper as P
+        return float(P.load_config()["accounts"]["CRYPTO"]["fee_pct"]) / 100
+    except Exception:
+        return 0.00059
+
+
+FEE = _fee()  # per side
 UTC = timezone.utc
 
 
@@ -260,9 +270,9 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist):
 
     tight_n = sum(1 for e in events if e["range_pct"] <= 1.0)
     lines = ["research.py crypto-v4  %s" % datetime.now(ist).strftime("%Y-%m-%d %H:%M IST"),
-             "%d coins, %d days (%s..%s), %d fresh 4h breakouts (%d from a range under 1%%). R after 0.1%% fee "
-             "each side. Out-of-sample = days from %s." % (len(data), len(days), days[0], days[-1], len(events),
-                                                           tight_n, split), "",
+             "%d coins, %d days (%s..%s), %d fresh 4h breakouts (%d from a range under 1%%). R after %.3f%% fee "
+             "each side (paper CRYPTO account). Out-of-sample = days from %s." % (len(data), len(days), days[0], days[-1], len(events),
+                                                           tight_n, FEE * 100, split), "",
              row(live, "OLD LIVE RULE (v3):      "), "",
              row(score(events, LIVE_V4, split, stats), "LIVE RULE NOW (v6):      "), "",
              "LIVE RULE NEIGHBOURS (one setting changed at a time; a robust rule has neighbours that also do well):"]
