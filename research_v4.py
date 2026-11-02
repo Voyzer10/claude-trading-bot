@@ -133,13 +133,14 @@ def events_v4(data, btc, rb=16):
                 trend = "ema+slope" if e200[i] > e200[i - 4] else "ema"
             ev = {"sym": sym, "day": rows[i][0].date().isoformat(), "hour": rows[i][0].hour,
                   "vol_x": rows[i][5] / avg_v if avg_v else 0.0, "regime": regime, "trend": trend,
-                  "range_pct": (hi - lo) / entry * 100, "out": {}, "stop_pct": {}, "fee_r": {}}
+                  "range_pct": (hi - lo) / entry * 100, "out": {}, "stop_pct": {}, "fee_r": {}, "chase": {}}
             for sname, stop in (("mid", mid), ("atr1.5", entry - 1.5 * atr)):
                 risk = entry - stop
                 if risk <= 0:
                     continue
                 ev["stop_pct"][sname] = risk / entry * 100
                 ev["fee_r"][sname] = 2 * entry * FEE / risk
+                ev["chase"][sname] = (entry - hi) / risk  # how far the close already is past the 4h high, in R
                 for hold in HOLDS:
                     path = rows[i + 1:i + 1 + hold]
                     for ex in EXITS:
@@ -159,9 +160,9 @@ def events_v4(data, btc, rb=16):
 
 GRID = {"stop": list(STOPS), "exit": list(EXITS), "hold": [48], "min_vol_x": [0.0, 1.5],
         "regime": [False, True], "trend": ["off", "ema", "ema+slope"], "max_range_pct": [None, 1.0],
-        "session": ["all", "active"], "max_fee_r": [0.25, 0.40]}
+        "session": ["all", "active"], "max_fee_r": [0.25, 0.40], "max_chase_r": [None, 0.5]}
 PRO = {"stop": "atr1.5", "exit": "partial", "hold": 48, "min_vol_x": 1.5, "regime": True, "trend": "ema",
-       "max_range_pct": 1.0, "session": "active", "max_fee_r": 0.40}
+       "max_range_pct": 1.0, "session": "active", "max_fee_r": 0.40, "max_chase_r": None}
 
 
 def keep(ev, f):
@@ -183,6 +184,8 @@ def keep(ev, f):
         return False
     if "max_fee_r" in f and ev["fee_r"][s] > f["max_fee_r"]:
         return False
+    if f.get("max_chase_r") is not None and ev["chase"][s] > f["max_chase_r"]:
+        return False
     return True
 
 
@@ -198,7 +201,7 @@ def score(events, f, split, stats):
 LIVE = {"stop": "mid", "exit": "2R", "hold": 24, "min_vol_x": 1.5, "regime": True, "min_stop_pct": 1.0}
 # the rule the live bot runs since rules v4 (auto_crypto.py DEFAULTS)
 LIVE_V4 = {"stop": "atr1.5", "exit": "trail", "hold": 48, "min_vol_x": 1.5, "regime": True, "trend": "off",
-           "max_range_pct": None, "session": "active", "max_fee_r": 0.25}
+           "max_range_pct": None, "session": "active", "max_fee_r": 0.25, "max_chase_r": 0.5}
 
 
 def row(r, label=""):
@@ -222,6 +225,8 @@ def row(r, label=""):
         parts.append("fees<=%.2fR" % f["max_fee_r"])
     if "min_stop_pct" in f:
         parts.append("stop>=%.1f%%" % f["min_stop_pct"])
+    if "max_chase_r" in f:
+        parts.append("chase<=%s" % (("%.1fR" % f["max_chase_r"]) if f["max_chase_r"] is not None else "off"))
     return "%s%s\n     in-sample   %s\n     OUT-sample  %s" % (label, " ".join(parts), s(i), s(o))
 
 
@@ -272,7 +277,8 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist):
              "WHICH INGREDIENT HELPS (average OUT-sample R of the combinations with it vs without it):",
              effect("trend", "ema", "off"), effect("max_range_pct", 1.0, None), effect("session", "active", "all"),
              effect("regime", True, False), effect("min_vol_x", 1.5, 0.0), effect("stop", "atr1.5", "mid"),
-             effect("exit", "partial", "2R"), effect("exit", "trail", "2R"), effect("max_fee_r", 0.40, 0.25), "",
+             effect("exit", "partial", "2R"), effect("exit", "trail", "2R"), effect("max_fee_r", 0.40, 0.25),
+             effect("max_chase_r", 0.5, None), "",
              "TOP 10 BY IN-SAMPLE (the OUT-sample line is the honest one):"]
     for n, r in enumerate(ok[:10], 1):
         lines.append(row(r, "%2d. " % n))
