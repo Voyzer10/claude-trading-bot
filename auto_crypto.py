@@ -52,7 +52,10 @@ DEFAULTS = {
     # 20 out-of-sample trades at +0.52R (in-sample 110 at +0.45R); without it 42 at +0.69R (in-sample 168 at
     # +0.41R): the strongest breakout candles were being thrown away. The thin-hours skip stays: trading those
     # hours added 23 in-sample trades that lost about -0.37R each.
-    "rules_version": 5,
+    # rules v6 (2 Nov 2026, owner's decision): breakout volume >= 1.0x the 4h average instead of 1.5x. NOT
+    # backtested at 1.0x (the v4 grid had 0 and 1.5); research.py crypto-v4 now includes 1.0 so the next run
+    # shows whether it helps. Go back to 1.5 from Settings if the live trades or that report say so.
+    "rules_version": 6,
     "stop": "atr",                # atr (v4), range-mid or range-low (v3 and older)
     "stop_atr_k": 1.5,            # stop = entry - k x ATR(14, 15m)
     "exit": "trail",              # trail: break-even at +trail_arm_r, then trail_atr_k x ATR under the high
@@ -62,7 +65,7 @@ DEFAULTS = {
     "target_r": 2.0,              # used when exit = target
     "max_chase_r": 0,             # 0 = off (v5). >0: skip if price already ran this many R past the range high
     "min_stop_pct": 0.0,          # v3 used 1.0; v4 sizes the stop from ATR and caps the fee share instead
-    "min_vol_x": 1.5,             # breakout candle volume vs the 4h range's average
+    "min_vol_x": 1.0,             # breakout candle volume vs the 4h range's average (v6: 1.0, was 1.5)
     "btc_regime": True,           # BTC's last close above the midpoint of its own prior 4h of closes
     "max_fee_r": 0.25,            # skip if the round-trip fee costs more than this many R
     "skip_hours_utc": [0, 1, 2, 3, 4, 5],  # thin hours (05:30-11:30 IST): breakouts there are skipped

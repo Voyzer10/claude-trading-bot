@@ -158,7 +158,7 @@ def events_v4(data, btc, rb=16):
     return evs
 
 
-GRID = {"stop": list(STOPS), "exit": list(EXITS), "hold": [48], "min_vol_x": [0.0, 1.5],
+GRID = {"stop": list(STOPS), "exit": list(EXITS), "hold": [48], "min_vol_x": [0.0, 1.0, 1.5],
         "regime": [False, True], "trend": ["off", "ema", "ema+slope"], "max_range_pct": [None, 1.0],
         "session": ["all", "active"], "max_fee_r": [0.25, 0.40], "max_chase_r": [None, 0.5]}
 PRO = {"stop": "atr1.5", "exit": "partial", "hold": 48, "min_vol_x": 1.5, "regime": True, "trend": "ema",
@@ -199,8 +199,8 @@ def score(events, f, split, stats):
 
 
 LIVE = {"stop": "mid", "exit": "2R", "hold": 24, "min_vol_x": 1.5, "regime": True, "min_stop_pct": 1.0}
-# the rule the live bot runs (auto_crypto.py DEFAULTS, rules v5 = v4 without the chase skip)
-LIVE_V4 = {"stop": "atr1.5", "exit": "trail", "hold": 48, "min_vol_x": 1.5, "regime": True, "trend": "off",
+# the rule the live bot runs (auto_crypto.py DEFAULTS, rules v6 = v4 without the chase skip, volume >= 1.0x)
+LIVE_V4 = {"stop": "atr1.5", "exit": "trail", "hold": 48, "min_vol_x": 1.0, "regime": True, "trend": "off",
            "max_range_pct": None, "session": "active", "max_fee_r": 0.25, "max_chase_r": None}
 
 
@@ -264,7 +264,7 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist):
              "each side. Out-of-sample = days from %s." % (len(data), len(days), days[0], days[-1], len(events),
                                                            tight_n, split), "",
              row(live, "OLD LIVE RULE (v3):      "), "",
-             row(score(events, LIVE_V4, split, stats), "LIVE RULE NOW (v5):      "), "",
+             row(score(events, LIVE_V4, split, stats), "LIVE RULE NOW (v6):      "), "",
              "LIVE RULE NEIGHBOURS (one setting changed at a time; a robust rule has neighbours that also do well):"]
     for k, vals in GRID.items():
         for v in vals:
@@ -276,7 +276,7 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist):
              row(pro, "PRO SETUP (all 7 checks): "), "",
              "WHICH INGREDIENT HELPS (average OUT-sample R of the combinations with it vs without it):",
              effect("trend", "ema", "off"), effect("max_range_pct", 1.0, None), effect("session", "active", "all"),
-             effect("regime", True, False), effect("min_vol_x", 1.5, 0.0), effect("stop", "atr1.5", "mid"),
+             effect("regime", True, False), effect("min_vol_x", 1.0, 1.5), effect("min_vol_x", 1.5, 0.0), effect("stop", "atr1.5", "mid"),
              effect("exit", "partial", "2R"), effect("exit", "trail", "2R"), effect("max_fee_r", 0.40, 0.25),
              effect("max_chase_r", 0.5, None), "",
              "TOP 10 BY IN-SAMPLE (the OUT-sample line is the honest one):"]
