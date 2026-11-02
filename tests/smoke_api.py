@@ -52,6 +52,7 @@ r = c.post("/api/py/ops/command", json={"action": "run_now"})
 check("command queued", r.status_code == 200 and os.path.exists("trader/live/commands.jsonl"))
 r = c.get("/api/py/ops/performance"); check("performance", r.status_code == 200)
 r = c.get("/api/py/ops/system"); check("system", r.status_code == 200 and "disk" in r.json())
+r = c.get("/api/py/ops/agents"); check("agents", r.status_code == 200 and len(r.json()["agents"]) == 11)
 r = c.get("/api/py/ops/download/trades.csv"); check("trades csv", r.status_code == 200)
 
 shutil.rmtree(work, ignore_errors=True)

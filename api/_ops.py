@@ -636,3 +636,255 @@ def download(name: str):
     if not os.path.exists(path):
         raise HTTPException(404, "%s does not exist yet" % name)
     return FileResponse(path, filename=name)
+
+
+# ------------------------------------------------------------------ agents (the day-trader skill pipeline)
+# The 11 agents of the day-trader skill run inside the runner as steps of one pipeline (auto_crypto.py and its
+# NSE/F&O/US twins). Each candidate goes through them in order and stops at the first that says no; every
+# verdict lands in trader/live/decisions.jsonl. This endpoint turns that file, the runner state and the open
+# paper positions into "which agent is working, and on what".
+
+AGENTS = [
+    (1, "scanner", "Scanner", "trader-scanner"),
+    (2, "news", "News", "trader-news"),
+    (3, "entry", "Entry", "trader-entry"),
+    (4, "exit", "Exit", "trader-exit"),
+    (5, "timemachine", "Time machine", "trader-timemachine"),
+    (6, "budget", "Budget", "trader-budget"),
+    (7, "risk", "Risk", "trader-risk"),
+    (8, "broker", "Broker (paper)", "trader-broker"),
+    (9, "alerts", "Alerts", "trader-alerts"),
+    (10, "analyst", "Analyst", "trader-analyst"),
+    (11, "pelosi", "Pelosi tracker", "trader-pelosi"),
+]
+# which agent said no, by the words of its reason (first match wins)
+_STOP_WORDS = [
+    ("time machine", 5),
+    ("fees eat", 4), ("stop too tight", 4), ("atr stop", 4),
+    ("past the stop", 3), ("thin hours", 3), ("chasing", 3), ("moved back", 3), ("fell back", 3),
+    ("reversed", 3), ("no live price", 3),
+    ("volume", 3), ("regime", 3), ("triggered", 3), ("opened ", 3), ("older than", 3),
+    ("lots fit", 6), ("units fit", 6), ("budget", 6),
+    ("risk", 7), ("daily loss limit", 7), ("max ", 7), ("block", 7),
+]
+_MKT = {"CRYPTO": "CRYPTO", "NSE": "NSE", "BSE": "NSE", "NFO": "FNO", "US": "US"}
+
+
+def _tail_lines(path, max_bytes=3_000_000):
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(0, 2)
+            size = fh.tell()
+            fh.seek(max(0, size - max_bytes))
+            raw = fh.read().decode("utf-8", errors="replace")
+    except OSError:
+        return []
+    lines = raw.splitlines()
+    return lines[1:] if size > max_bytes else lines
+
+
+def _step_no(key):
+    m = re.match(r"(\d+)", key)
+    return int(m.group(1)) if m else 0
+
+
+def _stopped_at(rec):
+    """None if the candidate was traded, else the number of the agent that stopped it."""
+    res = (rec.get("result") or "").upper()
+    if res.startswith("PAPER"):
+        return None
+    if res == "BLOCKED":
+        return 7
+    why = (rec.get("why") or "").lower()
+    for word, n in _STOP_WORDS:
+        if word in why:
+            return n
+    done = [_step_no(k) for k in (rec.get("steps") or {}) if 0 < _step_no(k) < 10]
+    return min(max(done or [1]) + 1, 8)
+
+
+def _fmt(x):
+    try:
+        x = float(x)
+    except (TypeError, ValueError):
+        return str(x)
+    return ("%.6g" % x) if abs(x) < 1000 else ("%.2f" % x)
+
+
+def _step_detail(n, rec):
+    """One line on what agent n found for this candidate (when it said yes)."""
+    st = rec.get("steps") or {}
+    sym = (rec.get("symbol") or "").split(":")[-1]
+    get = lambda pre: next((v for k, v in st.items() if k.startswith(pre)), None)
+    s = get("%d_" % n) if n not in (6, 7, 8) else (get("6-8") or get("%d_" % n))
+    if n == 1 and isinstance(s, dict):
+        px = s.get("close") or s.get("price")
+        vol = s.get("vol_ratio")
+        return "%s broke out%s%s" % (sym, " at %s" % _fmt(px) if px is not None else "", " (volume %sx)" % vol if vol else "")
+    if n == 2:
+        if isinstance(s, list) and s:
+            first = s[0].get("title") if isinstance(s[0], dict) else str(s[0])
+            return "%s: %d headlines, latest \"%s\"" % (sym, len(s), (first or "")[:90])
+        return "%s: %s" % (sym, s if isinstance(s, str) else "no headlines")
+    if n == 3 and isinstance(s, dict):
+        ch = s.get("chase_r")
+        return "%s at %s, %s" % (sym, _fmt(s.get("price_now") or s.get("index_now") or s.get("price")),
+                                 "%sR past the trigger" % ch if ch is not None else "timing ok")
+    if n == 4 and isinstance(s, dict):
+        return "%s stop %s (%s%% away), fees %sR" % (sym, _fmt(s.get("stop") or s.get("index_stop")),
+                                                   s.get("stop_pct", "?"), s.get("fee_r", "?"))
+    if n == 5 and isinstance(s, dict):
+        sim = s.get("sim") or s.get("replay") or {}
+        hist = s.get("history") or {}
+        out = "%s replays avg %+.2fR" % (sym, sim.get("avg_r", 0)) if isinstance(sim, dict) and "avg_r" in sim else sym
+        if isinstance(hist, dict) and hist.get("fired"):
+            out += ", rule fired %d times avg %+.2fR" % (hist["fired"], hist.get("avg_r", 0))
+        return out + " (recorded, not a gate)"
+    if n in (6, 7, 8) and isinstance(s, dict):
+        return "%s: %s, qty %s, max loss %s" % (sym, s.get("verdict", "pass"), _fmt(s.get("qty")), _fmt(s.get("max_loss")))
+    if n == 9 and s:
+        return "%s: %s" % (sym, s if isinstance(s, str) else "watching")
+    return "%s passed" % sym
+
+
+def _iso_age(iso, now):
+    try:
+        return (now - datetime.fromisoformat(iso)).total_seconds()
+    except (TypeError, ValueError):
+        return None
+
+
+@router.get("/agents")
+def agents():
+    now = _now()
+    state = _read_json(os.path.join(LIVE, "state.json"), {})
+    cfg = _rule_defaults()
+    cfg.update(_read_json(RULES, {}))
+    led = _read_json(LEDGER, {"open": []})
+    alive = _proc_alive(state.get("pid"))
+    upd_age = _iso_age(state.get("updated"), now)
+    running = alive if alive is not None else (upd_age is not None and upd_age < 15 * 60)
+    status_txt = state.get("status") or ""
+    if status_txt.startswith("stopped"):
+        running = False
+    markets = state.get("markets_scanned") or state.get("markets_started") or []
+
+    recs = []
+    for ln in _tail_lines(os.path.join(LIVE, "decisions.jsonl")):
+        try:
+            r = json.loads(ln)
+        except ValueError:
+            continue
+        if isinstance(r, dict) and r.get("time"):
+            r["_stop"] = _stopped_at(r)
+            recs.append(r)
+    today = now.date().isoformat()
+    todays = [r for r in recs if r["time"][:10] == today]
+
+    def reached(r, n):
+        s = r["_stop"]
+        return n <= 9 if s is None else n <= s
+
+    # thin hours right now?
+    utc_h = now.astimezone(timezone.utc).hour
+    thin = utc_h in (cfg.get("skip_hours_utc") or [])
+    thin_end = None
+    if thin:
+        h = utc_h
+        while h in cfg["skip_hours_utc"] and h < 24:
+            h += 1
+        end = now.astimezone(timezone.utc).replace(hour=h % 24, minute=0, second=0, microsecond=0)
+        thin_end = end.astimezone(IST).strftime("%H:%M")
+
+    # what the scanner is looking at
+    scans = []
+    for m in markets:
+        ms = (state.get("markets") or {}).get(m) or {}
+        res = ms.get("intraday") if m == "CRYPTO" else ms.get("orb")
+        if not res:
+            continue
+        hits = res.get("hits") or []
+        scans.append({"market": m, "as_of": res.get("as_of"), "scanned": res.get("scanned"), "usable": res.get("usable"),
+                      "hits": len(hits), "new": sum(1 for h in hits if h.get("new"))})
+
+    openpos = led.get("open") or []
+    stop_k = cfg.get("stop_atr_k", 1.5)
+    jobs = {
+        1: "Checks every coin when a 15-minute candle closes; a fresh close above its 4-hour high is a candidate "
+           "(at most one per coin every 6 hours).",
+        2: "Pulls the coin's latest headlines for the record. It never blocks or makes a trade.",
+        3: "Is the timing right? Skips thin hours (%s), a price back inside the range, volume under %sx the 4h "
+           "average%s%s." % ("%s:00-%s:00 UTC" % (cfg["skip_hours_utc"][0], cfg["skip_hours_utc"][-1] + 1)
+                             if cfg.get("skip_hours_utc") else "none", cfg.get("min_vol_x", 0),
+                             ", BTC below its 4h midpoint" if cfg.get("btc_regime") else "",
+                             ", a chase past %sR" % cfg["max_chase_r"] if cfg.get("max_chase_r") else ""),
+        4: "Sets the stop (%s) and the exit (%s); skips if fees would eat more than %sR."
+           % ("%s x ATR under the entry" % stop_k if cfg.get("stop") == "atr" else cfg.get("stop"),
+              "trailing" if cfg.get("exit") == "trail" else "%sR target" % cfg.get("target_r"), cfg.get("max_fee_r")),
+        5: "Replays the trade %s times on the coin's last %s days and counts past fires of the rule. Recorded only: "
+           "it is not a gate." % (cfg.get("sim_paths"), cfg.get("history_days")),
+        6: "Sizes the position so the loss at the stop fits your max loss per trade.",
+        7: "Checks the daily loss limit, trades per day and the position cap before anything is bought.",
+        8: "Fills the order on paper at the live price. No real broker is connected yet.",
+        9: "Watches open positions every cycle: stop, trailing stop (break-even at +%sR) and the %sh time stop."
+           % (cfg.get("trail_arm_r", 1), cfg.get("max_hold_hours")),
+        10: "Reads SEC filings for US stocks. Not used for crypto.",
+        11: "Tracks US Congress stock trades. Not used for crypto.",
+    }
+
+    out = []
+    for n, key, name, skill in AGENTS:
+        a = {"n": n, "key": key, "name": name, "skill": skill, "job": jobs[n]}
+        if n >= 10:
+            a.update(status="n/a", now="Not part of the crypto pipeline" +
+                     ("; for US stocks it runs by hand (us_flow.py)" if "US" in markets else "."))
+            out.append(a)
+            continue
+        mine = [r for r in recs if reached(r, n)]
+        tday = [r for r in todays if reached(r, n)]
+        stopped = sum(1 for r in tday if r["_stop"] == n)
+        a["today"] = {"checked": len(tday), "passed": len(tday) - stopped, "stopped": stopped}
+        if mine:
+            r = mine[-1]
+            sym = (r.get("symbol") or "").split(":")[-1]
+            a["last"] = {"time": r["time"], "symbol": sym, "market": _MKT.get((r.get("symbol") or "").split(":")[0], ""),
+                         "verdict": "stopped" if r["_stop"] == n else ("traded" if n >= 8 else "passed"),
+                         "text": ("%s: %s" % (sym, r.get("why")) if r["_stop"] == n else _step_detail(n, r))}
+        # status now
+        busy = bool(mine) and (_iso_age(mine[-1]["time"], now) or 1e9) < 180
+        if not running:
+            a.update(status="off", now="Runner is not running.")
+        elif n == 1:
+            sc = scans[0] if scans else None
+            a.update(status="active", now=("Last scan %s: %s of %s coins usable, %d above the 4h high, %d new"
+                                           % (datetime.fromisoformat(sc["as_of"]).astimezone(IST).strftime("%H:%M")
+                                              if sc.get("as_of") else "?", sc["usable"], sc["scanned"], sc["hits"],
+                                              sc["new"]) if sc else "Waiting for the next candle to close."))
+            a["scans"] = scans
+        elif n == 9:
+            if openpos:
+                a.update(status="active", now="Watching %d open position%s: %s" % (
+                    len(openpos), "" if len(openpos) == 1 else "s",
+                    ", ".join("%s stop %s%s" % (p.get("symbol"), _fmt(p.get("stop")),
+                                                " (trailing)" if p.get("trail_k") else "") for p in openpos[:4])))
+            else:
+                a.update(status="standby", now="No open position to watch.")
+        elif busy:
+            a.update(status="working", now="Just checked %s." % mine[-1].get("symbol", "").split(":")[-1])
+        elif n == 3 and thin and "CRYPTO" in markets:
+            a.update(status="paused", now="Thin hours: crypto breakouts are skipped until %s IST." % thin_end)
+        else:
+            a.update(status="standby", now="Waiting for a candidate from the agent before it.")
+        out.append(a)
+
+    flow = []
+    for r in recs[-15:][::-1]:
+        s = r["_stop"]
+        flow.append({"time": r["time"], "symbol": (r.get("symbol") or "").split(":")[-1],
+                     "market": _MKT.get((r.get("symbol") or "").split(":")[0], ""), "result": r.get("result"),
+                     "why": r.get("why"), "stopped_at": s,
+                     "chain": ["pass" if (s is None or i < s) else "stop" if i == s else "none" for i in range(1, 10)]})
+    return {"generated_at": now.isoformat(), "running": running, "runner_status": status_txt,
+            "next_run": state.get("next_run"), "markets": markets, "thin_hours_now": thin, "thin_until": thin_end,
+            "agents": out, "flow": flow,
+            "today": {"candidates": len(todays), "traded": sum(1 for r in todays if r["_stop"] is None)}}

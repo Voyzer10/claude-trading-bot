@@ -239,6 +239,37 @@ textarea { resize: vertical; }
 .stat .value { overflow-wrap: anywhere; }
 
 /* tables become labelled cards on narrow screens */
+/* agents: the day-trader skill pipeline. Cards in pipeline order; a candidate's path is a row of steps. */
+.agents { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 10px; }
+.agent { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--panel-2); display: grid; gap: 6px; align-content: start; min-width: 0; }
+.agent.st-active, .agent.st-working { border-color: color-mix(in srgb, var(--good) 55%, var(--line)); }
+.agent.st-paused { border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); }
+.agent.st-off { opacity: 0.75; }
+.agent-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.agent-n { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600; background: var(--off-bg); color: var(--muted); }
+.agent.st-active .agent-n, .agent.st-working .agent-n { background: var(--good-bg); color: var(--good); }
+.agent-name { display: grid; min-width: 0; line-height: 1.25; }
+.agent-name b { font-size: 14px; }
+.agent-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-now { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.agent-last { margin: 0; overflow-wrap: anywhere; }
+.verdict { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+.v-passed, .v-traded { color: var(--good); } .v-stopped { color: var(--bad); }
+.agent-job summary { cursor: pointer; color: var(--accent); font-weight: 500; width: fit-content; }
+.agent-job p { margin: 4px 0 0; color: var(--muted); }
+.subhead { font-size: 14px; font-weight: 600; margin: 18px 0 8px; }
+.flow { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.flow li { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: grid; gap: 6px; min-width: 0; }
+.flow-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.flow-head .chip { margin-left: auto; }
+.flow-why { margin: 0; overflow-wrap: anywhere; }
+.pipe { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 3px; }
+.step { font-size: 10.5px; font-weight: 600; text-align: center; padding: 3px 0; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.step.s-pass { background: var(--good-bg); color: var(--good); }
+.step.s-stop { background: var(--bad-bg); color: var(--bad); }
+.step.s-none { background: var(--off-bg); color: var(--muted); opacity: 0.6; }
+@media (max-width: 479.98px) { .step { font-size: 9px; } }
+
 @media (max-width: 639.98px) {
   .tablewrap:has(> .rtable) { overflow: visible; }
   .scroll:has(> .rtable) { max-height: 520px; border: 0; border-radius: 0; }
