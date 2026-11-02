@@ -12,7 +12,7 @@ backtest found no edge after charges. This mode tries what fixed the same proble
   exit       2R target with break-even at +1R (live) | trailing (break-even at +1R, then 2 x ATR under
              the high) | stop only, out at 15:15
   entry by   10:30 | 11:30 | 13:00 (first 5-minute close above the range)
-  filters    breakout volume >= 1.5x the 6 bars before it; Nifty above its own range midpoint and open;
+  filters    breakout volume >= 1.0x or 1.5x the 6 bars before it (or off); Nifty above its own range midpoint and open;
              charges at most 0.15R / 0.25R of the risk (like the crypto fee cap); chase at most 0.5R
              past the range high; opening gap within 3% (always on, as live)
 
@@ -33,7 +33,7 @@ EXITS = ("2R", "trail", "close")
 TRAIL_K = 2.0
 
 GRID = {"range": [15, 30], "stop": list(STOPS), "exit": list(EXITS), "entry_end": ["10:30", "11:30", "13:00"],
-        "min_vol_x": [0.0, 1.5], "regime": [False, True], "max_cost_r": [0.15, 0.25, None],
+        "min_vol_x": [0.0, 1.0, 1.5], "regime": [False, True], "max_cost_r": [0.15, 0.25, None],
         "max_chase_r": [None, 0.5]}
 # what the live bot runs now (auto_nse.py DEFAULTS), minus the time machine gate
 LIVE = {"range": 15, "stop": "mid", "exit": "2R", "entry_end": "11:30", "min_vol_x": 1.5, "regime": True,
@@ -267,7 +267,7 @@ def main(a, syms, src, fetch_all, fetch, stats, bars_by_day, out_dir, ist):
              "WHICH INGREDIENT HELPS (average OUT-sample R of the combinations with it vs the alternative):",
              effect("stop", "low", "mid"), effect("stop", "atr2", "mid"), effect("stop", "atr3", "mid"),
              effect("exit", "trail", "2R"), effect("exit", "close", "2R"), effect("range", 30, 15),
-             effect("entry_end", "10:30", "13:00"), effect("min_vol_x", 1.5, 0.0), effect("regime", True, False),
+             effect("entry_end", "10:30", "13:00"), effect("min_vol_x", 1.0, 1.5), effect("min_vol_x", 1.5, 0.0), effect("regime", True, False),
              effect("max_cost_r", 0.15, None), effect("max_cost_r", 0.25, None), effect("max_chase_r", 0.5, None), "",
              "TOP 10 BY IN-SAMPLE (the OUT-sample line is the honest one):"]
     for n, r in enumerate(ok[:10], 1):
