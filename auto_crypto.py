@@ -76,6 +76,13 @@ DEFAULTS = {
     "min_history_trades": 5,      # history only counts once the rule fired this often
     "min_history_avg_r": -99,     # history recorded, not a gate
     "max_hold_hours": 12,         # time stop for open crypto paper trades (v4: 12h)
+    # Smart Money "liquidity sweep and reclaim" (smc.py), used when "smc_sweep_long" / "smc_sweep_short" is in
+    # enabled_setups (off by default). Test it first: python research.py crypto-smc, then set these to the
+    # report's most consistent combination. Thin hours, the fee cap and the time stop above apply too.
+    "smc_stop": "sweep",          # sweep: beyond the sweep's extreme (0.1 ATR buffer) | atr1.5: 1.5 x ATR
+    "smc_exit": "2R",             # 2R target | mid: target the 4h range's middle | trail (longs; shorts use 2R)
+    "smc_min_vol_x": 0.0,         # sweep candle volume vs the 4h average
+    "smc_regime": False,          # True: long only while BTC is above its 4h midpoint, short only below
     "seed": None,
 }
 
@@ -252,7 +259,119 @@ def btc_regime():
     return v
 
 
+def run_smc(h, cfg, log):
+    """A reclaimed liquidity sweep of the 4h range (smc.py): long after a swept low, short after a swept high."""
+    sym, s = h["symbol"], h.get("smc") or {}
+    short = h["setup"] == "smc_sweep_short"
+    rec = {"time": datetime.now(S.IST).isoformat(), "symbol": "CRYPTO:" + sym, "setup": h["setup"],
+           "steps": {}, "result": None}
+    st = rec["steps"]
+    st["1_scanner"] = {"bar_end": h["bar_end"], "close": h["price"], "range_high": h["range_high"],
+                       "range_low": h["range_low"], "variant": s.get("variant"), "level": s.get("level"),
+                       "extreme": s.get("extreme"), "vol_ratio": round(s.get("vol_x", 0), 2)}
+
+    def done(result, why):
+        rec["result"], rec["why"] = result, why
+        st["10_analyst"] = "n/a for crypto"
+        st["11_pelosi"] = "n/a for crypto"
+        record(rec)
+        log("AUTO %s: %s (%s)" % (sym, result, why))
+        return rec
+
+    if not s:
+        return done("skipped", "scanner sent no sweep details")
+    try:
+        st["2_news"] = headlines(sym)
+    except Exception as e:
+        st["2_news"] = "unavailable: %s" % e
+    bar_start = datetime.fromisoformat(h["bar_end"]) - timedelta(minutes=C.BAR_MIN)
+    if bar_start.astimezone(timezone.utc).hour in (cfg.get("skip_hours_utc") or []):
+        return done("skipped", "thin hours: sweep candle at %02d:%02d UTC (rule skips %s UTC)" % (
+            bar_start.hour, bar_start.minute, ",".join(str(x) for x in cfg["skip_hours_utc"])))
+    try:
+        price, _ = P.fetch_price("CRYPTO", sym)
+    except Exception as e:
+        return done("skipped", "no live price: %s" % e)
+    try:
+        atr = atr15(sym, h["bar_end"])
+    except Exception as e:
+        return done("skipped", "no candles for the ATR: %s" % e)
+    if not atr:
+        return done("skipped", "not enough candles for the ATR")
+    level, extreme, mid = s["level"], s["extreme"], (h["range_high"] + h["range_low"]) / 2
+    if short:
+        stop = extreme + 0.1 * atr if cfg["smc_stop"] == "sweep" else price + 1.5 * atr
+        stop = P.round_px("CRYPTO", stop, down=False)
+        risk, back_in = stop - price, price < level
+    else:
+        stop = extreme - 0.1 * atr if cfg["smc_stop"] == "sweep" else price - 1.5 * atr
+        stop = P.round_px("CRYPTO", stop)
+        risk, back_in = price - stop, price > level
+    st["3_entry"] = {"side": "short" if short else "long", "price_now": price, "reclaimed_level": level,
+                     "sweep_extreme": extreme, "atr14_15m": round(atr, 8)}
+    if risk <= 0:
+        return done("skipped", "price %s is already past the stop %s" % (price, stop))
+    if not back_in:
+        return done("skipped", "price %s is back outside the 4h range (level %s): the reclaim failed" % (price, level))
+    trail = cfg["smc_exit"] == "trail" and not short
+    if cfg["smc_exit"] == "mid":
+        target = P.round_px("CRYPTO", mid, down=not short)
+        if (price - target if short else target - price) < 0.5 * risk:
+            return done("skipped", "the 4h range middle %s is under 0.5R away" % target)
+    else:
+        tr_r = 20.0 if trail else 2.0
+        target = P.round_px("CRYPTO", price - tr_r * risk if short else price + tr_r * risk, down=short)
+    fee_pct = P.load_config()["accounts"]["CRYPTO"].get("fee_pct", 0)
+    fee_r = 2 * price * fee_pct / 100 / risk
+    st["4_exit"] = {"entry": price, "stop": stop, "target": target, "risk": round(risk, 6),
+                    "stop_pct": round(risk / price * 100, 3), "fee_r": round(fee_r, 3), "exit": cfg["smc_exit"],
+                    "time_stop_hours": cfg["max_hold_hours"]}
+    if fee_r > cfg["max_fee_r"]:
+        return done("skipped", "fees eat %.2fR of the trade (max %.2fR)" % (fee_r, cfg["max_fee_r"]))
+    if s.get("vol_x", 0) < cfg.get("smc_min_vol_x", 0):
+        return done("skipped", "sweep volume %.2fx the 4h average (min %.1fx)" % (s.get("vol_x", 0), cfg["smc_min_vol_x"]))
+    if cfg.get("smc_regime"):
+        reg = btc_regime()
+        st["regime"] = reg
+        if reg is None:
+            return done("skipped", "BTC regime unknown")
+        if short and reg is True:
+            return done("skipped", "BTC regime: BTC is above its 4h midpoint (no shorts against it)")
+        if not short and reg is False:
+            return done("skipped", "BTC regime: BTC is not above its 4h midpoint")
+    st["5_timemachine"] = "n/a for SMC sweeps (crypto-smc backtest instead): not a gate"
+    pcfg = P.load_config()
+    led = P.load_ledger(pcfg)
+    args = type("A", (), {"symbol": "CRYPTO:" + sym, "stop": str(stop), "target": str(target), "qty": None,
+                          "price": str(price), "note": "auto: %s %s" % (h["setup"], s.get("variant")), "force": False,
+                          "side": "short" if short else "long"})()
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            P.cmd_buy(args, pcfg, led)
+        P.save_json(P.LEDGER, led)
+    except P.PaperError as e:
+        st["6-8_budget_risk_broker"] = "BLOCK: %s" % e
+        return done("blocked", str(e))
+    pos = next(p for p in led["open"] if p["key"] == "CRYPTO:" + sym)
+    if trail:
+        pos.update({"trail_atr": round(atr, 8), "trail_k": cfg["trail_atr_k"], "trail_arm_r": cfg["trail_arm_r"],
+                    "peak": pos["entry"]})
+        P.save_json(P.LEDGER, led)
+    st["6-8_budget_risk_broker"] = {"verdict": "PASS, paper %s filled" % ("short" if short else "buy"), "qty": pos["qty"],
+                                    "entry": pos["entry"], "stop": pos["stop"], "target": pos["target"],
+                                    "max_loss": round(abs(pos["entry"] - pos["stop"]) * pos["qty"] + pos["entry_fee"], 2),
+                                    "report": buf.getvalue().strip().splitlines()}
+    st["9_alerts"] = "live.py checks stop %s / target %s every cycle%s; time stop after %dh" % (
+        pos["stop"], pos["target"], " (trailing)" if trail else "", cfg["max_hold_hours"])
+    return done("PAPER SHORT" if short else "PAPER BUY", "%s @ %s, stop %s, %s (SMC %s sweep of the 4h %s)" % (
+        P.fmt_qty("CRYPTO", pos["qty"]), pos["entry"], pos["stop"],
+        "trailing exit" if trail else "target %s" % pos["target"], s.get("variant"), "high" if short else "low"))
+
+
 def run_one(h, cfg, log):
+    if h["setup"].startswith("smc_sweep"):
+        return run_smc(h, cfg, log)
     sym = h["symbol"]
     rec = {"time": datetime.now(S.IST).isoformat(), "symbol": "CRYPTO:" + sym, "setup": h["setup"],
            "steps": {}, "result": None}

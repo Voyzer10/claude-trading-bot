@@ -10,6 +10,7 @@ combination, and check the winners on days they were NOT chosen on (walk-forward
     python research.py crypto-live        # the live rule with live entry timing: close vs +1 min vs +5 min
     python research.py nse-v2             # NSE opening range v2: wider stops (range low, ATR), trailing exit,
                                           # charges cap in R, 15/30-minute ranges (research_nse2.py)
+    python research.py crypto-smc         # Smart Money "liquidity sweep and reclaim" vs the live breakout rule
     python research.py crypto-v4          # "pro" breakout setup: trend, squeeze, session, ATR stop, partial/trailing exits
 
 Bars are cached in trader/research/cache/ (delete it to refetch). Reports:
@@ -617,7 +618,7 @@ def live_timing_main(a, syms, src):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="Walk-forward backtest of the breakout rules. Not financial advice.")
-    p.add_argument("mode", choices=["nse", "nse-v2", "crypto", "crypto-short", "crypto-mr", "crypto-5m", "crypto-live", "crypto-v4", "fno"])
+    p.add_argument("mode", choices=["nse", "nse-v2", "crypto", "crypto-short", "crypto-mr", "crypto-5m", "crypto-live", "crypto-v4", "crypto-smc", "fno"])
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--workers", type=int, default=6)
     p.add_argument("--top", type=int, default=10)
@@ -661,6 +662,9 @@ def main(argv=None):
             syms = syms[:a.limit]
         if a.mode == "crypto-live":
             return live_timing_main(a, syms, src)
+        if a.mode == "crypto-smc":  # liquidity sweep and reclaim: research_smc.py
+            import research_smc
+            return research_smc.main(a, syms, src, fetch_all, fetch, stats, OUT, IST)
         if a.mode == "crypto-v4":  # stop / exit / squeeze variants: research_v4.py
             import research_v4
             return research_v4.main(a, syms, src, fetch_all, fetch, stats, OUT, IST)
