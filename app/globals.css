@@ -243,6 +243,10 @@ textarea { resize: vertical; }
 .paperbuys { margin-top: 12px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
 .paperbuys > div { flex: 1 1 280px; min-width: 0; }
 .paperbuys p { margin: 2px 0 0; }
+/* coin / stock icons next to tickers */
+.sym { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.sym-icon { border-radius: 50%; object-fit: contain; background: var(--panel); }
+.sym-mono { display: inline-grid; place-items: center; color: #fff; font-family: var(--font-body); font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
 .style-line { font-weight: 600; }
 .style-line.t-good { color: var(--good); } .style-line.t-warn { color: var(--warn); } .style-line.t-bad { color: var(--bad); }
 .behaviour { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
