@@ -248,6 +248,10 @@ textarea { resize: vertical; }
 .sym-icon { border-radius: 50%; object-fit: contain; background: var(--panel); }
 .sym-mono { display: inline-grid; place-items: center; color: #fff; font-family: var(--font-body); font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
 .style-line { font-weight: 600; }
+/* backtest report toolbar */
+.report-wrap { display: grid; gap: 6px; min-width: 0; }
+.report-bar { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: space-between; }
+.report-actions { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .style-line.t-good { color: var(--good); } .style-line.t-warn { color: var(--warn); } .style-line.t-bad { color: var(--bad); }
 .behaviour { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
 .behaviour summary { cursor: pointer; }

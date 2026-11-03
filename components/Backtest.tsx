@@ -29,6 +29,45 @@ export default function Backtest() {
   const [out, setOut] = useState<{ job: Job; output: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  async function copyReport() {
+    const text = out?.output ?? "";
+    if (!text) return;
+    let ok = false;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {   // HTTPS / localhost
+        await navigator.clipboard.writeText(text);
+        ok = true;
+      }
+    } catch { /* fall back below */ }
+    if (!ok) {   // plain HTTP (the VPS dashboard): the old textarea + execCommand way still works there
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      try { ok = document.execCommand("copy"); } catch { ok = false; }
+      document.body.removeChild(ta);
+    }
+    setCopied(ok ? "Copied" : "Copy blocked by the browser: use Download");
+    setTimeout(() => setCopied(null), 2500);
+  }
+
+  function downloadReport() {
+    if (!out?.output) return;
+    const blob = new Blob([out.output], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `backtest-${out.job.id}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
 
   const load = useCallback(async () => {
     try {
@@ -106,9 +145,19 @@ export default function Backtest() {
               </li>
             ))}
           </ul>
-          <pre className="report" aria-live="polite">
-            {out ? out.output || (out.job.status === "running" ? "Starting… downloading market data." : "(no output)") : "Pick a backtest."}
-          </pre>
+          <div className="report-wrap">
+            <div className="report-bar">
+              <span className="small muted">{out ? `${out.job.mode} · ${out.job.status.split(" ")[0]}` : ""}</span>
+              <span className="report-actions">
+                {copied && <span className="small muted" role="status">{copied}</span>}
+                <button className="btn small-btn" onClick={copyReport} disabled={!out?.output}>Copy log</button>
+                <button className="btn small-btn" onClick={downloadReport} disabled={!out?.output}>Download .txt</button>
+              </span>
+            </div>
+            <pre className="report" aria-live="polite">
+              {out ? out.output || (out.job.status === "running" ? "Starting… downloading market data." : "(no output)") : "Pick a backtest."}
+            </pre>
+          </div>
         </div>
       )}
     </section>
