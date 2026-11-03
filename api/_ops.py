@@ -852,8 +852,9 @@ def _step_detail(n, rec):
         return "%s at %s, %s" % (sym, _fmt(s.get("price_now") or s.get("index_now") or s.get("price")),
                                  "%sR past the trigger" % ch if ch is not None else "timing ok")
     if n == 4 and isinstance(s, dict):
-        return "%s stop %s (%s%% away), fees %sR" % (sym, _fmt(s.get("stop") or s.get("index_stop")),
-                                                   s.get("stop_pct", "?"), s.get("fee_r", "?"))
+        fee = s.get("fee_r", s.get("charges_r"))
+        return "%s stop %s (%s%% away)%s" % (sym, _fmt(s.get("stop") or s.get("index_stop")), s.get("stop_pct", "?"),
+                                            ", fees %sR" % fee if fee is not None else "")
     if n == 5 and isinstance(s, dict):
         sim = s.get("sim") or s.get("replay") or {}
         hist = s.get("history") or {}
@@ -926,7 +927,8 @@ def agents():
             continue
         hits = res.get("hits") or []
         scans.append({"market": m, "as_of": res.get("as_of"), "scanned": res.get("scanned"), "usable": res.get("usable"),
-                      "hits": len(hits), "new": sum(1 for h in hits if h.get("new"))})
+                      "hits": len(hits) if m != "CRYPTO" else sum(1 for h in hits if h.get("setup") == "range_breakout_4h"),
+                      "new": sum(1 for h in hits if h.get("new")), "tf": ms.get("timeframe", 15)})
 
     openpos = led.get("open") or []
     stop_k = cfg.get("stop_atr_k", 1.5)
@@ -976,11 +978,15 @@ def agents():
         if not running:
             a.update(status="off", now="Runner is not running.")
         elif n == 1:
-            sc = scans[0] if scans else None
-            a.update(status="active", now=("Last scan %s: %s of %s coins usable, %d above the 4h high, %d new"
-                                           % (datetime.fromisoformat(sc["as_of"]).astimezone(IST).strftime("%H:%M")
-                                              if sc.get("as_of") else "?", sc["usable"], sc["scanned"], sc["hits"],
-                                              sc["new"]) if sc else "Waiting for the next candle to close."))
+            def line(sc):
+                at = datetime.fromisoformat(sc["as_of"]).astimezone(IST).strftime("%H:%M") if sc.get("as_of") else "?"
+                if sc["market"] == "CRYPTO":
+                    return "Crypto %sm candle %s: %s of %s coins usable, %d above the 4h high, %d new" % (
+                        sc["tf"], at, sc["usable"], sc["scanned"], sc["hits"], sc["new"])
+                return "%s opening range %s: %s of %s stocks usable, %d broke out, %d new" % (
+                    sc["market"], at, sc["usable"], sc["scanned"], sc["hits"], sc["new"])
+            a.update(status="active", now="; ".join(line(sc) for sc in scans) if scans
+                     else "Waiting for the next candle to close.")
             a["scans"] = scans
         elif n == 9:
             if openpos:

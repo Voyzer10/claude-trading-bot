@@ -59,7 +59,8 @@ def _tail(path, n):
 CATEGORIES = [
     ("thin hours", "Thin hours"),
     ("volume not reported", "Volume not reported yet"),
-    ("breakout volume", "Low volume"),
+    ("breakout volume", "Low volume"), ("sweep volume", "Low volume"),
+    ("not enough free cash", "No free cash"),
     ("stop too tight", "Stop too tight"),
     ("fell back", "Reversed"), ("moved back inside", "Reversed"), ("reversed", "Reversed"),
     ("chasing", "Chasing"),
