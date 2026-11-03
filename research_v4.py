@@ -257,6 +257,8 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist, step=15, short=Fal
     data, failed = fetch_all(syms, "-USD", iv, a.workers)
     btc = data.get("BTC") or fetch("BTC", "-USD", iv)
     events = events_v4(data, btc, rb=240 // step, step=step, short=short)
+    import tm_test
+    tm_test.add_history(events)
     if not events:
         print("No events: no data came back (check the internet / Yahoo).")
         return 1
@@ -310,10 +312,17 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist, step=15, short=Fal
              "TOP 10 BY IN-SAMPLE (the OUT-sample line is the honest one):"]
     for n, r in enumerate(ok[:10], 1):
         lines.append(row(r, "%2d. " % n))
+    key = lambda f: (f["stop"], f["exit"], f["hold"])
+    lines += [""] + tm_test.section(events, cur, key(cur), keep, split, stats,
+                                    "the live short rule" if short else "the live rule (v6)")
+    alt = dict(cur, min_vol_x=1.5)
+    lines += [""] + tm_test.section(events, alt, key(alt), keep, split, stats, "the live rule with volume >= 1.5x")
     lines += ["", "%d of %d combinations (with enough trades) were positive both in- and out-of-sample." % (
         len(stable), len(ok))]
     if stable:
         best = stable[0]
+        lines += [""] + tm_test.section(events, best["filters"], key(best["filters"]), keep, split, stats,
+                                        "the most consistent combination")
         lines += ["", "MOST CONSISTENT (best of its weaker half):", row(best, "  "), "",
                   "ITS NEIGHBOURS (one setting changed at a time; a robust rule has neighbours that also do well):"]
         for k, vals in GRID.items():
