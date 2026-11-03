@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getJSON, OPS, errText } from "@/lib/api";
 import { ago, timeIST } from "@/lib/format";
+import SymbolIcon from "@/components/SymbolIcon";
 
 type Status = "active" | "working" | "standby" | "paused" | "off" | "n/a";
 type Agent = {
@@ -133,7 +134,7 @@ export default function Agents({ refreshKey }: { refreshKey: number }) {
             {(showAll ? d.flow : d.flow.slice(0, 6)).map((f, i) => (
               <li key={`${f.time}-${f.symbol}-${i}`}>
                 <div className="flow-head">
-                  <b className="mono">{f.symbol}</b>
+                  <b className="mono sym"><SymbolIcon market={f.market === "FNO" ? "NFO" : f.market} symbol={f.symbol} />{f.symbol}</b>
                   <span className="muted small">{f.market} · {timeIST(f.time)}</span>
                   <span className={`chip plain ${f.stopped_at === null ? "c-good" : f.result === "blocked" ? "c-bad" : "c-off"}`}>
                     {f.stopped_at === null ? f.result : `stopped at ${FULL[f.stopped_at - 1] ?? f.stopped_at}`}

@@ -10,6 +10,7 @@ import Operations, { useCommands } from "@/components/Operations";
 import Backtest from "@/components/Backtest";
 import Alerts from "@/components/Alerts";
 import Agents from "@/components/Agents";
+import SymbolIcon from "@/components/SymbolIcon";
 import { errText } from "@/lib/api";
 
 const POLL_MS = 30_000;
@@ -369,7 +370,7 @@ function CoinBehaviour({ coins, asOf, days }: { coins: Coin[]; asOf: string | nu
             <tbody>
               {rows.map((p) => (
                 <tr key={p.symbol}>
-                  <td data-label="Coin" className="mono">{p.symbol}</td>
+                  <td data-label="Coin" className="mono"><span className="sym"><SymbolIcon market="CRYPTO" symbol={p.symbol} />{p.symbol}</span></td>
                   <td data-label="Style" className="why">
                     <span className={`style-line ${styleTone(p.style)}`}>{shortStyle(p.style)}</span>
                     {p.why && <div className="muted small">{p.why}</div>}
@@ -397,7 +398,7 @@ function CoinCard({ c }: { c: Coin }) {
   return (
     <div className={`coin st-${c.state.replace(" ", "")}`}>
       <div className="row">
-        <b>{c.symbol}</b>
+        <b className="sym"><SymbolIcon market="CRYPTO" symbol={c.symbol} size={20} />{c.symbol}</b>
         <span className={`chip plain ${STATE_CHIP[c.state] ?? "c-off"}`}>{c.state}</span>
       </div>
       <div className="row">
@@ -594,7 +595,7 @@ function DecisionsSection({ decisions }: { decisions: Decision[] }) {
             {rows.map((d, i) => (
               <tr key={i}>
                 <td data-label="Time" className="num">{timeIST(d.time, true)}</td>
-                <td data-label="Symbol" className="num">{d.symbol}</td>
+                <td data-label="Symbol" className="num"><span className="sym"><SymbolIcon id={d.symbol} />{d.symbol}</span></td>
                 <td data-label="Result">{resultChip(d.result)}</td>
                 <td data-label="Reason" className="why">
                   <b>{d.category}</b>
@@ -674,7 +675,7 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
               <tbody>
                 {open.map((p) => (
                   <tr key={p.key}>
-                    <td data-label="Instrument" className="num">{p.key}</td>
+                    <td data-label="Instrument" className="num"><span className="sym"><SymbolIcon id={p.key} />{p.key}</span></td>
                     <td data-label="Side">{p.side ?? "long"}</td>
                     <td data-label="Qty" className="num">{p.qty}</td>
                     <td data-label="Entry" className="num">{price(p.entry)}</td>
@@ -707,7 +708,7 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
             {closed.slice().reverse().map((c, i) => (
               <tr key={i}>
                 <td data-label="Closed" className="num">{timeIST(c.exit_time, true)}</td>
-                <td data-label="Instrument" className="num">{c.key}</td>
+                <td data-label="Instrument" className="num"><span className="sym"><SymbolIcon id={c.key} />{c.key}</span></td>
                 <td data-label="Entry → exit" className="num">{price(c.entry)} → {price(c.exit)}</td>
                 <td data-label="P&L" className={`num ${(c.pnl ?? 0) > 0 ? "pos" : "neg"}`}>{money(c.pnl, currencyOf(acctOf(c.market)))}</td>
                 <td data-label="R" className={`num ${(c.r ?? 0) > 0 ? "pos" : "neg"}`}>{c.r !== undefined ? `${c.r > 0 ? "+" : ""}${c.r}` : "—"}</td>
