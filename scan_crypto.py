@@ -148,11 +148,30 @@ def intraday_one(d, cutoff):
     if sw:
         tags.append("smc_sweep_long" if sw["side"] == "long" else "smc_sweep_short")
         fresh["smc_sweep_long"] = fresh["smc_sweep_short"] = True
+    # the user's SMC Trading Playbook (smc_playbook.py): sweep of PDH/PDL/CDH/CDL/swing -> doji / top hammer /
+    # bottom star at the level -> this candle is candle 1 or 2 and CLOSED beyond the trigger extreme. The agent
+    # (auto_crypto.run_smcp) applies the smcp_* settings (candle 1 only, structure, doji size, stop, target).
+    pb = []
+    try:
+        import smc_playbook as PB
+        rows = [(b[0], b[5] if b[5] is not None else b[3], b[1], b[2], b[3], b[4] or 0) for b in bars]
+        ctx = PB.Context(rows, lambda t: t.date())
+        i = len(rows) - 1
+        for x in PB.find_setups(ctx, i, doji_pct=0.15, near_atr=0.5, struct_lookback=48, max_confirm=2):
+            if any(y["setup"] == x["setup"] for y in pb):
+                continue   # the same setup from candle 1 and candle 2: keep the candle-1 one
+            x = dict(x, internal_target=PB.target_for(ctx, i, x, "internal", x["entry"]),
+                     external_target=PB.target_for(ctx, i, x, "external", x["entry"]))
+            pb.append(x)
+            tags.append("smcp_" + x["setup"])
+            fresh["smcp_" + x["setup"]] = True
+    except Exception:
+        pb = []
     return {"price": last[3], "bar_end": (last[0] + timedelta(minutes=BAR_MIN)).isoformat(),
             "range_high": hi, "range_low": lo, "pct_vs_high": round((last[3] / hi - 1) * 100, 2),
             "rsi_15m": round(rsi, 1) if rsi is not None else None,
             "vol_ratio": (round(last[4] / avg_v, 2) if avg_v and last[4] else None), "tags": tags, "fresh": fresh,
-            "smc": sw}
+            "smc": sw, "smcp": {"smcp_" + x["setup"]: x for x in pb}}
 
 
 def sig(x):
@@ -188,7 +207,8 @@ def fill_volume(sym, r, cutoff):
 
 
 def intraday_scan(symbols, now_utc, workers=6, quiet=False):
-    data, failed = S.fetch_many(symbols, "2d", "%dm" % BAR_MIN, workers, SUFFIX, quiet, fetcher=crypto_chart)
+    # 5 days: the playbook's liquidity map needs yesterday's full high / low and 2 days of swing points
+    data, failed = S.fetch_many(symbols, "5d", "%dm" % BAR_MIN, workers, SUFFIX, quiet, fetcher=crypto_chart)
     cutoff = last_bar_close(now_utc)
     hits, usable, coins = [], 0, {}
     for s, d in data.items():
@@ -209,7 +229,8 @@ def intraday_scan(symbols, now_utc, workers=6, quiet=False):
                          "pct_vs_high": r["pct_vs_high"], "rsi_15m": r["rsi_15m"],
                          "vol_ratio": r["vol_ratio"], "bar_end": r["bar_end"],
                          "fresh": r.get("fresh", {}).get(tag, True),
-                         **({"smc": r["smc"]} if tag.startswith("smc_sweep") and r.get("smc") else {})})
+                         **({"smc": r["smc"]} if tag.startswith("smc_sweep") and r.get("smc") else {}),
+                         **({"smcp": r["smcp"][tag]} if tag in r.get("smcp", {}) else {})})
     hits.sort(key=lambda h: (h["setup"], -h["pct_vs_high"]))
     return {"mode": "intraday", "market": "CRYPTO", "as_of": cutoff.isoformat(), "universe": len(symbols),
             "scanned": len(data), "failed": len(failed), "failed_symbols": failed, "usable": usable,

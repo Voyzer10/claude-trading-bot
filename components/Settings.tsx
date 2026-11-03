@@ -17,7 +17,7 @@ type SettingsDoc = {
 };
 
 const RULE_LABELS: Record<string, [string, string]> = {
-  enabled_setups: ["Setups traded", "4h breakout (backtested, live). 4h breakdown: failed its backtest. SMC sweeps: run the Crypto SMC backtest first; untick the breakout to use SMC instead of it."],
+  enabled_setups: ["Setups traded", "4h breakout (backtested, live). 4h breakdown: failed its backtest. SMC sweeps: run the Crypto SMC backtest first. Playbook setups (your SMC playbook): run \"Playbook crypto 15m\" first; each can be ticked alone."],
   short_exit: ["Short exit", "trail (crypto-v4-short best): break-even at +1R, then the stop follows the low. 2R: fixed target."],
   short_trend: ["Short trend filter", "ema+slope: short only a coin below its EMA50 < EMA200 with EMA200 falling (15m). ema: without the slope. off: any."],
   short_max_range_pct: ["Short max 4h range (%)", "Short only breakdowns of a tight 4h range (a squeeze). 0 = any width."],
@@ -29,6 +29,14 @@ const RULE_LABELS: Record<string, [string, string]> = {
   smc_exit: ["SMC exit", "2R target, mid (target the 4h range's middle), or trail (longs only; shorts use 2R)."],
   smc_min_vol_x: ["SMC min sweep volume (x)", "Sweep candle volume vs the 4h average. 0 = off."],
   smc_regime: ["SMC BTC filter", "Long only while BTC is above its 4h midpoint, short only below."],
+  smcp_confirm: ["Playbook: confirm on candle", "2: candle 1 or candle 2 may close beyond the trigger (playbook). 1: candle 1 only."],
+  smcp_struct: ["Playbook: structure (BOS/CHoCH)", "before: a BOS/CHoCH in the trade's direction before the sweep. any: before or up to the entry. none: not required."],
+  smcp_doji_pct: ["Playbook: max doji body", "Doji body as a share of its range (0.15 = 15%; 0.10 = stricter)."],
+  smcp_buffer_atr: ["Playbook: stop buffer (x ATR)", "Stop beyond the pattern / sweep extreme plus this many ATRs."],
+  smcp_target: ["Playbook: target", "internal: nearest swing (else today's high/low). external: CDH/PDH (CDL/PDL). 2R. trail."],
+  smcp_min_rr: ["Playbook: min reward (R)", "Skip if the liquidity target is closer than this, after fees."],
+  smcp_regime: ["Playbook: BTC filter", "Long only while BTC is above its 4h midpoint, short only below."],
+  smcp_skip_thin_hours: ["Playbook: skip thin hours", "On: skip 00-06 UTC like the breakout rule. Off: all hours."],
   stop: ["Stop", "atr: 1.5 x ATR under the entry (v4, backtested). range-mid / range-low: the older v3 stops."],
   stop_atr_k: ["ATR stop (x ATR)", "How many ATRs below the entry the stop sits (stop = atr)."],
   exit: ["Exit", "trail: break-even at +1R, then the stop follows the high (v4). target: fixed target at Target (R)."],
@@ -54,6 +62,10 @@ const SETUP_NAMES: Record<string, string> = {
   range_breakdown_4h: "Short (4h breakdown)",
   smc_sweep_long: "SMC long (swept 4h low, reclaimed)",
   smc_sweep_short: "SMC short (swept 4h high, reclaimed)",
+  smcp_doji_long: "Playbook: doji long (after a swept low)",
+  smcp_doji_short: "Playbook: doji short (after a swept high)",
+  smcp_star_long: "Playbook: bottom star long",
+  smcp_hammer_short: "Playbook: top hammer short",
 };
 
 export default function Settings() {
