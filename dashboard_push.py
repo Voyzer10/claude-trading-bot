@@ -134,6 +134,20 @@ def kind_of(msg):
 
 # ------------------------------------------------------------------ snapshot
 
+def _with_quotes(opens, state):
+    """Open positions from the ledger, plus the last price and open P&L the runner fetched this cycle."""
+    live = {p.get("key"): p for p in ((state or {}).get("paper") or {}).get("open", []) if isinstance(p, dict)}
+    out = []
+    for p in opens:
+        row = dict(p)
+        q = live.get(p.get("key")) or {}
+        for k in ("last", "open_pnl"):
+            if q.get(k) is not None:
+                row[k] = q[k]
+        out.append(row)
+    return out
+
+
 def build(state=None):
     state = state if state is not None else _json(STATE, {}) or {}
     now = datetime.now(IST)
@@ -234,7 +248,7 @@ def build(state=None):
         "counts": {"decisions_total": len(decisions), "traded": counts.get("PAPER BUY", 0) + counts.get("PAPER SHORT", 0),
                    "skipped": counts.get("skipped", 0), "blocked": counts.get("blocked", 0),
                    "log_only": counts.get("LOG ONLY", 0)},
-        "ledger": {"accounts": led.get("accounts") or {}, "open": led.get("open") or [],
+        "ledger": {"accounts": led.get("accounts") or {}, "open": _with_quotes(led.get("open") or [], state),
                    "closed": (led.get("closed") or [])[-100:]},
         "logs": logs,
     }
