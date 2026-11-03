@@ -605,7 +605,22 @@ def check_once(cfg, led):
             pos["stop"], pos["breakeven"] = pos["entry"], True
             print("BREAKEVEN %-16s price %s is %gR up: stop moved to the entry %s"
                   % (pos["key"], money(m, price), be, money(m, pos["entry"])))
-        if pos.get("trail_k") and not sh:
+        if pos.get("trail_k") and sh:
+            # trailing exit for a short (auto_crypto short_exit = trail): break-even once price has fallen
+            # trail_arm_r R, then the stop follows trail_k x ATR above the lowest price seen; it never moves up
+            pos["peak"] = min(pos.get("peak", pos["entry"]), price)   # for a short, "peak" is the low
+            risk = rs - pos["entry"]
+            if not pos.get("breakeven") and risk > 0 and pos["peak"] <= pos["entry"] - pos.get("trail_arm_r", 1.0) * risk:
+                pos["stop"], pos["breakeven"] = min(pos["stop"], pos["entry"]), True
+                print("BREAKEVEN %-16s low %s: stop moved to the entry %s" % (pos["key"], money(m, pos["peak"]),
+                                                                            money(m, pos["entry"])))
+            if pos.get("breakeven"):
+                trail_to = round_px(m, pos["peak"] + pos["trail_k"] * pos["trail_atr"], down=False)
+                if trail_to < pos["stop"]:
+                    pos["stop"], pos["trailing"] = trail_to, True
+                    print("TRAIL %-16s stop lowered to %s (low %s)" % (pos["key"], money(m, trail_to),
+                                                                     money(m, pos["peak"])))
+        elif pos.get("trail_k") and not sh:
             # trailing exit (auto_crypto rules v4): break-even once +trail_arm_r is reached, then the stop
             # follows trail_k x ATR under the highest price seen; it never moves down
             pos["peak"] = max(pos.get("peak", pos["entry"]), price)

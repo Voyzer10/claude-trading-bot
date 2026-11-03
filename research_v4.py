@@ -107,17 +107,23 @@ EXITS = ("2R", "trail", "partial")
 HOLDS = (24, 48)
 
 
-def events_v4(data, btc, rb=16, step=15):
+def events_v4(data, btc, rb=16, step=15, short=False):
     """Fresh closes above the prior 4h high on `step`-minute candles (15, or 5 with rb=48), with every stop /
-    exit / hold variant scored. Holds are counted in 15-minute units (24 = 6 h, 48 = 12 h) on any step."""
+    exit / hold variant scored. Holds are counted in 15-minute units (24 = 6 h, 48 = 12 h) on any step.
+    short=True: the same on prices turned upside down, i.e. fresh closes BELOW the 4h low sold short: the stop
+    sits above, the trail follows the lowest price, "regime" means BTC is below its 4h midpoint and "trend"
+    means a downtrend (close < EMA50 < EMA200)."""
     scale = 15 // step
-    btc_close = {t: c for t, c in zip(btc["t"], btc["c"])} if btc else {}
+    sgn = -1 if short else 1
+    btc_close = {t: sgn * c for t, c in zip(btc["t"], btc["c"]) if c is not None} if btc else {}
     bt = sorted(btc_close)
     evs = []
     for sym, d in data.items():
         rows = [(datetime.fromtimestamp(t, UTC), o, h, l, c, v or 0) for t, o, h, l, c, v in
                 zip(d["t"], d["o"], d["h"], d["l"], d["c"], d["v"])
                 if not datetime.fromtimestamp(t, UTC).minute % step and None not in (o, h, l, c)]
+        if short:  # upside down: high <-> -low, so the long-only exit functions score a short
+            rows = [(r[0], -r[1], -r[3], -r[2], -r[4], r[5]) for r in rows]
         if len(rows) < 300:
             continue
         closes = [r[4] for r in rows]
@@ -145,27 +151,27 @@ def events_v4(data, btc, rb=16, step=15):
                 trend = "ema+slope" if e200[i] > e200[i - 4] else "ema"
             ev = {"sym": sym, "day": rows[i][0].date().isoformat(), "hour": rows[i][0].hour,
                   "vol_x": rows[i][5] / avg_v if avg_v else 0.0, "regime": regime, "trend": trend,
-                  "range_pct": (hi - lo) / entry * 100, "out": {}, "stop_pct": {}, "fee_r": {}, "chase": {}}
+                  "range_pct": (hi - lo) / abs(entry) * 100, "out": {}, "stop_pct": {}, "fee_r": {}, "chase": {}}
             for sname, stop in (("mid", mid), ("atr1.5", entry - 1.5 * atr)):
                 risk = entry - stop
                 if risk <= 0:
                     continue
-                ev["stop_pct"][sname] = risk / entry * 100
-                ev["fee_r"][sname] = 2 * entry * FEE / risk
+                ev["stop_pct"][sname] = risk / abs(entry) * 100
+                ev["fee_r"][sname] = 2 * abs(entry) * FEE / risk
                 ev["chase"][sname] = (entry - hi) / risk  # how far the close already is past the 4h high, in R
                 for hold in HOLDS:
                     path = rows[i + 1:i + 1 + hold * scale]
                     for ex in EXITS:
                         if ex == "2R":
                             r = _fixed(path, entry, stop, 2.0)
-                            cost = (2 * entry + 2 * risk) * FEE / risk
+                            cost = (2 * abs(entry) + sgn * 2 * risk) * FEE / risk
                         elif ex == "trail":
                             r, cost = _trail(path, entry, stop, atr), ev["fee_r"][sname]
                         else:
                             r, cost = _partial(path, entry, stop, atr), ev["fee_r"][sname]
                         ev["out"][(sname, ex, hold)] = r - cost
             evs.append(ev)
-            i += 24  # one trade at a time per coin (6h), as in research.py
+            i += 24 * scale  # one trade at a time per coin (6h), as in research.py
     evs.sort(key=lambda e: e["day"])
     return evs
 
@@ -212,6 +218,9 @@ def score(events, f, split, stats):
 
 LIVE = {"stop": "mid", "exit": "2R", "hold": 24, "min_vol_x": 1.5, "regime": True, "min_stop_pct": 1.0}
 # the rule the live bot runs (auto_crypto.py DEFAULTS, rules v6 = v4 without the chase skip, volume >= 1.0x)
+# the live crypto SHORT rule (auto_crypto range_breakdown_4h): the long rule's filters, fixed 2R target
+LIVE_SHORT = {"stop": "atr1.5", "exit": "2R", "hold": 48, "min_vol_x": 1.0, "regime": True, "trend": "off",
+              "max_range_pct": None, "session": "active", "max_fee_r": 0.25, "max_chase_r": None}
 LIVE_V4 = {"stop": "atr1.5", "exit": "trail", "hold": 48, "min_vol_x": 1.0, "regime": True, "trend": "off",
            "max_range_pct": None, "session": "active", "max_fee_r": 0.25, "max_chase_r": None}
 
@@ -242,12 +251,12 @@ def row(r, label=""):
     return "%s%s\n     in-sample   %s\n     OUT-sample  %s" % (label, " ".join(parts), s(i), s(o))
 
 
-def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist, step=15):
+def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist, step=15, short=False):
     iv = "%dm" % step
     print("Fetching 60 days of %s bars for %d coins (%s)..." % (iv, len(syms), src), flush=True)
     data, failed = fetch_all(syms, "-USD", iv, a.workers)
     btc = data.get("BTC") or fetch("BTC", "-USD", iv)
-    events = events_v4(data, btc, rb=240 // step, step=step)
+    events = events_v4(data, btc, rb=240 // step, step=step, short=short)
     if not events:
         print("No events: no data came back (check the internet / Yahoo).")
         return 1
@@ -272,21 +281,24 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist, step=15):
             "%s=%s" % (name, on), ma, mb, "helps" if ma > mb + 0.03 else "hurts" if ma < mb - 0.03 else "no clear effect")
 
     tight_n = sum(1 for e in events if e["range_pct"] <= 1.0)
-    mode = "crypto-v4" if step == 15 else "crypto-v4-%dm" % step
+    mode = ("crypto-v4" if step == 15 else "crypto-v4-%dm" % step) + ("-short" if short else "")
+    cur = LIVE_SHORT if short else LIVE_V4
     lines = ["research.py %s  %s" % (mode, datetime.now(ist).strftime("%Y-%m-%d %H:%M IST")),
              "Candles: %s (4h range = %d candles, ATR(14) and the trailing stop on %s candles; holds are the same "
              "6 h / 12 h on every timeframe)." % (iv, 240 // step, iv),
-             "%d coins, %d days (%s..%s), %d fresh 4h breakouts (%d from a range under 1%%). R after %.3f%% fee "
+             ("SHORT SIDE: fresh closes below the 4h low, sold short (stop above, trail follows the low; btc=on means "
+              "BTC below its 4h midpoint, trend=ema means a downtrend)." if short else "Long side: fresh closes above the 4h high."),
+             "%d coins, %d days (%s..%s), %d fresh 4h breaks (%d from a range under 1%%). R after %.3f%% fee "
              "each side (paper CRYPTO account). Out-of-sample = days from %s." % (len(data), len(days), days[0], days[-1], len(events),
                                                            tight_n, FEE * 100, split), "",
              row(live, "OLD LIVE RULE (v3):      "), "",
-             row(score(events, LIVE_V4, split, stats), "LIVE RULE NOW (v6):      "), "",
+             row(score(events, cur, split, stats), "LIVE SHORT RULE NOW:     " if short else "LIVE RULE NOW (v6):      "), "",
              "LIVE RULE NEIGHBOURS (one setting changed at a time; a robust rule has neighbours that also do well):"]
     for k, vals in GRID.items():
         for v in vals:
-            if v == LIVE_V4[k]:
+            if v == cur[k]:
                 continue
-            f = dict(LIVE_V4, **{k: v})
+            f = dict(cur, **{k: v})
             lines.append(row(score(events, f, split, stats), "  %s=%s -> " % (k, v)))
     lines += ["",
              row(pro, "PRO SETUP (all 7 checks): "), "",
