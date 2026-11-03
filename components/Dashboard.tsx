@@ -671,7 +671,7 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
           <div className="tablewrap" style={{ marginBottom: 14 }}>
             <table className="rtable">
               <thead>
-                <tr><th>Instrument</th><th>Side</th><th>Qty</th><th>Entry</th><th>Stop</th><th>Target</th><th>Opened</th>{available && <th><span className="sr-only">Action</span></th>}</tr>
+                <tr><th>Instrument</th><th>Side</th><th>Qty</th><th>Entry</th><th>Now</th><th>Stop</th><th>Target</th><th>Opened</th>{available && <th><span className="sr-only">Action</span></th>}</tr>
               </thead>
               <tbody>
                 {open.map((p) => (
@@ -680,8 +680,21 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
                     <td data-label="Side">{p.side ?? "long"}</td>
                     <td data-label="Qty" className="num">{p.qty}</td>
                     <td data-label="Entry" className="num">{price(p.entry)}</td>
-                    <td data-label="Stop" className="num">{price(p.stop)}</td>
-                    <td data-label="Target" className="num">{price(p.target)}</td>
+                    <td data-label="Now" className="num">
+                      {p.last !== undefined ? price(p.last) : "—"}
+                      {p.open_pnl !== undefined && (
+                        <span className={`small ${p.open_pnl > 0 ? "pos" : p.open_pnl < 0 ? "neg" : ""}`}>
+                          {" "}{money(p.open_pnl, currencyOf(acctOf(p.market)))}
+                        </span>
+                      )}
+                    </td>
+                    <td data-label="Stop" className="num">
+                      {price(p.stop)}
+                      {p.trailing ? <span className="small muted"> (trailing)</span> : p.breakeven ? <span className="small muted"> (break-even)</span> : null}
+                    </td>
+                    <td data-label="Target" className="num">
+                      {p.trail_k ? <span className="muted">trailing exit, no fixed target</span> : price(p.target)}
+                    </td>
                     <td data-label="Opened" className="num">{timeIST(p.entry_time, true)}</td>
                     {available && (
                       <td data-label="Action">

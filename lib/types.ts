@@ -76,6 +76,12 @@ export type Position = {
   pnl?: number;
   r?: number;
   reason?: string;
+  last?: number;
+  open_pnl?: number;
+  trail_k?: number | null;
+  trailing?: boolean;
+  breakeven?: boolean;
+  risk_stop?: number;
 };
 
 export type Snapshot = {

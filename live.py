@@ -120,7 +120,7 @@ def paper_snapshot():
         row = dict(p)
         try:
             row["last"] = P.fetch_price(p["market"], p["symbol"])[0]
-            row["open_pnl"] = round((row["last"] - p["entry"]) * p["qty"], 2)
+            row["open_pnl"] = round(P.pnl_of(p, row["last"]), 2)   # sign-aware: a short gains when price falls
         except Exception:
             pass
         opens.append(row)
