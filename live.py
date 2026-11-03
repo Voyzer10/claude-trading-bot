@@ -134,6 +134,15 @@ def crypto_cycle(state, a):
     """24/7: daily setups once per UTC day, the 15-minute scan whenever a new candle has closed."""
     utc = now_ist().astimezone(timezone.utc)
     ms = state["markets"].setdefault("CRYPTO", {})
+    try:
+        import auto_crypto
+        tf = C.set_timeframe(auto_crypto.load_cfg().get("timeframe", "15m"))
+    except Exception:
+        tf = C.set_timeframe("15m")
+    if ms.get("timeframe") != tf:
+        if ms.get("timeframe"):
+            log("CRYPTO timeframe now %dm candles (4h range = %d candles)" % (tf, C.RANGE_BARS))
+        ms["timeframe"], ms["intraday"] = tf, None   # rescan on the new candles
     syms, src = C.universe()
     ms["universe_source"] = src
     d = ms.get("daily") or {}
@@ -158,12 +167,12 @@ def crypto_cycle(state, a):
     except Exception as e:
         log("CRYPTO coin profiles not started: %s" % e)
     if (ms.get("intraday") or {}).get("as_of") == C.last_bar_close(utc).isoformat():
-        return  # no new 15-minute candle yet
+        return  # no new candle yet
     try:
         res = C.intraday_scan(syms, utc, a.workers, quiet=True)
     except Exception as e:
         state["errors"].append("CRYPTO intraday: %s" % e)
-        log("CRYPTO 15m scan failed: %s" % e)
+        log("CRYPTO %dm scan failed: %s" % (C.BAR_MIN, e))
         return
     today = now_ist().date().isoformat()
     seen = ms.get("seen") if ms.get("seen_date") == today else {}  # display only: first time seen today
@@ -191,8 +200,8 @@ def crypto_cycle(state, a):
     brk = sum(1 for h in res["hits"] if h["setup"] == "range_breakout_4h")
     osd = sum(1 for h in res["hits"] if h["setup"] == "oversold_15m")
     bdn = sum(1 for h in res["hits"] if h["setup"] == "range_breakdown_4h")
-    log("CRYPTO 15m @%s IST: %d/%d usable; %d above their 4h high, %d below their 4h low, %d oversold%s"
-        % (datetime.fromisoformat(res["as_of"]).astimezone(S.IST).strftime("%H:%M"), res["usable"], res["scanned"],
+    log("CRYPTO %dm @%s IST: %d/%d usable; %d above their 4h high, %d below their 4h low, %d oversold%s"
+        % (C.BAR_MIN, datetime.fromisoformat(res["as_of"]).astimezone(S.IST).strftime("%H:%M"), res["usable"], res["scanned"],
            brk, bdn, osd, ("; NEW: " + ", ".join(new[:15])) if new else ""))
     if a.auto_paper:
         try:
@@ -351,6 +360,31 @@ def crypto_wake(now, a):
     while nxt - now > timedelta(seconds=max(300, a.interval)):
         nxt -= timedelta(minutes=5)
     return nxt if nxt > now else nxt + timedelta(minutes=5)
+
+
+def heartbeat(state, active, wake):
+    """One log line per cycle (every 5 minutes), so the log shows the runner is alive and what it looked at."""
+    parts = []
+    mk = state.get("markets") or {}
+    for m in active:
+        ms = mk.get(m) or {}
+        if m == "CRYPTO":
+            it = ms.get("intraday") or {}
+            when = datetime.fromisoformat(it["as_of"]).astimezone(S.IST).strftime("%H:%M") if it.get("as_of") else "-"
+            parts.append("CRYPTO %sm candle %s, %d above 4h high" % (
+                ms.get("timeframe", 15), when, sum(1 for h in it.get("hits", []) if h.get("setup") == "range_breakout_4h")))
+        elif m == "US":
+            parts.append("US %s" % (ms.get("status") or "-"))
+        elif m in ("NSE", "BSE"):
+            orb = ms.get("orb") or {}
+            parts.append("%s %s" % (m, ("ORB %d hits" % len(orb.get("hits", []))) if orb.get("as_of", "")[:10] ==
+                                    now_ist().date().isoformat() else "closed / waiting"))
+        else:
+            parts.append(m)
+    paper = state.get("paper") or {}
+    n_open = len(paper.get("open", [])) if isinstance(paper, dict) else 0
+    return "Cycle: %s; %d open paper position%s; next check %s" % (
+        "; ".join(parts) or "paused", n_open, "" if n_open == 1 else "s", wake.strftime("%H:%M"))
 
 
 CONTROL = os.path.join("trader", "live", "control.json")
@@ -549,6 +583,10 @@ def main(argv=None):
                     wake, why = cw, "next check"
             state["next_run"] = wake.isoformat()
             state["status"] = "running (%s at %s)" % (why, wake.strftime("%a %H:%M"))
+            try:
+                log(heartbeat(state, active, wake))
+            except Exception as e:
+                log("heartbeat failed: %s" % e)
             save_state(state)
             print("  ... %s at %s IST" % (why, wake.strftime("%a %d %b %H:%M:%S")), flush=True)
             notify(state)

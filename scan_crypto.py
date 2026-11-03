@@ -33,8 +33,16 @@ BAR_MIN = 15
 RANGE_BARS = 16  # 4 hours of 15-minute candles
 
 
+def set_timeframe(tf):
+    """'15m' (backtested, default) or '5m' (auto_config timeframe). The 4h range stays 4 hours."""
+    global BAR_MIN, RANGE_BARS
+    BAR_MIN = 5 if str(tf).strip().lower() in ("5", "5m") else 15
+    RANGE_BARS = 240 // BAR_MIN
+    return BAR_MIN
+
+
 COINBASE = "https://api.exchange.coinbase.com"
-_GRAN = {"15m": 900, "1h": 3600, "1d": 86400}
+_GRAN = {"5m": 300, "15m": 900, "1h": 3600, "1d": 86400}
 _RANGE_DAYS = {"2d": 2, "5d": 5, "30d": 30, "60d": 60, "3mo": 92}
 
 
@@ -160,7 +168,7 @@ def fill_volume(sym, r, cutoff):
     """The breakout candle's volume ratio when Yahoo has not filled it yet: Coinbase first (coins it lists),
     then a few short Yahoo retries. Returns (vol_ratio or None, source)."""
     try:
-        d = coinbase_chart(sym, "2d", "15m")
+        d = coinbase_chart(sym, "2d", "%dm" % BAR_MIN)
         r2 = intraday_one(d, cutoff) if d else None
         if r2 and r2["bar_end"] == r["bar_end"] and r2["vol_ratio"]:
             return r2["vol_ratio"], "coinbase"
@@ -170,7 +178,7 @@ def fill_volume(sym, r, cutoff):
     for _ in range(VOLUME_RETRIES):
         time.sleep(VOLUME_RETRY_SECONDS)
         try:
-            d = S.yahoo_chart(sym, "2d", "15m", SUFFIX)
+            d = S.yahoo_chart(sym, "2d", "%dm" % BAR_MIN, SUFFIX)
             r2 = intraday_one(d, cutoff) if d else None
             if r2 and r2["bar_end"] == r["bar_end"] and r2["vol_ratio"]:
                 return r2["vol_ratio"], "yahoo (retry)"
@@ -180,7 +188,7 @@ def fill_volume(sym, r, cutoff):
 
 
 def intraday_scan(symbols, now_utc, workers=6, quiet=False):
-    data, failed = S.fetch_many(symbols, "2d", "15m", workers, SUFFIX, quiet, fetcher=crypto_chart)
+    data, failed = S.fetch_many(symbols, "2d", "%dm" % BAR_MIN, workers, SUFFIX, quiet, fetcher=crypto_chart)
     cutoff = last_bar_close(now_utc)
     hits, usable, coins = [], 0, {}
     for s, d in data.items():

@@ -8,6 +8,7 @@ type Job = { id: string; mode: string; status: string; started: string; ended?: 
 
 const MODE_NAMES: Record<string, string> = {
   "crypto-v4": "Crypto v4 pro setup: trend, squeeze, session, ATR stop, partial/trailing exit",
+  "crypto-v4-5m": "Crypto v4 on 5-minute candles (compare with Crypto v4)",
   "crypto-smc": "Crypto SMC: liquidity sweep and reclaim vs the live breakout rule",
   "nse-v2": "NSE v2: wider stops (range low / ATR), trailing exit, charges cap, 15/30-min range",
   "crypto-live": "Crypto live rule: entry timing (close vs +1 min vs +5 min)",
@@ -83,7 +84,8 @@ export default function Backtest() {
       <div className="actions">
         <span className="small muted" style={{ alignSelf: "center" }}>Quick:</span>
         <button className="btn" onClick={() => start("crypto-v4")} disabled={running}>Crypto v4</button>
-        <button className="btn" onClick={() => start("crypto-smc")} disabled={running}>Crypto SMC (new)</button>
+        <button className="btn" onClick={() => start("crypto-v4-5m")} disabled={running}>Crypto 5m (new)</button>
+        <button className="btn" onClick={() => start("crypto-smc")} disabled={running}>Crypto SMC</button>
         <button className="btn" onClick={() => start("nse-v2")} disabled={running}>NSE v2</button>
         <button className="btn" onClick={() => start("crypto-live")} disabled={running}>Live entry timing</button>
         <button className="btn" onClick={() => start("crypto-5m")} disabled={running}>5-minute charts</button>

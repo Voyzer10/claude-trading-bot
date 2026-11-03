@@ -479,6 +479,7 @@ function RulesSection({ snap }: { snap: Snapshot }) {
   const r = (snap.rules.crypto ?? {}) as Record<string, unknown>;
   const rows: [string, string][] = [
     ["Setups traded", String((r.enabled_setups as string[] | undefined)?.join(", ") ?? "—")],
+    ["Candles", String(r.timeframe ?? "15m")],
     ["Volume at least", r.min_vol_x !== undefined ? `${r.min_vol_x}× the 4h average` : "—"],
     ["Stop", r.stop === "atr" ? `${r.stop_atr_k ?? 1.5} × ATR(14) under the entry` : r.min_stop_pct ? `${r.stop}, at least ${r.min_stop_pct}% away` : String(r.stop ?? "—")],
     ["Exit", r.exit === "trail" ? `trailing: break-even at +${r.trail_arm_r ?? 1}R, then ${r.trail_atr_k ?? 2} × ATR under the high` : r.target_r !== undefined ? `target ${r.target_r}R` : "—"],

@@ -107,21 +107,23 @@ EXITS = ("2R", "trail", "partial")
 HOLDS = (24, 48)
 
 
-def events_v4(data, btc, rb=16):
-    """Fresh 15-minute closes above the prior 4h high, with every stop / exit / hold variant scored."""
+def events_v4(data, btc, rb=16, step=15):
+    """Fresh closes above the prior 4h high on `step`-minute candles (15, or 5 with rb=48), with every stop /
+    exit / hold variant scored. Holds are counted in 15-minute units (24 = 6 h, 48 = 12 h) on any step."""
+    scale = 15 // step
     btc_close = {t: c for t, c in zip(btc["t"], btc["c"])} if btc else {}
     bt = sorted(btc_close)
     evs = []
     for sym, d in data.items():
         rows = [(datetime.fromtimestamp(t, UTC), o, h, l, c, v or 0) for t, o, h, l, c, v in
                 zip(d["t"], d["o"], d["h"], d["l"], d["c"], d["v"])
-                if not datetime.fromtimestamp(t, UTC).minute % 15 and None not in (o, h, l, c)]
+                if not datetime.fromtimestamp(t, UTC).minute % step and None not in (o, h, l, c)]
         if len(rows) < 300:
             continue
         closes = [r[4] for r in rows]
         e50, e200 = _ema(closes, 50), _ema(closes, 200)
-        i = 210
-        while i < len(rows) - 48:
+        i = max(210, rb + 10)
+        while i < len(rows) - 48 * scale:
             hi = max(r[2] for r in rows[i - rb:i])
             lo = min(r[3] for r in rows[i - rb:i])
             prev_hi = max(r[2] for r in rows[i - rb - 1:i - 1])
@@ -152,7 +154,7 @@ def events_v4(data, btc, rb=16):
                 ev["fee_r"][sname] = 2 * entry * FEE / risk
                 ev["chase"][sname] = (entry - hi) / risk  # how far the close already is past the 4h high, in R
                 for hold in HOLDS:
-                    path = rows[i + 1:i + 1 + hold]
+                    path = rows[i + 1:i + 1 + hold * scale]
                     for ex in EXITS:
                         if ex == "2R":
                             r = _fixed(path, entry, stop, 2.0)
@@ -240,11 +242,12 @@ def row(r, label=""):
     return "%s%s\n     in-sample   %s\n     OUT-sample  %s" % (label, " ".join(parts), s(i), s(o))
 
 
-def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist):
-    print("Fetching 60 days of 15-minute bars for %d coins (%s)..." % (len(syms), src), flush=True)
-    data, failed = fetch_all(syms, "-USD", "15m", a.workers)
-    btc = data.get("BTC") or fetch("BTC", "-USD", "15m")
-    events = events_v4(data, btc)
+def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist, step=15):
+    iv = "%dm" % step
+    print("Fetching 60 days of %s bars for %d coins (%s)..." % (iv, len(syms), src), flush=True)
+    data, failed = fetch_all(syms, "-USD", iv, a.workers)
+    btc = data.get("BTC") or fetch("BTC", "-USD", iv)
+    events = events_v4(data, btc, rb=240 // step, step=step)
     if not events:
         print("No events: no data came back (check the internet / Yahoo).")
         return 1
@@ -269,7 +272,10 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist):
             "%s=%s" % (name, on), ma, mb, "helps" if ma > mb + 0.03 else "hurts" if ma < mb - 0.03 else "no clear effect")
 
     tight_n = sum(1 for e in events if e["range_pct"] <= 1.0)
-    lines = ["research.py crypto-v4  %s" % datetime.now(ist).strftime("%Y-%m-%d %H:%M IST"),
+    mode = "crypto-v4" if step == 15 else "crypto-v4-%dm" % step
+    lines = ["research.py %s  %s" % (mode, datetime.now(ist).strftime("%Y-%m-%d %H:%M IST")),
+             "Candles: %s (4h range = %d candles, ATR(14) and the trailing stop on %s candles; holds are the same "
+             "6 h / 12 h on every timeframe)." % (iv, 240 // step, iv),
              "%d coins, %d days (%s..%s), %d fresh 4h breakouts (%d from a range under 1%%). R after %.3f%% fee "
              "each side (paper CRYPTO account). Out-of-sample = days from %s." % (len(data), len(days), days[0], days[-1], len(events),
                                                            tight_n, FEE * 100, split), "",
@@ -302,7 +308,7 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist):
     report = "\n".join(lines)
     print("\n" + report)
     os.makedirs(out_dir, exist_ok=True)
-    with open(os.path.join(out_dir, "report_crypto-v4.txt"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(out_dir, "report_%s.txt" % mode), "w", encoding="utf-8") as fh:
         fh.write(report)
-    print("\nWrote %s" % os.path.join(out_dir, "report_crypto-v4.txt"))
+    print("\nWrote %s" % os.path.join(out_dir, "report_%s.txt" % mode))
     return 0
