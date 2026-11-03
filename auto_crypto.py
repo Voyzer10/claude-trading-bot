@@ -79,6 +79,8 @@ DEFAULTS = {
     # Smart Money "liquidity sweep and reclaim" (smc.py), used when "smc_sweep_long" / "smc_sweep_short" is in
     # enabled_setups (off by default). Test it first: python research.py crypto-smc, then set these to the
     # report's most consistent combination. Thin hours, the fee cap and the time stop above apply too.
+    "short_exit": "2R",           # shorts (range_breakdown_4h): 2R target | trail (break-even at +1R, then
+                                  # trail_atr_k x ATR above the lowest price); crypto-v4-short decides
     "timeframe": "15m",           # candles the breakout is read on: 15m (backtested) | 5m (crypto-v4-5m first);
                                   # the 4h range, ATR(14) stop and trailing stop all use this timeframe
     "smc_variant": "any",         # any | wick (one candle sweeps and closes back in) | 2bar (failed breakdown)
@@ -325,7 +327,7 @@ def run_smc(h, cfg, log):
             return done("skipped", "the 4h range middle %s is under 0.5R away" % target)
     else:
         tr_r = 20.0 if trail else 2.0
-        target = P.round_px("CRYPTO", price - tr_r * risk if short else price + tr_r * risk, down=short)
+        target = P.round_px("CRYPTO", max(price * 0.05, price - tr_r * risk) if short else price + tr_r * risk, down=short)
     fee_pct = P.load_config()["accounts"]["CRYPTO"].get("fee_pct", 0)
     fee_r = 2 * price * fee_pct / 100 / risk
     st["4_exit"] = {"entry": price, "stop": stop, "target": target, "risk": round(risk, 6),
@@ -441,7 +443,7 @@ def run_one(h, cfg, log):
     if cfg.get("max_chase_r") and chase > cfg["max_chase_r"]:
         return done("skipped", "chasing: price is %.2fR past the trigger (max %.2fR)" % (chase, cfg["max_chase_r"]))
 
-    trail = cfg.get("exit") == "trail" and not short
+    trail = (cfg.get("short_exit") == "trail") if short else (cfg.get("exit") == "trail")
     tr_r = 20.0 if trail else cfg["target_r"]  # trailing: a far "target" only for display; the trail exits
     target = P.round_px("CRYPTO", price - tr_r * risk if short else price + tr_r * risk, down=short)
     fee_pct = P.load_config()["accounts"]["CRYPTO"].get("fee_pct", 0)

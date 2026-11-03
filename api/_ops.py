@@ -64,6 +64,7 @@ RULE_FIELDS = {
     "max_fee_r": {"type": "float", "min": 0.05, "max": 1.0},
     "max_hold_hours": {"type": "float", "min": 1, "max": 48},
     "timeframe": {"type": "choice", "choices": ["15m", "5m"]},
+    "short_exit": {"type": "choice", "choices": ["2R", "trail"]},
     "smc_variant": {"type": "choice", "choices": ["any", "wick", "2bar"]},
     "smc_stop": {"type": "choice", "choices": ["sweep", "atr1.5"]},
     "smc_exit": {"type": "choice", "choices": ["2R", "mid", "trail"]},
@@ -81,7 +82,7 @@ RISK_FIELDS = {
 PREF_FIELDS = {"usd_inr": {"type": "float", "min": 50, "max": 200},
                "daily_goal_inr": {"type": "float", "min": 0, "max": 1e7}}
 PREF_DEFAULT = {"usd_inr": 88.0, "daily_goal_inr": 500.0}
-BACKTEST_MODES = ["crypto-v4", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
+BACKTEST_MODES = ["crypto-v4", "crypto-v4-short", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
 
 
 # ------------------------------------------------------------------ small helpers
