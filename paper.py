@@ -526,8 +526,18 @@ def cmd_buy(a, cfg, led):
             raise PaperError("0 lots fit: one lot (%d) risks %s at the stop (max loss %s) and ties up %s "
                              "(cash %s). Skip it, or change max_loss_per_trade_fno." % (
                                  lot, money(m, one), money(m, max_loss), money(m, need), money(m, book["cash"])))
+        if limiter.startswith("cash"):
+            raise PaperError("not enough free cash: %s free in the %s account (open positions tie up the rest)"
+                             % (money(m, book["cash"]), account_of(m)))
         raise PaperError("0 units fit: the stop is %s away and your max loss is %s. "
                          "Tighten the stop or skip the trade." % (money(m, risk_ps), money(m, max_loss)))
+    full = min(v for k, v in caps.items() if not k.startswith("cash"))
+    if want is None and limiter.startswith("cash") and q < 0.25 * full:
+        # e.g. four open crypto shorts use the whole account: the fifth would be a dust position that only
+        # uses up a "trade of the day" (2 Nov: ADA $0.15, HBAR $0.0001 shorts)
+        raise PaperError("not enough free cash: %s free in the %s account buys %s, under a quarter of a normal "
+                         "position (%s); skipped until a position closes" % (
+                             money(m, book["cash"]), account_of(m), fmt_qty(m, q), fmt_qty(m, full)))
     fee = charges(cfg, m, t, open_side, q * entry)
     margin = round(q * unit_cost, 2) if kind == "futures" else None
     book["cash"] -= (margin if margin is not None else q * entry) + fee
