@@ -219,6 +219,9 @@ def main(a, syms, src, fetch_all, fetch, stats, bars_by_day, out_dir, ist):
     data, failed = fetch_all(syms, ".NS", "5m", a.workers)
     nifty = fetch("^NSEI", "", "5m")
     events = events_nse2(data, nifty, bars_by_day, ist)
+    import tm_test
+    tm_test.add_history(events)
+    k2 = lambda f: (f["stop"], f["exit"])
     if not events:
         print("No events: no data came back (check the internet / Yahoo).")
         return 1
@@ -272,9 +275,16 @@ def main(a, syms, src, fetch_all, fetch, stats, bars_by_day, out_dir, ist):
              "TOP 10 BY IN-SAMPLE (the OUT-sample line is the honest one):"]
     for n, r in enumerate(ok[:10], 1):
         lines.append(row(r, "%2d. " % n))
+    if ok and not [r for r in ok if r["in_sample"]["avg_r"] > 0 and r["out_of_sample"]["avg_r"] > 0]:
+        lines += [""] + tm_test.section(by_range[ok[0]["filters"]["range"]], ok[0]["filters"], k2(ok[0]["filters"]), keep,
+                                        split, stats, "the best in-sample combination (can a history gate rescue it?)")
+    lines += [""] + tm_test.section(by_range[15], LIVE, k2(LIVE), keep, split, stats,
+                                    "the live NSE rule (its +0.10R time machine gate, history half)")
     lines += ["", "%d of %d combinations (with enough trades) were positive both in- and out-of-sample." % (len(stable), len(ok))]
     if stable:
         best = stable[0]
+        lines += [""] + tm_test.section(by_range[best["filters"]["range"]], best["filters"], k2(best["filters"]), keep,
+                                        split, stats, "the most consistent combination")
         lines += ["", "MOST CONSISTENT (best of its weaker half):", row(best, "  "), "",
                   "ITS NEIGHBOURS (one setting changed at a time; a robust rule has neighbours that also do well):"]
         for k, vals in GRID.items():

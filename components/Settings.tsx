@@ -18,7 +18,11 @@ type SettingsDoc = {
 
 const RULE_LABELS: Record<string, [string, string]> = {
   enabled_setups: ["Setups traded", "4h breakout (backtested, live). 4h breakdown: failed its backtest. SMC sweeps: run the Crypto SMC backtest first; untick the breakout to use SMC instead of it."],
-  short_exit: ["Short exit", "2R: fixed target 2R below the entry. trail: break-even at +1R, then the stop follows the low (run Crypto shorts v4 first)."],
+  short_exit: ["Short exit", "trail (crypto-v4-short best): break-even at +1R, then the stop follows the low. 2R: fixed target."],
+  short_trend: ["Short trend filter", "ema+slope: short only a coin below its EMA50 < EMA200 with EMA200 falling (15m). ema: without the slope. off: any."],
+  short_max_range_pct: ["Short max 4h range (%)", "Short only breakdowns of a tight 4h range (a squeeze). 0 = any width."],
+  short_min_vol_x: ["Short min volume (x)", "Breakdown candle volume vs the 4h average, for shorts only. 0 = off."],
+  short_skip_thin_hours: ["Shorts skip thin hours", "Off: shorts trade all hours (what the short backtest liked). On: same 00-06 UTC skip as longs."],
   timeframe: ["Candles (timeframe)", "15m: backtested (crypto-v4). 5m: run the Crypto 5m backtest first; the 4h range, ATR stop and trail use 5m candles."],
   smc_variant: ["SMC sweep shape", "wick: one candle sweeps and closes back in (best in crypto-smc, 2 Nov). 2bar: a failed breakdown. any: both."],
   smc_stop: ["SMC stop", "sweep: just beyond the sweep's wick (0.1 ATR buffer). atr1.5: 1.5 x ATR from the entry."],
@@ -95,7 +99,7 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
   const shortOn = Array.isArray(v.enabled_setups) && (v.enabled_setups as string[]).includes("range_breakdown_4h");
 
   async function save() {
-    if (shortOn && !window.confirm("Shorts lost money in the backtest. Turn them on anyway?")) return;
+    if (shortOn && !window.confirm("Crypto shorts are a paper forward test: the v7 short filters were positive out-of-sample on only 35 trades. Turn them on?")) return;
     setBusy(true);
     try {
       const changes = Object.fromEntries(changed.map((k) => [k, v[k]]));
@@ -164,7 +168,7 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
           );
         })}
       </div>
-      {shortOn && <div className="notice bad" style={{ marginTop: 10 }}>Short selling is selected. It failed its backtest (also with the trend filter).</div>}
+      {shortOn && <div className="notice bad" style={{ marginTop: 10 }}>Crypto shorts are selected. The old short rule lost money; the v7 short filters (downtrend, tight range, trailing exit) were positive out-of-sample on 35 trades only: treat it as a paper test.</div>}
       <div className="actions">
         <button className="btn primary" onClick={save} disabled={busy || changed.length === 0}>
           {changed.length ? `Save ${changed.length} change${changed.length > 1 ? "s" : ""}` : "No changes"}

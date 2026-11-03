@@ -55,7 +55,12 @@ DEFAULTS = {
     # rules v6 (2 Nov 2026, owner's decision): breakout volume >= 1.0x the 4h average instead of 1.5x. NOT
     # backtested at 1.0x (the v4 grid had 0 and 1.5); research.py crypto-v4 now includes 1.0 so the next run
     # shows whether it helps. Go back to 1.5 from Settings if the live trades or that report say so.
-    "rules_version": 6,
+    # rules v7 (3 Nov 2026): the long rule is v6 unchanged; new short_* settings (used only when
+    # range_breakdown_4h is ticked, off by default) default to the most consistent short combination of
+    # research.py crypto-v4-short: trailing exit, coin in a downtrend (close < EMA50 < EMA200, EMA200 falling),
+    # 4h range under 1%, no volume rule, all hours, BTC below its 4h midpoint. Out-of-sample 35 trades +0.40R
+    # (in-sample 44, +0.27R); 33 of 1,608 combinations were positive in both halves, so paper-test it first.
+    "rules_version": 7,
     "stop": "atr",                # atr (v4), range-mid or range-low (v3 and older)
     "stop_atr_k": 1.5,            # stop = entry - k x ATR(14, 15m)
     "exit": "trail",              # trail: break-even at +trail_arm_r, then trail_atr_k x ATR under the high
@@ -79,8 +84,12 @@ DEFAULTS = {
     # Smart Money "liquidity sweep and reclaim" (smc.py), used when "smc_sweep_long" / "smc_sweep_short" is in
     # enabled_setups (off by default). Test it first: python research.py crypto-smc, then set these to the
     # report's most consistent combination. Thin hours, the fee cap and the time stop above apply too.
-    "short_exit": "2R",           # shorts (range_breakdown_4h): 2R target | trail (break-even at +1R, then
-                                  # trail_atr_k x ATR above the lowest price); crypto-v4-short decides
+    "short_exit": "trail",        # shorts (range_breakdown_4h): 2R target | trail (break-even at +1R, then
+                                  # trail_atr_k x ATR above the lowest price)
+    "short_trend": "ema+slope",   # off | ema (close < EMA50 < EMA200, 15m) | ema+slope (and EMA200 falling)
+    "short_max_range_pct": 1.0,   # the 4h range at most this % of the price (a squeeze); 0 = any
+    "short_min_vol_x": 0.0,       # breakdown candle volume vs the 4h average (shorts only)
+    "short_skip_thin_hours": False,  # shorts trade all hours (the long rule skips 00-06 UTC)
     "timeframe": "15m",           # candles the breakout is read on: 15m (backtested) | 5m (crypto-v4-5m first);
                                   # the 4h range, ATR(14) stop and trailing stop all use this timeframe
     "smc_variant": "any",         # any | wick (one candle sweeps and closes back in) | 2bar (failed breakdown)
@@ -376,6 +385,35 @@ def run_smc(h, cfg, log):
         "trailing exit" if trail else "target %s" % pos["target"], s.get("variant"), "high" if short else "low"))
 
 
+_trend_cache = {}
+
+
+def downtrend(sym, bar_end_iso):
+    """'ema+slope', 'ema' or 'none' for a short: close < EMA50 < EMA200 on 15m candles up to the breakdown candle,
+    plus EMA200 falling over the last 4 candles for 'ema+slope' (as research_v4 scores trend on mirrored prices)."""
+    key = (sym, bar_end_iso)
+    if key in _trend_cache:
+        return _trend_cache[key]
+    d = C.crypto_chart(sym, "15d", "15m")
+    cut = datetime.fromisoformat(bar_end_iso)
+    closes = [c for t, c in zip(d["t"], d["c"]) if c is not None and not datetime.fromtimestamp(t, timezone.utc).minute % 15
+              and datetime.fromtimestamp(t, timezone.utc) + timedelta(minutes=15) <= cut] if d else []
+    out = "unknown"
+    if len(closes) >= 400:
+        def ema(vals, n):
+            k, e, res = 2 / (n + 1), None, []
+            for v in vals:
+                e = v if e is None else e + k * (v - e)
+                res.append(e)
+            return res
+        e50, e200 = ema(closes, 50), ema(closes, 200)
+        out = "none"
+        if closes[-1] < e50[-1] < e200[-1]:
+            out = "ema+slope" if e200[-1] < e200[-5] else "ema"
+    _trend_cache[key] = out
+    return out
+
+
 def run_one(h, cfg, log):
     if h["setup"].startswith("smc_sweep"):
         return run_smc(h, cfg, log)
@@ -406,7 +444,25 @@ def run_one(h, cfg, log):
     short = h["setup"] == "range_breakdown_4h"
     mid = (h["range_high"] + h["range_low"]) / 2
     bar_start = datetime.fromisoformat(h["bar_end"]) - timedelta(minutes=C.BAR_MIN)
-    if bar_start.astimezone(timezone.utc).hour in (cfg.get("skip_hours_utc") or []):
+    if short:   # short-only filters (crypto-v4-short): a squeeze range and a coin already in a downtrend
+        rng_pct = (h["range_high"] - h["range_low"]) / price * 100
+        if cfg.get("short_max_range_pct") and rng_pct > cfg["short_max_range_pct"]:
+            return done("skipped", "short: 4h range %.2f%% wide (max %.1f%%: shorts take tight ranges only)"
+                        % (rng_pct, cfg["short_max_range_pct"]))
+        want = cfg.get("short_trend", "off")
+        if want != "off":
+            try:
+                tr = downtrend(sym, h["bar_end"])
+            except Exception as e:
+                tr = "unknown (%s)" % e
+            st["short_trend"] = tr
+            if tr not in (("ema", "ema+slope") if want == "ema" else ("ema+slope",)):
+                return done("skipped", "short: coin not in a downtrend (%s; rule wants %s: close < EMA50 < EMA200%s)"
+                            % (tr, want, ", EMA200 falling" if want == "ema+slope" else ""))
+    thin = cfg.get("skip_hours_utc") or []
+    if short and not cfg.get("short_skip_thin_hours", True):
+        thin = []
+    if bar_start.astimezone(timezone.utc).hour in thin:
         return done("skipped", "thin hours: breakout candle at %02d:%02d UTC (rule skips %s UTC)" % (
             bar_start.hour, bar_start.minute, ",".join(str(x) for x in cfg["skip_hours_utc"])))
     atr = None
@@ -459,10 +515,11 @@ def run_one(h, cfg, log):
         return done("skipped", "stop too tight: %.2f%% below the entry (min %.2f%%)" % (stop_pct, cfg["min_stop_pct"]))
     if fee_r > cfg["max_fee_r"]:
         return done("skipped", "fees eat %.2fR of the trade (max %.2fR)" % (fee_r, cfg["max_fee_r"]))
-    if cfg.get("min_vol_x", 0) and h.get("vol_ratio") is None:
+    min_vol = cfg.get("short_min_vol_x", cfg.get("min_vol_x", 0)) if short else cfg.get("min_vol_x", 0)
+    if min_vol and h.get("vol_ratio") is None:
         return done("skipped", "breakout candle's volume not reported yet by Yahoo (cannot check the volume rule)")
-    if h.get("vol_ratio") is not None and h["vol_ratio"] < cfg.get("min_vol_x", 0):
-        return done("skipped", "breakout volume %.2fx the 4h average (min %.1fx)" % (h["vol_ratio"], cfg["min_vol_x"]))
+    if h.get("vol_ratio") is not None and h["vol_ratio"] < min_vol:
+        return done("skipped", "breakout volume %.2fx the 4h average (min %.1fx)" % (h["vol_ratio"], min_vol))
     if cfg.get("btc_regime"):
         reg = btc_regime()
         st["regime"] = reg
