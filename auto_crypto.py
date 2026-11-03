@@ -79,6 +79,8 @@ DEFAULTS = {
     # Smart Money "liquidity sweep and reclaim" (smc.py), used when "smc_sweep_long" / "smc_sweep_short" is in
     # enabled_setups (off by default). Test it first: python research.py crypto-smc, then set these to the
     # report's most consistent combination. Thin hours, the fee cap and the time stop above apply too.
+    "timeframe": "15m",           # candles the breakout is read on: 15m (backtested) | 5m (crypto-v4-5m first);
+                                  # the 4h range, ATR(14) stop and trailing stop all use this timeframe
     "smc_variant": "any",         # any | wick (one candle sweeps and closes back in) | 2bar (failed breakdown)
     "smc_stop": "sweep",          # sweep: beyond the sweep's extreme (0.1 ATR buffer) | atr1.5: 1.5 x ATR
     "smc_exit": "2R",             # 2R target | mid: target the 4h range's middle | trail (longs; shorts use 2R)
@@ -137,8 +139,8 @@ def candles(d):
 
 
 def atr15(sym, bar_end_iso, n=14):
-    """ATR(n) of the coin's completed 15-minute candles up to the breakout candle (inclusive)."""
-    d = C.crypto_chart(sym, "5d", "15m")
+    """ATR(n) of the coin's completed candles (the live timeframe) up to the breakout candle (inclusive)."""
+    d = C.crypto_chart(sym, "5d", "%dm" % C.BAR_MIN)
     if not d:
         return None
     cut = datetime.fromisoformat(bar_end_iso)
@@ -190,7 +192,7 @@ def simulate(rows, entry, stop, target, paths, bars, seed):
 
 def history(rows, target_r, bars, stop_mode):
     """Every past fresh 4-hour breakout in the window, traded with the same stop/target/time limit."""
-    rb = C.RANGE_BARS
+    rb = 16  # the time machine replays 15-minute candles (recorded only, not a gate) on any timeframe
     results, i = [], rb + 1
     while i < len(rows) - 1:
         hi = max(r[0] for r in rows[i - rb:i])

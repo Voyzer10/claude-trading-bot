@@ -18,6 +18,7 @@ type SettingsDoc = {
 
 const RULE_LABELS: Record<string, [string, string]> = {
   enabled_setups: ["Setups traded", "4h breakout (backtested, live). 4h breakdown: failed its backtest. SMC sweeps: run the Crypto SMC backtest first; untick the breakout to use SMC instead of it."],
+  timeframe: ["Candles (timeframe)", "15m: backtested (crypto-v4). 5m: run the Crypto 5m backtest first; the 4h range, ATR stop and trail use 5m candles."],
   smc_variant: ["SMC sweep shape", "wick: one candle sweeps and closes back in (best in crypto-smc, 2 Nov). 2bar: a failed breakdown. any: both."],
   smc_stop: ["SMC stop", "sweep: just beyond the sweep's wick (0.1 ATR buffer). atr1.5: 1.5 x ATR from the entry."],
   smc_exit: ["SMC exit", "2R target, mid (target the 4h range's middle), or trail (longs only; shorts use 2R)."],
