@@ -313,7 +313,13 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist, step=15, short=Fal
     lines += ["", "%d of %d combinations (with enough trades) were positive both in- and out-of-sample." % (
         len(stable), len(ok))]
     if stable:
-        lines += ["", "MOST CONSISTENT (best of its weaker half):", row(stable[0], "  ")]
+        best = stable[0]
+        lines += ["", "MOST CONSISTENT (best of its weaker half):", row(best, "  "), "",
+                  "ITS NEIGHBOURS (one setting changed at a time; a robust rule has neighbours that also do well):"]
+        for k, vals in GRID.items():
+            for v in vals:
+                if v != best["filters"].get(k):
+                    lines.append(row(score(events, dict(best["filters"], **{k: v}), split, stats), "  %s=%s -> " % (k, v)))
     lines += ["", "Decision rule: switch the live bot to a rule only if it beats the CURRENT LIVE RULE out-of-sample",
               "with enough trades (20+), and its neighbours (one setting changed) also do well. ~60 days is short.",
               "Not financial advice."]
