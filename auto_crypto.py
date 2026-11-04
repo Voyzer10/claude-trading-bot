@@ -97,6 +97,21 @@ DEFAULTS = {
     "smc_exit": "2R",             # 2R target | mid: target the 4h range's middle | trail (longs; shorts use 2R)
     "smc_min_vol_x": 0.0,         # sweep candle volume vs the 4h average
     "smc_regime": False,          # True: long only while BTC is above its 4h midpoint, short only below
+    # The user's SMC Trading Playbook (smc_playbook.py), used when any of "smcp_doji_long", "smcp_doji_short",
+    # "smcp_star_long", "smcp_hammer_short" is in enabled_setups (all off by default). Sequence: liquidity sweep
+    # (PDH/PDL, CDH/CDL, swing) -> doji / top hammer / bottom star at the level -> candle 1 or 2 CLOSES beyond its
+    # extreme. Test first: python research.py crypto-smcp (Backtest: "Playbook crypto 15m") and set these to the
+    # report's most consistent combination. The fee cap and the time stop above apply too.
+    "smcp_confirm": 2,            # 2: candle 1 or candle 2 may confirm | 1: candle 1 only
+    "smcp_struct": "before",      # before: a BOS/CHoCH in the trade's direction in the 48 candles before the sweep
+                                  # any: before or up to the entry | none: no structure rule
+    "smcp_doji_pct": 0.15,        # doji body at most this share of the candle's range (0.10 = stricter)
+    "smcp_buffer_atr": 0.1,       # stop buffer beyond the pattern / sweep extreme, x ATR(14)
+    "smcp_target": "internal",    # internal: nearest swing beyond (else today's high/low) | external: CDH/PDH
+                                  # (CDL/PDL) | 2R | trail (break-even at +1R, then trail_atr_k x ATR)
+    "smcp_min_rr": 1.0,           # skip if the liquidity target is under this many R away (after fees)
+    "smcp_regime": False,         # True: long only while BTC is above its 4h midpoint, short only below
+    "smcp_skip_thin_hours": False,  # True: skip skip_hours_utc (00-06 UTC) like the long breakout rule
     "seed": None,
 }
 
@@ -414,7 +429,131 @@ def downtrend(sym, bar_end_iso):
     return out
 
 
+def run_smcp(h, cfg, log):
+    """The user's SMC Trading Playbook (smc_playbook.py). Agent steps: scanner = liquidity map and sweep, entry =
+    trigger pattern + candle 1/2 close, exit = buffer stop and liquidity target."""
+    sym, s = h["symbol"], h.get("smcp") or {}
+    short = s.get("side") == "short"
+    rec = {"time": datetime.now(S.IST).isoformat(), "symbol": "CRYPTO:" + sym, "setup": h["setup"],
+           "steps": {}, "result": None}
+    st = rec["steps"]
+
+    def done(result, why):
+        rec["result"], rec["why"] = result, why
+        st["10_analyst"] = "n/a for crypto"
+        st["11_pelosi"] = "n/a for crypto"
+        record(rec)
+        log("AUTO %s: %s (%s)" % (sym, result, why))
+        return rec
+
+    if not s:
+        return done("skipped", "scanner sent no playbook details")
+    st["1_scanner"] = {"bar_end": h["bar_end"], "close": h["price"], "liquidity_swept": s.get("level_name"),
+                       "level": s.get("level"), "sweep_extreme": s.get("extreme"),
+                       "sweep_candles_ago": s.get("trigger", 0) - s.get("sweep_at", 0) + s.get("confirm_at", 0),
+                       "bos_choch_before_sweep": s.get("struct_before"), "bos_choch_any": s.get("struct_any")}
+    pattern = {"doji_long": "doji", "doji_short": "doji", "star_long": "bottom star", "hammer_short": "top hammer"}
+    st["3_entry"] = {"side": "short" if short else "long", "pattern": pattern.get(s.get("setup"), s.get("setup")),
+                     "trigger_high": s.get("hi"), "trigger_low": s.get("lo"), "body_pct": round(s.get("body_pct", 0), 3),
+                     "confirmed_by": "candle %s close %s %s" % (s.get("confirm_at"), "<" if short else ">",
+                                                                s.get("lo") if short else s.get("hi"))}
+    if s.get("confirm_at", 9) > int(cfg.get("smcp_confirm", 2)):
+        return done("skipped", "playbook: confirmed on candle %s (rule takes candle 1 only)" % s.get("confirm_at"))
+    need = cfg.get("smcp_struct", "before")
+    if need == "before" and not s.get("struct_before") or need == "any" and not s.get("struct_any"):
+        return done("skipped", "playbook: no %s BOS/CHoCH %s the sweep" % (
+            "bearish" if short else "bullish", "before" if need == "before" else "around"))
+    if s.get("setup", "").startswith("doji") and s.get("body_pct", 1) > float(cfg.get("smcp_doji_pct", 0.15)):
+        return done("skipped", "playbook: doji body %.0f%% of the range (max %.0f%%)" % (
+            100 * s.get("body_pct", 0), 100 * float(cfg.get("smcp_doji_pct", 0.15))))
+    try:
+        st["2_news"] = headlines(sym)
+    except Exception as e:
+        st["2_news"] = "unavailable: %s" % e
+    bar_start = datetime.fromisoformat(h["bar_end"]) - timedelta(minutes=C.BAR_MIN)
+    if cfg.get("smcp_skip_thin_hours") and bar_start.astimezone(timezone.utc).hour in (cfg.get("skip_hours_utc") or []):
+        return done("skipped", "thin hours: candle at %02d:%02d UTC" % (bar_start.hour, bar_start.minute))
+    try:
+        price, _ = P.fetch_price("CRYPTO", sym)
+    except Exception as e:
+        return done("skipped", "no live price: %s" % e)
+    import smc_playbook as PB
+    stop = PB.stop_for(s, float(cfg.get("smcp_buffer_atr", 0.1)))
+    stop = P.round_px("CRYPTO", stop, down=not short)
+    risk = (stop - price) if short else (price - stop)
+    if risk <= 0:
+        return done("skipped", "price %s is already past the stop %s" % (price, stop))
+    if (price > s["hi"]) if short else (price < s["lo"]):
+        return done("skipped", "price %s is back beyond the other side of the trigger candle: setup cancelled" % price)
+    mode = cfg.get("smcp_target", "internal")
+    trail = mode == "trail"
+    if mode in ("internal", "external"):
+        target = s.get("%s_target" % mode)
+        if target is None or (target >= price if short else target <= price):
+            return done("skipped", "playbook: no %s liquidity left beyond the price for a target" % mode)
+    elif trail:
+        target = max(price * 0.05, price - 20 * risk) if short else price + 20 * risk
+    else:
+        target = price - 2 * risk if short else price + 2 * risk
+    target = P.round_px("CRYPTO", target, down=short)
+    fee_pct = P.load_config()["accounts"]["CRYPTO"].get("fee_pct", 0)
+    fee_r = (2 * price if trail else price + target) * fee_pct / 100 / risk
+    rr = abs(target - price) / risk
+    st["4_exit"] = {"entry": price, "stop": stop, "stop_rule": "%s + %g ATR" % (
+                        "other side of the doji" if s["setup"].startswith("doji") else "pattern / sweep extreme",
+                        float(cfg.get("smcp_buffer_atr", 0.1))),
+                    "target": target, "target_rule": mode, "risk": round(risk, 6), "reward_r": round(rr, 2),
+                    "net_r_after_fees": None if trail else round(rr - fee_r, 2), "fee_r": round(fee_r, 3),
+                    "time_stop_hours": cfg["max_hold_hours"]}
+    if fee_r > cfg["max_fee_r"]:
+        return done("skipped", "fees eat %.2fR of the trade (max %.2fR)" % (fee_r, cfg["max_fee_r"]))
+    if not trail and rr - fee_r < float(cfg.get("smcp_min_rr", 1.0)):
+        return done("skipped", "playbook: target only %.2fR away after fees (min %.1fR): reward does not justify "
+                               "the stop" % (rr - fee_r, float(cfg.get("smcp_min_rr", 1.0))))
+    if cfg.get("smcp_regime"):
+        reg = btc_regime()
+        st["regime"] = reg
+        if reg is None:
+            return done("skipped", "BTC regime unknown")
+        if short and reg is True:
+            return done("skipped", "BTC regime: BTC is above its 4h midpoint (no shorts against it)")
+        if not short and reg is False:
+            return done("skipped", "BTC regime: BTC is not above its 4h midpoint")
+    st["5_timemachine"] = "n/a for the playbook (crypto-smcp backtest instead): not a gate"
+    pcfg = P.load_config()
+    led = P.load_ledger(pcfg)
+    args = type("A", (), {"symbol": "CRYPTO:" + sym, "stop": str(stop), "target": str(target), "qty": None,
+                          "price": str(price), "note": "auto: playbook %s after %s sweep" % (
+                              s["setup"], s.get("level_name")), "force": False,
+                          "side": "short" if short else "long"})()
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            P.cmd_buy(args, pcfg, led)
+        P.save_json(P.LEDGER, led)
+    except P.PaperError as e:
+        st["6-8_budget_risk_broker"] = "BLOCK: %s" % e
+        return done("blocked", str(e))
+    pos = next(p for p in led["open"] if p["key"] == "CRYPTO:" + sym)
+    if trail:
+        pos.update({"trail_atr": round(s["atr"], 8), "trail_k": cfg["trail_atr_k"], "trail_arm_r": cfg["trail_arm_r"],
+                    "peak": pos["entry"]})
+        P.save_json(P.LEDGER, led)
+    st["6-8_budget_risk_broker"] = {"verdict": "PASS, paper %s filled" % ("short" if short else "buy"), "qty": pos["qty"],
+                                    "entry": pos["entry"], "stop": pos["stop"], "target": pos["target"],
+                                    "max_loss": round(abs(pos["entry"] - pos["stop"]) * pos["qty"] + pos["entry_fee"], 2),
+                                    "report": buf.getvalue().strip().splitlines()}
+    st["9_alerts"] = "live.py checks stop %s / target %s every cycle%s; time stop after %dh" % (
+        pos["stop"], pos["target"], " (trailing)" if trail else "", cfg["max_hold_hours"])
+    return done("PAPER SHORT" if short else "PAPER BUY", "%s @ %s, stop %s, %s (playbook %s after a %s sweep)" % (
+        P.fmt_qty("CRYPTO", pos["qty"]), pos["entry"], pos["stop"],
+        "trailing exit" if trail else "target %s (%s)" % (pos["target"], mode), pattern.get(s["setup"]),
+        s.get("level_name")))
+
+
 def run_one(h, cfg, log):
+    if h["setup"].startswith("smcp_"):
+        return run_smcp(h, cfg, log)
     if h["setup"].startswith("smc_sweep"):
         return run_smc(h, cfg, log)
     sym = h["symbol"]

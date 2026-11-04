@@ -74,6 +74,9 @@ CATEGORIES = [
     ("lots fit", "Too big for budget"), ("units fit", "Too big for budget"),
     ("daily loss limit", "Daily loss limit"), ("max ", "Trade limit"),
     ("no live price", "No price"),
+    ("playbook: target only", "Playbook: target too close"), ("liquidity left", "Playbook: target too close"),
+    ("bos/choch", "Playbook: no structure"), ("playbook: confirmed on candle", "Playbook: candle 2"),
+    ("playbook: doji body", "Playbook: doji too big"), ("setup cancelled", "Reversed"),
 ]
 
 

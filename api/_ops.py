@@ -51,7 +51,8 @@ router = APIRouter(prefix="/api/py/ops")
 # What the dashboard may change, with limits. Anything else in the files is left alone.
 RULE_FIELDS = {
     "enabled_setups": {"type": "setups", "choices": ["range_breakout_4h", "range_breakdown_4h", "smc_sweep_long",
-                                                     "smc_sweep_short"]},
+                                                     "smc_sweep_short", "smcp_doji_long", "smcp_doji_short",
+                                                     "smcp_star_long", "smcp_hammer_short"]},
     "stop": {"type": "choice", "choices": ["atr", "range-mid", "range-low"]},
     "stop_atr_k": {"type": "float", "min": 0.5, "max": 4.0},
     "exit": {"type": "choice", "choices": ["trail", "target"]},
@@ -74,6 +75,14 @@ RULE_FIELDS = {
     "smc_exit": {"type": "choice", "choices": ["2R", "mid", "trail"]},
     "smc_min_vol_x": {"type": "float", "min": 0.0, "max": 10.0},
     "smc_regime": {"type": "bool"},
+    "smcp_confirm": {"type": "int", "min": 1, "max": 2},
+    "smcp_struct": {"type": "choice", "choices": ["before", "any", "none"]},
+    "smcp_doji_pct": {"type": "float", "min": 0.05, "max": 0.3},
+    "smcp_buffer_atr": {"type": "float", "min": 0.0, "max": 1.0},
+    "smcp_target": {"type": "choice", "choices": ["internal", "external", "2R", "trail"]},
+    "smcp_min_rr": {"type": "float", "min": 0.5, "max": 5.0},
+    "smcp_regime": {"type": "bool"},
+    "smcp_skip_thin_hours": {"type": "bool"},
 }
 RISK_FIELDS = {
     "max_loss_per_trade": {"type": "float", "min": 0.01},
@@ -86,7 +95,7 @@ RISK_FIELDS = {
 PREF_FIELDS = {"usd_inr": {"type": "float", "min": 50, "max": 200},
                "daily_goal_inr": {"type": "float", "min": 0, "max": 1e7}}
 PREF_DEFAULT = {"usd_inr": 88.0, "daily_goal_inr": 500.0}
-BACKTEST_MODES = ["crypto-v4", "crypto-v4-short", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
+BACKTEST_MODES = ["crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-v4", "crypto-v4-short", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
 
 
 # ------------------------------------------------------------------ small helpers
@@ -786,6 +795,7 @@ AGENTS = [
 # which agent said no, by the words of its reason (first match wins)
 _STOP_WORDS = [
     ("time machine", 5),
+    ("playbook: target only", 4), ("liquidity left", 4), ("playbook", 3), ("setup cancelled", 3),
     ("fees eat", 4), ("stop too tight", 4), ("atr stop", 4),
     ("past the stop", 3), ("thin hours", 3), ("chasing", 3), ("moved back", 3), ("fell back", 3),
     ("reversed", 3), ("no live price", 3),
