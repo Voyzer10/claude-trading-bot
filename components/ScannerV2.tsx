@@ -34,7 +34,7 @@ const NAMES: Record<string, string> = {
 const MARKETS = ["ALL", "CRYPTO", "NSE", "US"];
 
 /** Scanner v2: the owner's setups seen live on every market, handed to the agents. Record only: nothing is traded. */
-export default function ScannerV2({ refreshKey }: { refreshKey: number }) {
+export default function ScannerV2({ refreshKey, embedded = false }: { refreshKey: number; embedded?: boolean }) {
   const [d, setD] = useState<Resp | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [mkt, setMkt] = useState("ALL");
@@ -52,24 +52,15 @@ export default function ScannerV2({ refreshKey }: { refreshKey: number }) {
     totals[m] = (totals[m] || 0) + v;
   });
 
-  return (
-    <section id="scanner-v2" className="panel" aria-labelledby="obs-h">
-      <div className="panel-head">
-        <div>
-          <h2 id="obs-h">Scanner v2 (your setups, record only)</h2>
-          <p>
-            Scanner v2 finds your setups (A-B-C-D, SMC playbook, FVG / order block) on every market, on the candle that
-            just closed, and hands each one to the agents (News, Entry, Exit, Budget, Risk: see the Agents section,
-            setup name shown). The Broker does <b>not</b> trade them: these rules failed their backtests, so they are
-            recorded to compare with your own charts. Today:{" "}
-            {Object.keys(totals).length
-              ? Object.entries(totals).map(([m, v]) => `${m} ${v}`).join(" · ")
-              : "none yet"}
-            .
-          </p>
-        </div>
-      </div>
-      <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+  const body = (
+    <>
+      <p className="small muted" style={{ margin: "4px 0 8px" }}>
+        Your setups (A-B-C-D, SMC playbook, FVG / order block), found on the candle that just closed and handed to the
+        agents above: each one&apos;s pipe in the list shows how far it got. The Broker records them, it does{" "}
+        <b>not</b> trade them (these rules failed their backtests). Today:{" "}
+        {Object.keys(totals).length ? Object.entries(totals).map(([m, v]) => `${m} ${v}`).join(" · ") : "none yet"}.
+      </p>
+      <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 8 }} id="scanner-v2">
         {MARKETS.map((m) => (
           <button key={m} className={`btn ${mkt === m ? "primary" : ""}`} onClick={() => setMkt(m)}>{m}</button>
         ))}
@@ -114,6 +105,8 @@ export default function ScannerV2({ refreshKey }: { refreshKey: number }) {
           </table>
         </div>
       )}
-    </section>
+    </>
   );
+  if (embedded) return body;
+  return <section className="panel">{body}</section>;
 }

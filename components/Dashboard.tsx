@@ -10,7 +10,6 @@ import Operations, { useCommands } from "@/components/Operations";
 import Backtest from "@/components/Backtest";
 import Alerts from "@/components/Alerts";
 import Agents from "@/components/Agents";
-import ScannerV2 from "@/components/ScannerV2";
 import SymbolIcon from "@/components/SymbolIcon";
 import { errText } from "@/lib/api";
 
@@ -72,7 +71,6 @@ export default function Dashboard() {
           <a href="#control">Control</a>
           <a href="#runner">Runner</a>
           <a href="#agents">Agents</a>
-          <a href="#scanner-v2">Scanner v2</a>
           <a href="#ledger">Positions</a>
           <a href="#coins">Coins</a>
           <a href="#reasons">Skip reasons</a>
@@ -97,7 +95,6 @@ export default function Dashboard() {
           <ControlPanel />
           <RunnerSection snap={snap} ageSec={ageSec} />
           <Agents refreshKey={refreshKey} />
-          <ScannerV2 refreshKey={refreshKey} />
           <MarketsStrip snap={snap} />
           <LedgerSection snap={snap} onChange={changed} />
           <CoinsSection snap={snap} />

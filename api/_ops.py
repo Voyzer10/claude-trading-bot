@@ -787,7 +787,7 @@ def _download_all():
 # paper positions into "which agent is working, and on what".
 
 AGENTS = [
-    (1, "scanner", "Scanner", "trader-scanner"),
+    (1, "scanner", "Scanner (v1 + v2)", "trader-scanner + scanner_v2"),
     (2, "news", "News", "trader-news"),
     (3, "entry", "Entry", "trader-entry"),
     (4, "exit", "Exit", "trader-exit"),
@@ -995,8 +995,10 @@ def agents():
     openpos = led.get("open") or []
     stop_k = cfg.get("stop_atr_k", 1.5)
     jobs = {
-        1: "Checks every coin when a 15-minute candle closes; a fresh close above its 4-hour high is a candidate "
-           "(at most one per coin every 6 hours).",
+        1: "Scanner v1 (the rules that trade): every coin when a 15-minute candle closes, a fresh close above its "
+           "4-hour high (or below its low for shorts) is a candidate; NSE / US opening-range breaks. Scanner v2 (your "
+           "setups): A-B-C-D, the SMC playbook's doji / star / hammer and FVG / order-block retests on every market; "
+           "each goes through the same agents but the broker only records it (those rules failed their backtests).",
         2: "Pulls the coin's latest headlines for the record. It never blocks or makes a trade.",
         3: "Is the timing right? Skips thin hours (%s), a price back inside the range, volume under %sx the 4h "
            "average%s%s." % ("%s:00-%s:00 UTC" % (cfg["skip_hours_utc"][0], cfg["skip_hours_utc"][-1] + 1)
@@ -1047,9 +1049,14 @@ def agents():
                         sc["tf"], at, sc["usable"], sc["scanned"], sc["hits"], sc["new"])
                 return "%s opening range %s: %s of %s stocks usable, %d broke out, %d new" % (
                     sc["market"], at, sc["usable"], sc["scanned"], sc["hits"], sc["new"])
-            a.update(status="active", now="; ".join(line(sc) for sc in scans) if scans
-                     else "Waiting for the next candle to close.")
+            v2 = [r for r in todays if (r.get("setup") or "").startswith("v2:")]
+            v2_line = ("Scanner v2: %d of your setups today, last %s %s" % (
+                len(v2), (v2[-1].get("symbol") or "").split(":")[-1], _setup_label(v2[-1]).replace("Scanner v2 · ", ""))
+                if v2 else "Scanner v2: none of your setups yet today")
+            a.update(status="active", now="; ".join([line(sc) for sc in scans] + [v2_line]) if scans
+                     else "Waiting for the next candle to close. " + v2_line)
             a["scans"] = scans
+            a["v2_today"] = len(v2)
         elif n == 9:
             if openpos:
                 a.update(status="active", now="Watching %d open position%s: %s" % (
