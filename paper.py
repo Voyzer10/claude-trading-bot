@@ -63,7 +63,7 @@ DEFAULT_CONFIG = {
                    "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
                    "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True},
-        "US":     {"capital": 5000, "max_loss_per_trade": 50, "max_position_pct": 25,
+        "US":     {"capital": 50000, "max_loss_per_trade": 50, "max_position_pct": 25,
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
                    "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True},
@@ -132,6 +132,11 @@ def load_config():
         crypto["fee_pct"] = DEFAULT_CONFIG["accounts"]["CRYPTO"]["fee_pct"]
         cfg["_fees_coindcx"] = True
         changed = True
+    us = cfg["accounts"].get("US", {})
+    if not cfg.get("_us_capital_50k") and float(us.get("capital", 0)) == 5000:   # one-time: owner raised US to $50k
+        us["capital"] = 50000
+        cfg["_us_capital_50k"] = True
+        changed = True
     if "india_charges" not in cfg:
         cfg["india_charges"] = DEFAULT_CONFIG["india_charges"]
         changed = True
@@ -142,9 +147,18 @@ def load_config():
 
 def load_ledger(cfg):
     led = load_json(LEDGER, {"accounts": {}, "open": [], "closed": []})
+    topped = False
     for name, acc in cfg["accounts"].items():
         if name in ACCOUNT_MARKET:
-            led["accounts"].setdefault(name, {"cash": float(acc["capital"]), "start_capital": float(acc["capital"])})
+            book = led["accounts"].setdefault(name, {"cash": float(acc["capital"]), "start_capital": float(acc["capital"])})
+            # capital changed in the config (Settings): a top-up / withdrawal of the difference, history and P&L kept
+            delta = float(acc["capital"]) - float(book["start_capital"])
+            if abs(delta) > 1e-9:
+                book["cash"] = round(float(book["cash"]) + delta, 6)
+                book["start_capital"] = float(acc["capital"])
+                topped = True
+    if topped and os.path.exists(LEDGER):
+        save_json(LEDGER, led)
     return led
 
 

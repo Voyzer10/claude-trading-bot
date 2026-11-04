@@ -56,6 +56,7 @@ const RISK_LABELS: Record<string, string> = {
   max_loss_per_trade_fno: "Max loss per F&O trade",
   daily_loss_limit: "Daily loss limit",
   max_trades_per_day: "Max trades per day",
+  capital: "Paper capital (changing it adds / removes the difference as cash; P&L kept)",
   risk_limits: "Risk limits ON (daily loss, trades/day, cooldown, weekly, max per side). Off while paper testing; turn on before real money",
   trade_setups: "Paper trade Scanner v2 setups (your A-B-C-D / playbook / FVG / OB)",
   cooldown_losses: "Cooldown after N losses in a row (0 = off)",
