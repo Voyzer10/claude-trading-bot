@@ -36,6 +36,8 @@ const RULE_LABELS: Record<string, [string, string]> = {
   smcp_target: ["Playbook: target", "internal: nearest swing (else today's high/low). external: CDH/PDH (CDL/PDL). 2R. trail."],
   smcp_min_rr: ["Playbook: min reward (R)", "Skip if the liquidity target is closer than this, after fees."],
   smcp_regime: ["Playbook: BTC filter", "Long only while BTC is above its 4h midpoint, short only below."],
+  smcp_liq: ["Playbook: liquidity", "base: PDH/PDL, CDH/CDL, swings. all: + last week's high/low. strong: only PDH/PDL/PWH/PWL or equal highs/lows."],
+  smcp_min_disp: ["Playbook: min displacement (x ATR)", "Entry candle body at least this many ATRs. 0 = off."],
   smcp_skip_thin_hours: ["Playbook: skip thin hours", "On: skip 00-06 UTC like the breakout rule. Off: all hours."],
   stop: ["Stop", "atr: 1.5 x ATR under the entry (v4, backtested). range-mid / range-low: the older v3 stops."],
   stop_atr_k: ["ATR stop (x ATR)", "How many ATRs below the entry the stop sits (stop = atr)."],
@@ -54,6 +56,10 @@ const RISK_LABELS: Record<string, string> = {
   max_loss_per_trade_fno: "Max loss per F&O trade",
   daily_loss_limit: "Daily loss limit",
   max_trades_per_day: "Max trades per day",
+  cooldown_losses: "Cooldown after N losses in a row (0 = off)",
+  cooldown_minutes: "Cooldown length (minutes)",
+  weekly_loss_x: "Weekly loss limit (x daily limit, 0 = off)",
+  max_same_side: "Max open positions on one side",
   max_position_pct: "Max position (% of capital)",
   fee_pct: "Fee per side % (CoinDCX futures taker + GST: 0.059)",
 };
@@ -66,6 +72,10 @@ const SETUP_NAMES: Record<string, string> = {
   smcp_doji_short: "Playbook: doji short (after a swept high)",
   smcp_star_long: "Playbook: bottom star long",
   smcp_hammer_short: "Playbook: top hammer short",
+  smcp_fvg_long: "Rulebook: FVG retest long",
+  smcp_fvg_short: "Rulebook: FVG retest short",
+  smcp_ob_long: "Rulebook: order block retest long",
+  smcp_ob_short: "Rulebook: order block retest short",
 };
 
 export default function Settings() {

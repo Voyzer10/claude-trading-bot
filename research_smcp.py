@@ -25,8 +25,10 @@ UTC = timezone.utc
 BUFFERS = (0.1, 0.25)
 TARGETS = ("internal", "external", "2R", "trail")
 MIN_RR = 1.0
-PLAYBOOK = {"setup": "all", "confirm": 2, "struct": "before", "doji_pct": 0.15, "buffer": 0.1, "target": "internal",
-            "regime": False, "session": "all"}
+PLAYBOOK = {"setup": "playbook", "confirm": 2, "struct": "before", "doji_pct": 0.15, "buffer": 0.1, "target": "internal",
+            "regime": False, "liq": "base", "disp": 0.0, "session": "all"}
+SETUP_GRID = ["doji_long", "doji_short", "star_long", "hammer_short", "fvg_long", "fvg_short", "ob_long", "ob_short",
+              "playbook", "zones", "all"]
 
 
 def _mirror(rows):
@@ -67,7 +69,8 @@ def events_smcp(data, day_of, hold, cost_fn, regime_fn=None, entry_ok=None, path
         for i in range(40, len(rows) - 2):
             if entry_ok and not entry_ok(rows[i][0]):
                 continue
-            for s in M.find_setups(ctx, i, doji_pct=0.15, near_atr=0.5, struct_lookback=48, max_confirm=2):
+            for s in (M.find_setups(ctx, i, doji_pct=0.15, near_atr=0.5, struct_lookback=48, max_confirm=2)
+                      + M.zone_setups(ctx, i)):
                 long = s["side"] == "long"
                 end = path_end(rows[i][0]) if path_end else None
                 src = rows if long else mrows
@@ -77,7 +80,8 @@ def events_smcp(data, day_of, hold, cost_fn, regime_fn=None, entry_ok=None, path
                 ev = {"sym": sym, "day": rows[i][0].date().isoformat(), "i": i, "hour": rows[i][0].hour,
                       "setup": s["setup"], "side": s["side"], "confirm_at": s["confirm_at"],
                       "struct_before": s["struct_before"], "struct_any": s["struct_any"], "body_pct": s["body_pct"],
-                      "level": s["level_name"], "regime": regime_fn(rows[i][0], s["side"]) if regime_fn else None,
+                      "level": s["level_name"], "strong": s["level_name"] in M.MAJOR or s.get("eq", False),
+                      "disp": s.get("disp", 0.0), "regime": regime_fn(rows[i][0], s["side"]) if regime_fn else None,
                       "out": {}, "rr": {}}
                 for buf in BUFFERS:
                     stop = M.stop_for(s, buf)
@@ -105,11 +109,30 @@ def events_smcp(data, day_of, hold, cost_fn, regime_fn=None, entry_ok=None, path
     return evs
 
 
+GROUPS = {"playbook": set(M.SETUPS), "zones": set(M.ZONE_SETUPS), "all": set(M.SETUPS) | set(M.ZONE_SETUPS),
+          "longs": M.LONG, "shorts": (set(M.SETUPS) | set(M.ZONE_SETUPS)) - M.LONG}
+_POOLS = {}
+
+
+def _pool(events, st):
+    """Only the events of the setup(s) a combination can keep (scoring every event for every combination is slow)."""
+    key = (id(events), st)
+    if key not in _POOLS:
+        names = GROUPS.get(st, {st})
+        _POOLS[key] = [e for e in events if e["setup"] in names]
+    return _POOLS[key]
+
+
 def keep(ev, f):
     st = f["setup"]
-    if st == "longs" and ev["side"] != "long" or st == "shorts" and ev["side"] != "short":
+    if ev["setup"] not in GROUPS.get(st, {st}):
         return False
-    if st not in ("all", "longs", "shorts") and ev["setup"] != st:
+    liq = f.get("liq", "base")
+    if liq == "base" and ev["level"] in ("PWH", "PWL"):
+        return False
+    if liq == "strong" and ev["setup"] in M.SETUPS and not ev["strong"]:
+        return False
+    if ev["disp"] < f.get("disp", 0.0):
         return False
     if (f["buffer"], f["target"]) not in ev["out"]:
         return False
@@ -129,14 +152,26 @@ def keep(ev, f):
 def score(events, f, split, stats, spacing):
     ins, oos, last = {}, {}, {}
     k = (f["buffer"], f["target"])
-    for ev in events:
+    for ev in _pool(events, f["setup"]):
         if not keep(ev, f):
             continue
         if ev["sym"] in last and ev["i"] - last[ev["sym"]] < spacing:   # one trade per symbol at a time
             continue
         last[ev["sym"]] = ev["i"]
         (ins if ev["day"] < split else oos).setdefault(ev["day"], []).append(ev["out"][k])
-    return {"filters": f, "in_sample": stats(ins), "out_of_sample": stats(oos)}
+    return {"filters": f, "in_sample": stats(ins), "out_of_sample": stats(oos),
+            "rs": [r for d in (ins, oos) for v in d.values() for r in v]}
+
+
+def concentration(r):
+    """Rulebook: do a few trades make all the money? Share of the total R from the best 3 trades."""
+    rs = sorted(r.get("rs", []), reverse=True)
+    tot = sum(rs)
+    if len(rs) < 10 or tot <= 0:
+        return "  concentration: not meaningful (total R not positive or under 10 trades)"
+    top = sum(rs[:3])
+    return "  concentration: the best 3 of %d trades = %.0f%% of the total %+.1fR%s" % (
+        len(rs), 100 * top / tot, tot, "  <- a few lucky trades carry it" if top >= 0.6 * tot else "")
 
 
 def row(r, label=""):
@@ -150,7 +185,8 @@ def row(r, label=""):
             x["worst_day_r"], x["max_drawdown_r"])
     parts = ["setup=%s" % f["setup"], "confirm=%s" % ("c1" if f["confirm"] == 1 else "c1/c2"),
              "struct=%s" % f["struct"], "doji<=%d%%" % round(100 * f["doji_pct"]), "buffer=%.2fATR" % f["buffer"],
-             "target=%s" % f["target"], "mkt=%s" % ("with" if f["regime"] else "off")]
+             "target=%s" % f["target"], "mkt=%s" % ("with" if f["regime"] else "off"),
+             "liq=%s" % f.get("liq", "base"), "disp>=%.1fATR" % f.get("disp", 0.0)]
     if "session" in f:
         parts.append("hours=%s" % f["session"])
     return "%s%s\n     in-sample   %s\n     OUT-sample  %s" % (label, " ".join(parts), s(i), s(o))
@@ -182,9 +218,9 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist, market="crypto", s
             return (entry + exit_px) * fee / abs(entry - stop)
 
         events = events_smcp(data, lambda t: t.date(), hold=12 * 60 // step, cost_fn=cost_fn, regime_fn=regime_fn)
-        grid = {"setup": ["doji_long", "doji_short", "star_long", "hammer_short", "longs", "shorts", "all"],
-                "confirm": [1, 2], "struct": ["none", "before", "any"], "doji_pct": [0.10, 0.15],
-                "buffer": list(BUFFERS), "target": list(TARGETS), "regime": [False, True], "session": ["all", "active"]}
+        grid = {"setup": SETUP_GRID, "confirm": [1, 2], "struct": ["none", "before", "any"], "doji_pct": [0.10, 0.15],
+                "buffer": list(BUFFERS), "target": list(TARGETS), "regime": [False, True], "liq": ["base", "all", "strong"],
+                "disp": [0.0, 0.7], "session": ["all", "active"]}
         spacing = 240 // step
         mode = "crypto-smcp" + ("" if step == 15 else "-%dm" % step)
         what = "%d coins, %s candles" % (len(data), iv)
@@ -224,9 +260,9 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist, market="crypto", s
 
         events = events_smcp(data, lambda t: t.astimezone(ist).date(), hold=75, cost_fn=cost_fn, regime_fn=regime_fn,
                              entry_ok=entry_ok, path_end=path_end)
-        grid = {"setup": ["doji_long", "doji_short", "star_long", "hammer_short", "longs", "shorts", "all"],
-                "confirm": [1, 2], "struct": ["none", "before", "any"], "doji_pct": [0.10, 0.15],
-                "buffer": list(BUFFERS), "target": list(TARGETS), "regime": [False, True]}
+        grid = {"setup": SETUP_GRID, "confirm": [1, 2], "struct": ["none", "before", "any"], "doji_pct": [0.10, 0.15],
+                "buffer": list(BUFFERS), "target": list(TARGETS), "regime": [False, True], "liq": ["base", "all", "strong"],
+                "disp": [0.0, 0.7]}
         spacing = 48
         mode = "nse-smcp"
         what = "%d NSE stocks, 5m candles, intraday" % len(data)
@@ -241,7 +277,15 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist, market="crypto", s
     print("%d setups found; scoring %d combinations..." % (len(events), len(list(itertools.product(*grid.values())))),
           flush=True)
     res = [score(events, dict(zip(grid, c)), split, stats, spacing) for c in itertools.product(*grid.values())]
-    ok = [r for r in res if r["in_sample"].get("trades", 0) >= 20 and r["out_of_sample"].get("trades", 0) >= 10]
+    ok, seen = [], set()
+    for r in res:   # many settings are no-ops for some setups (doji size for an FVG): keep one of identical results
+        if r["in_sample"].get("trades", 0) < 20 or r["out_of_sample"].get("trades", 0) < 10:
+            continue
+        sig = (r["filters"]["setup"], r["in_sample"]["trades"], r["in_sample"]["total_r"],
+               r["out_of_sample"]["trades"], r["out_of_sample"]["total_r"])
+        if sig not in seen:
+            seen.add(sig)
+            ok.append(r)
     ok.sort(key=lambda r: -r["in_sample"]["avg_r"])
     stable = [r for r in ok if r["in_sample"]["avg_r"] > 0 and r["out_of_sample"]["avg_r"] > 0]
     stable.sort(key=lambda r: -min(r["in_sample"]["avg_r"], r["out_of_sample"]["avg_r"]))
@@ -262,29 +306,34 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist, market="crypto", s
     lines = ["research.py %s  %s" % (mode, datetime.now(ist).strftime("%Y-%m-%d %H:%M IST")),
              "SMC Trading Playbook (user's rules, smc_playbook.py): liquidity sweep -> trigger candle -> candle 1/2 "
              "CLOSE strictly beyond its extreme.",
+             "Plus the rulebook's zone setups: fvg_* (structure-breaking impulse leaves a gap, first retest) and ob_* "
+             "(last opposite candle before that impulse, first retest). liq: base = PDH/PDL/CDH/CDL/swings, all = "
+             "+ last week's high/low, strong = PDH/PDL/PWH/PWL or equal highs/lows only. disp = confirmation candle body.",
              "%s, %d days (%s..%s). Setups found: %s. R after costs; a liquidity target under 1R away is skipped. "
              "Out-of-sample = days from %s." % (what, len(days), days[0], days[-1],
                                                 ", ".join("%s %d" % kv for kv in sorted(counts.items())), split), "",
-             row(score(events, pb, split, stats, spacing), "PLAYBOOK DEFAULTS (all setups):  "), "",
+             row(score(events, pb, split, stats, spacing), "PLAYBOOK DEFAULTS (the 4 playbook setups):  "),
+             row(score(events, dict(pb, setup="zones"), split, stats, spacing), "ZONES (FVG + order block), same:  "), "",
              "EACH SETUP ALONE (playbook defaults otherwise):"]
-    for st in ("doji_long", "doji_short", "star_long", "hammer_short"):
+    for st in M.SETUPS + M.ZONE_SETUPS:
         lines.append(row(score(events, dict(pb, setup=st), split, stats, spacing), "  %-13s " % st))
     lines += ["", "WHICH INGREDIENT HELPS (average OUT-sample R of the combinations with it vs the alternative):",
               effect("confirm", 1, 2), effect("struct", "before", "none"), effect("struct", "any", "none"),
               effect("doji_pct", 0.10, 0.15), effect("buffer", 0.25, 0.1), effect("target", "external", "internal"),
-              effect("target", "2R", "internal"), effect("target", "trail", "internal"), effect("regime", True, False)]
+              effect("target", "2R", "internal"), effect("target", "trail", "internal"), effect("regime", True, False),
+              effect("liq", "all", "base"), effect("liq", "strong", "base"), effect("disp", 0.7, 0.0)]
     if market == "crypto":
         lines.append(effect("session", "active", "all"))
     lines += ["", "TOP 10 BY IN-SAMPLE (the OUT-sample line is the honest one):"]
     for n, r in enumerate(ok[:10], 1):
         lines.append(row(r, "%2d. " % n))
-    lines += ["", "%d of %d combinations (with enough trades) were positive both in- and out-of-sample." % (
+    lines += ["", "%d of %d distinct combinations (with enough trades) were positive both in- and out-of-sample." % (
         len(stable), len(ok))]
     keyf = lambda f: (f["buffer"], f["target"])
     keepf = lambda ev, f: keep(ev, f)
     if stable:
         best = stable[0]
-        lines += ["", "MOST CONSISTENT (best of its weaker half):", row(best, "  "), "",
+        lines += ["", "MOST CONSISTENT (best of its weaker half):", row(best, "  "), concentration(best), "",
                   "ITS NEIGHBOURS (one setting changed at a time; a robust rule has neighbours that also do well):"]
         for k, vals in grid.items():
             for v in vals:
@@ -298,10 +347,12 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist, market="crypto", s
         brk = V4.events_v4(data, btc)
         sh = V4.events_v4(data, btc, short=True)
         lines += ["", "THE LIVE CRYPTO RULES ON THE SAME DATA (what the playbook has to beat):",
-                  V4.row(V4.score(brk, dict(V4.LIVE_V4, min_vol_x=1.5), split, stats), "  breakout long, vol 1.5x: "),
+                  V4.row(V4.score(brk, dict(V4.LIVE_V4), split, stats), "  breakout long (live v6):  "),
                   V4.row(V4.score(sh, dict(V4.LIVE_SHORT, exit="trail", trend="ema+slope", max_range_pct=1.0,
                                            min_vol_x=0.0, session="all"), split, stats), "  short v7:                ")]
-    lines += ["", "Decision rule: put a playbook setup live (paper) only if it is positive out-of-sample with 20+ trades,",
+    lines += ["", "Multiple testing (rulebook 224): with this many combinations some look good in both halves by luck",
+              "alone (on random-walk test data about 1% did). Trust a result only if its neighbours agree.",
+              "", "Decision rule: put a playbook setup live (paper) only if it is positive out-of-sample with 20+ trades,",
               "its neighbours mostly stay positive, and it adds to (or beats) the live rules. ~60 days is short.",
               "The playbook itself assumes no positive expectancy. Not financial advice."]
     report = "\n".join(lines)

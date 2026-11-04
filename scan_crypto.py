@@ -149,7 +149,8 @@ def intraday_one(d, cutoff):
         tags.append("smc_sweep_long" if sw["side"] == "long" else "smc_sweep_short")
         fresh["smc_sweep_long"] = fresh["smc_sweep_short"] = True
     # the user's SMC Trading Playbook (smc_playbook.py): sweep of PDH/PDL/CDH/CDL/swing -> doji / top hammer /
-    # bottom star at the level -> this candle is candle 1 or 2 and CLOSED beyond the trigger extreme. The agent
+    # bottom star at the level -> this candle is candle 1 or 2 and CLOSED beyond the trigger extreme. Plus the
+    # rulebook's FVG / order-block first retests (smcp_fvg_*, smcp_ob_*). The agent
     # (auto_crypto.run_smcp) applies the smcp_* settings (candle 1 only, structure, doji size, stop, target).
     pb = []
     try:
@@ -157,7 +158,8 @@ def intraday_one(d, cutoff):
         rows = [(b[0], b[5] if b[5] is not None else b[3], b[1], b[2], b[3], b[4] or 0) for b in bars]
         ctx = PB.Context(rows, lambda t: t.date())
         i = len(rows) - 1
-        for x in PB.find_setups(ctx, i, doji_pct=0.15, near_atr=0.5, struct_lookback=48, max_confirm=2):
+        for x in (PB.find_setups(ctx, i, doji_pct=0.15, near_atr=0.5, struct_lookback=48, max_confirm=2)
+                  + PB.zone_setups(ctx, i)):
             if any(y["setup"] == x["setup"] for y in pb):
                 continue   # the same setup from candle 1 and candle 2: keep the candle-1 one
             x = dict(x, internal_target=PB.target_for(ctx, i, x, "internal", x["entry"]),

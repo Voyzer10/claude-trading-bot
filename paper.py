@@ -61,13 +61,19 @@ DEFAULT_CONFIG = {
         "INDIA":  {"capital": 50000, "max_loss_per_trade": 500, "max_loss_per_trade_fno": 1500,
                    "max_position_pct": 25, "max_position_pct_fno": 40, "daily_loss_limit": 2500,
                    "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
-                   "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": True},
+                   "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": True,
+                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0},
         "US":     {"capital": 5000, "max_loss_per_trade": 50, "max_position_pct": 25,
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
-                   "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True},
+                   "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
+                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0},
         "CRYPTO": {"capital": 1000, "max_loss_per_trade": 10, "max_position_pct": 25,
                    "daily_loss_limit": 30, "max_trades_per_day": 10, "min_reward_risk": 1.0,
-                   "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True},
+                   "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True,
+                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "max_same_side": 3},
+        # Rulebook risk guards (all accounts): after cooldown_losses losing trades in a row, no new entries for
+        # cooldown_minutes; a week's net realised loss of weekly_loss_x x daily_loss_limit stops new entries until
+        # Monday; CRYPTO: at most max_same_side open positions on one side (alts move with BTC). 0 = off.
         # CRYPTO fee_pct: CoinDCX USDT futures taker 0.05% + 18% GST = 0.059% a side (2 Nov 2026; maker 0.02%).
         # The bot enters and stops out with market orders, so taker. Funding (every 8 h) is not modelled.
     },
@@ -433,6 +439,35 @@ def cmd_price(a, cfg, led):
             print("%-28s %s" % (key(m, t), e))
 
 
+def rulebook_guards(led, m, acc, now, short):
+    """Risk guards from the trading rulebook. They only block NEW entries; exits are never blocked.
+    Everything is computed from the ledger, so a restart cannot reset them."""
+    name = account_of(m)
+    mine = sorted((c for c in led["closed"] if account_of(c["market"]) == name and c.get("exit_time")),
+                  key=lambda c: c["exit_time"])
+    n, mins = int(acc.get("cooldown_losses") or 0), float(acc.get("cooldown_minutes") or 0)
+    if n > 0 and mins > 0 and len(mine) >= n and all(c["pnl"] < 0 for c in mine[-n:]):
+        last = datetime.fromisoformat(mine[-1]["exit_time"])
+        until = last + timedelta(minutes=mins)
+        if now < until:
+            raise PaperError("cooldown: %d losing trades in a row for %s, no new entries until %s"
+                             % (n, name, local_now(m, until).strftime("%H:%M")))
+    wx = float(acc.get("weekly_loss_x") or 0)
+    if wx > 0:
+        today = local_now(m, now).date()
+        monday = (today - timedelta(days=today.weekday())).isoformat()
+        week = sum(c["pnl"] for c in mine if c.get("exit_date", "") >= monday)
+        if -week >= wx * acc["daily_loss_limit"]:
+            raise PaperError("weekly loss limit hit for %s (%s net this week, limit %s): no new entries until Monday"
+                             % (name, money(m, -week), money(m, wx * acc["daily_loss_limit"])))
+    cap = int(acc.get("max_same_side") or 0)
+    if cap > 0:
+        same = [p for p in led["open"] if account_of(p["market"]) == name and is_short(p) == short]
+        if len(same) >= cap:
+            raise PaperError("max %d open %s positions in %s (they move together): %s"
+                             % (cap, "short" if short else "long", name, ", ".join(p["key"] for p in same)))
+
+
 def cmd_buy(a, cfg, led):
     now = datetime.now(timezone.utc)
     m, t = parse_symbol(a.symbol, cfg)
@@ -460,6 +495,7 @@ def cmd_buy(a, cfg, led):
                          % (account_of(m), money(m, lost_today), money(m, acc["daily_loss_limit"])))
     if len(trades_today(led, m, now)) >= acc["max_trades_per_day"]:
         raise PaperError("max %d trades per day reached for %s" % (acc["max_trades_per_day"], account_of(m)))
+    rulebook_guards(led, m, acc, now, short)
 
     if getattr(a, "price", None) is not None:
         entry = float(a.price)

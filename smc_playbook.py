@@ -38,7 +38,9 @@ The playbook is a testing framework: no positive expectancy is assumed, and neit
 """
 
 SETUPS = ("doji_long", "doji_short", "star_long", "hammer_short")
-LONG = {"doji_long", "star_long"}
+ZONE_SETUPS = ("fvg_long", "fvg_short", "ob_long", "ob_short")
+LONG = {"doji_long", "star_long", "fvg_long", "ob_long"}
+MAJOR = {"PDH", "PDL", "PWH", "PWL"}   # "strong" liquidity: these, or a swing with an equal twin
 
 
 def atr_series(bars, n=14):
@@ -77,6 +79,13 @@ def patterns(b, doji_pct=0.15):
     return out
 
 
+def _week(d):
+    try:
+        return d.isocalendar()[:2]
+    except AttributeError:
+        return d
+
+
 class Context:
     """Precomputed, causal context for one symbol's candles: pivots, structure events, day levels, ATR."""
 
@@ -108,18 +117,32 @@ class Context:
                 self.bull[i] = True
             if ls and bars[i][4] < ls[-1][1] <= bars[i - 1][4]:
                 self.bear[i] = True
-        # day levels: previous day high/low, and today's high/low BEFORE each candle
+        # day levels: previous day high/low, and today's high/low BEFORE each candle. The first day in the data
+        # may be partial, so it never becomes a "previous day" (same for the first week).
         self.pdh, self.pdl, self.cdh, self.cdl = [None] * n, [None] * n, [None] * n, [None] * n
-        prev_hl, cur_day, ch, cl = None, None, None, None
+        self.pwh, self.pwl = [None] * n, [None] * n
+        prev_hl, cur_day, ch, cl, days_seen = None, None, None, None, 0
+        prev_w, cur_w, wh, wl, weeks_seen = None, None, None, None, 0
         for i, b in enumerate(bars):
             if self.day[i] != cur_day:
-                if cur_day is not None:
+                if cur_day is not None and days_seen > 1:
                     prev_hl = (ch, cl)
                 cur_day, ch, cl = self.day[i], None, None
+                days_seen += 1
+            wk = _week(self.day[i])
+            if wk != cur_w:
+                if cur_w is not None and weeks_seen > 1:
+                    prev_w = (wh, wl)
+                cur_w, wh, wl = wk, None, None
+                weeks_seen += 1
             self.pdh[i], self.pdl[i] = (prev_hl if prev_hl else (None, None))
+            self.pwh[i], self.pwl[i] = (prev_w if prev_w else (None, None))
             self.cdh[i], self.cdl[i] = ch, cl
             ch = b[2] if ch is None else max(ch, b[2])
             cl = b[3] if cl is None else min(cl, b[3])
+            wh = b[2] if wh is None else max(wh, b[2])
+            wl = b[3] if wl is None else min(wl, b[3])
+        self._zones = {}
 
     def levels(self, i, side):
         """Mapped liquidity known before candle i: side 'low' = sell-side (PDL, CDL, swing lows of about the
@@ -133,13 +156,25 @@ class Context:
             if self.cdl[i] is not None:
                 out.append(("CDL", self.cdl[i]))
             out += [("swing low", p) for idx, p in self.sl_known[i - 1] if i - idx <= 192]
+            if self.pwl[i] is not None:
+                out.append(("PWL", self.pwl[i]))
         else:
             if self.pdh[i] is not None:
                 out.append(("PDH", self.pdh[i]))
             if self.cdh[i] is not None:
                 out.append(("CDH", self.cdh[i]))
             out += [("swing high", p) for idx, p in self.sh_known[i - 1] if i - idx <= 192]
+            if self.pwh[i] is not None:
+                out.append(("PWH", self.pwh[i]))
         return out
+
+    def equal_level(self, i, side, lvl, tol_atr=0.1):
+        """True if the swept level has a twin: another confirmed swing within tol_atr x ATR (equal highs / lows,
+        a pool of stops). PDH/PDL/PWH/PWL count as major levels in their own right."""
+        a = self.atr[i] or 0
+        piv = self.sl_known[i - 1] if side == "low" else self.sh_known[i - 1]
+        near = [p for idx, p in piv if i - idx <= 192 and abs(p - lvl) <= tol_atr * a]
+        return len(near) >= 2
 
     def sweep_at(self, j, side):
         """A sweep of mapped liquidity ending at candle j? -> (name, level, extreme) of the most important level
@@ -148,7 +183,7 @@ class Context:
         back inside. A close that stays beyond is a breakout, not a sweep."""
         if j < 2:
             return None
-        rank = {"PDL": 0, "PDH": 0, "CDL": 1, "CDH": 1, "swing low": 2, "swing high": 2}
+        rank = {"PDL": 0, "PDH": 0, "CDL": 1, "CDH": 1, "swing low": 2, "swing high": 2, "PWL": 3, "PWH": 3}
         b, a = self.bars[j], self.bars[j - 1]
         best = None
         for name, lvl in self.levels(j, side):
@@ -225,8 +260,80 @@ def find_setups(ctx, i, doji_pct=0.15, near_atr=0.5, struct_lookback=48, max_con
             out.append({"setup": setup, "side": "long" if long else "short", "trigger": p, "confirm_at": offs,
                         "sweep_at": j, "level_name": lname, "level": lvl, "extreme": extreme, "hi": hi, "lo": lo,
                         "struct_before": before, "struct_any": before or after, "atr": a, "entry": bars[i][4],
-                        "body_pct": shape(bars[p])["body"]})
+                        "body_pct": shape(bars[p])["body"],
+                        "eq": ctx.equal_level(j, "low" if long else "high", lvl),
+                        "disp": abs(bars[i][4] - bars[i][1]) / (ctx.atr[i] or a)})
     return out
+
+
+def is_displacement(b, a, disp_atr=1.0):
+    """A strong candle: body >= disp_atr x ATR and at least 60% of its range."""
+    s = shape(b)
+    return bool(s and a and s["body_abs"] >= disp_atr * a and s["body"] >= 0.6)
+
+
+def _build_zones(ctx, disp_atr, min_gap_atr, expiry_fvg, expiry_ob):
+    """Every FVG / order-block zone, frozen when it forms, and the candle of its FIRST retest (if that candle is a
+    valid trigger). Returns {trigger index: [setup dicts]}."""
+    bars, n, out = ctx.bars, len(ctx.bars), {}
+
+    def add(t, d):
+        out.setdefault(t, []).append(d)
+
+    def retest(kind, long, born, top, bot, last):
+        # first candle after `born` that trades into the zone; a close through the far side first kills it
+        for t in range(born + 1, min(n, last + 1)):
+            b = bars[t]
+            if (b[4] < bot) if long else (b[4] > top):
+                return
+            if (b[3] <= top) if long else (b[2] >= bot):
+                mid = (top + bot) / 2
+                ok = (b[4] > b[1] and b[4] > mid) if long else (b[4] < b[1] and b[4] < mid)
+                if ok and ctx.atr[t]:
+                    far = bot if long else top
+                    add(t, {"setup": "%s_%s" % (kind, "long" if long else "short"), "side": "long" if long else "short",
+                            "trigger": t, "confirm_at": 1, "sweep_at": born, "level_name": kind.upper(),
+                            "level": top if long else bot, "extreme": min(far, b[3]) if long else max(far, b[2]),
+                            "hi": b[2], "lo": b[3], "struct_before": True, "struct_any": True, "atr": ctx.atr[t],
+                            "entry": b[4], "body_pct": shape(b)["body"] if shape(b) else 0.0, "eq": False,
+                            "disp": abs(b[4] - b[1]) / ctx.atr[t], "zone_top": top, "zone_bottom": bot})
+                return
+
+    for k in range(3, n):
+        a = ctx.atr[k - 1]
+        if not a:
+            continue
+        mid = bars[k - 1]
+        # fair value gap: candle k-1 is a displacement that breaks structure, candles k-2 and k do not overlap
+        if is_displacement(mid, a, disp_atr):
+            up = mid[4] > mid[1]
+            brk = (ctx.bull[k - 1] or ctx.bull[k]) if up else (ctx.bear[k - 1] or ctx.bear[k])
+            if brk:
+                if up and bars[k][3] - bars[k - 2][2] >= min_gap_atr * a:
+                    retest("fvg", True, k, bars[k][3], bars[k - 2][2], k + expiry_fvg)
+                if not up and bars[k - 2][3] - bars[k][2] >= min_gap_atr * a:
+                    retest("fvg", False, k, bars[k - 2][3], bars[k][2], k + expiry_fvg)
+        # order block: the last opposite candle (within 3) before a displacement candle that breaks structure
+        d, ad = k - 1, ctx.atr[k - 1]
+        if is_displacement(bars[d], ad, disp_atr):
+            up = bars[d][4] > bars[d][1]
+            if (ctx.bull[d] if up else ctx.bear[d]):
+                for o in (d - 1, d - 2, d - 3):
+                    ob = bars[o]
+                    if (ob[4] < ob[1]) if up else (ob[4] > ob[1]):
+                        retest("ob", up, d + 1, ob[2], ob[3], d + expiry_ob)
+                        break
+    return out
+
+
+def zone_setups(ctx, i, disp_atr=1.0, min_gap_atr=0.2, expiry_fvg=24, expiry_ob=48):
+    """FVG continuation and order-block retest setups whose trigger candle is i (the rulebook's sequences:
+    structure -> impulse -> gap -> retracement -> trigger; zone -> impulse -> retest). Zones are frozen at creation
+    and only the first retest counts. The entry is candle i's close; the stop goes beyond the zone."""
+    key = (disp_atr, min_gap_atr, expiry_fvg, expiry_ob)
+    if key not in ctx._zones:
+        ctx._zones[key] = _build_zones(ctx, *key)
+    return list(ctx._zones[key].get(i, []))
 
 
 def stop_for(s, buffer_atr):

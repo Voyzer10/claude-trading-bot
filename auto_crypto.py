@@ -112,6 +112,11 @@ DEFAULTS = {
     "smcp_min_rr": 1.0,           # skip if the liquidity target is under this many R away (after fees)
     "smcp_regime": False,         # True: long only while BTC is above its 4h midpoint, short only below
     "smcp_skip_thin_hours": False,  # True: skip skip_hours_utc (00-06 UTC) like the long breakout rule
+    "smcp_liq": "base",           # which sweeps count: base (PDH/PDL, CDH/CDL, swings) | all (+ last week's high/low)
+                                  # | strong (only PDH/PDL/PWH/PWL or equal highs/lows)
+    "smcp_min_disp": 0.0,         # entry candle body at least this many ATRs (rulebook "displacement"); 0 = off
+    # smcp_fvg_long / smcp_fvg_short / smcp_ob_long / smcp_ob_short (rulebook zone setups, off by default): the first
+    # retest of a fair value gap / order block left by a structure-breaking impulse; the stop goes beyond the zone.
     "seed": None,
 }
 
@@ -261,7 +266,19 @@ def history(rows, target_r, bars, stop_mode):
 
 # ------------------------------------------------------------------ pipeline
 
+_RULES = {}
+
+
+def rules_tag(cfg):
+    """Rule version + a short hash of the config, stored with every decision (rulebook: which rules made it)."""
+    import hashlib
+    body = json.dumps({k: v for k, v in cfg.items() if not k.startswith("_")}, sort_keys=True, default=str)
+    return {"version": cfg.get("rules_version"), "hash": hashlib.sha1(body.encode()).hexdigest()[:10]}
+
+
 def record(rec):
+    if _RULES:
+        rec.setdefault("rules", dict(_RULES))
     os.makedirs(LIVE_DIR, exist_ok=True)
     with open(DECISIONS, "a", encoding="utf-8") as fh:
         fh.write(json.dumps(rec) + "\n")
@@ -452,7 +469,9 @@ def run_smcp(h, cfg, log):
                        "level": s.get("level"), "sweep_extreme": s.get("extreme"),
                        "sweep_candles_ago": s.get("trigger", 0) - s.get("sweep_at", 0) + s.get("confirm_at", 0),
                        "bos_choch_before_sweep": s.get("struct_before"), "bos_choch_any": s.get("struct_any")}
-    pattern = {"doji_long": "doji", "doji_short": "doji", "star_long": "bottom star", "hammer_short": "top hammer"}
+    pattern = {"doji_long": "doji", "doji_short": "doji", "star_long": "bottom star", "hammer_short": "top hammer",
+               "fvg_long": "FVG retest", "fvg_short": "FVG retest", "ob_long": "order block retest",
+               "ob_short": "order block retest"}
     st["3_entry"] = {"side": "short" if short else "long", "pattern": pattern.get(s.get("setup"), s.get("setup")),
                      "trigger_high": s.get("hi"), "trigger_low": s.get("lo"), "body_pct": round(s.get("body_pct", 0), 3),
                      "confirmed_by": "candle %s close %s %s" % (s.get("confirm_at"), "<" if short else ">",
@@ -463,6 +482,16 @@ def run_smcp(h, cfg, log):
     if need == "before" and not s.get("struct_before") or need == "any" and not s.get("struct_any"):
         return done("skipped", "playbook: no %s BOS/CHoCH %s the sweep" % (
             "bearish" if short else "bullish", "before" if need == "before" else "around"))
+    liq = cfg.get("smcp_liq", "base")
+    zone = s.get("level_name") in ("FVG", "OB")
+    if not zone and liq == "base" and s.get("level_name") in ("PWH", "PWL"):
+        return done("skipped", "playbook: sweep of last week's %s (smcp_liq = base ignores weekly levels)" % s["level_name"])
+    if not zone and liq == "strong" and not (s.get("level_name") in ("PDH", "PDL", "PWH", "PWL") or s.get("eq")):
+        return done("skipped", "playbook: %s is not strong liquidity (needs PDH/PDL/PWH/PWL or equal highs/lows)"
+                    % s.get("level_name"))
+    if s.get("disp", 0) < float(cfg.get("smcp_min_disp", 0) or 0):
+        return done("skipped", "playbook: entry candle body %.2f ATR, no displacement (min %.2f)" % (
+            s.get("disp", 0), float(cfg["smcp_min_disp"])))
     if s.get("setup", "").startswith("doji") and s.get("body_pct", 1) > float(cfg.get("smcp_doji_pct", 0.15)):
         return done("skipped", "playbook: doji body %.0f%% of the range (max %.0f%%)" % (
             100 * s.get("body_pct", 0), 100 * float(cfg.get("smcp_doji_pct", 0.15))))
@@ -757,6 +786,8 @@ def time_stops(cfg, log):
 def process(state, res, log):
     """Called by live.py after each crypto scan."""
     cfg = load_cfg()
+    _RULES.clear()
+    _RULES.update(rules_tag(cfg))
     time_stops(cfg, log)
     out = []
     for h in res.get("hits", []):

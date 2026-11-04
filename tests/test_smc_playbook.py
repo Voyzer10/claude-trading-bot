@@ -27,8 +27,12 @@ def check(name, ok, extra=""):
 def series():
     """Yesterday ranges 99.0-102 (PDL 99.0); today drifts down to ~99.5, then a doji sweeps PDL and closes back
     above it, and the next candle closes above the doji's high (candle-1 confirmation)."""
-    t0 = datetime(2026, 11, 2, tzinfo=UTC)
+    t0 = datetime(2026, 11, 1, tzinfo=UTC)
     rows, t = [], t0
+    for k in range(96):                     # the first day in the data (partial days never become "previous")
+        base = 103 + (0.3 if (k // 6) % 2 else -0.3)
+        rows.append((t, base, base + 0.2, base - 0.2, base + 0.05, 100))
+        t += timedelta(minutes=15)
     for k in range(96):                     # yesterday: zigzag 100..102, one dip to 99.0
         base = 101 + (1 if (k // 6) % 2 else -1) * 0.5
         lo = 99.0 if k == 40 else base - 0.2
@@ -115,8 +119,74 @@ def agent_checks(r):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def zone_checks():
+    t = [datetime(2026, 11, 2, tzinfo=UTC)]
+    rows = []
+
+    def add(o, h, l, c):
+        rows.append((t[0], o, h, l, c, 100))
+        t[0] += timedelta(minutes=15)
+    for k in range(60):
+        b = 100 + (0.3 if (k // 3) % 2 else 0.0)
+        add(b, b + 0.2, b - 0.2, b + 0.05)
+    add(100.2, 100.4, 100.0, 100.3)      # candle before the impulse (high 100.4)
+    add(100.3, 101.7, 100.25, 101.6)     # displacement breaking the 100.5 swing high
+    add(101.6, 102.0, 100.8, 101.9)      # low 100.8: gap 100.4..100.8
+    add(101.9, 102.2, 101.5, 102.1)
+    add(102.1, 102.3, 101.4, 101.6)
+    add(101.2, 101.5, 100.7, 101.3)      # first retest into the gap, closes up above its middle
+    ctx = PB.Context(rows, lambda x: x.date())
+    got = PB.zone_setups(ctx, len(rows) - 1)
+    check("FVG long on the first retest", [g["setup"] for g in got] == ["fvg_long"], got)
+    if got:
+        check("FVG stop below the gap", PB.stop_for(got[0], 0.1) < 100.4)
+    check("no zone setup before the retest", not any(PB.zone_setups(ctx, i) for i in range(60, len(rows) - 1)))
+
+
+def guard_checks():
+    import paper as P
+    now = datetime(2026, 11, 4, 6, 0, tzinfo=UTC)
+    acc = dict(P.DEFAULT_CONFIG["accounts"]["CRYPTO"])
+
+    def closed(mins_ago, pnl):
+        x = now - timedelta(minutes=mins_ago)
+        return {"market": "CRYPTO", "pnl": pnl, "exit_time": x.isoformat(), "exit_date": x.date().isoformat()}
+    led = {"open": [], "closed": [closed(200, -5), closed(100, -5), closed(30, -5)]}
+    try:
+        P.rulebook_guards(led, "CRYPTO", acc, now, False)
+        check("3 losses in a row -> cooldown", False, "not blocked")
+    except P.PaperError as e:
+        check("3 losses in a row -> cooldown", "cooldown" in str(e), e)
+    led = {"open": [], "closed": [closed(400, -5), closed(300, -5), closed(200, -5)]}
+    try:
+        P.rulebook_guards(led, "CRYPTO", acc, now, False)
+        check("cooldown over after 2h", True)
+    except P.PaperError as e:
+        check("cooldown over after 2h", False, e)
+    led = {"open": [], "closed": [closed(2000, -40), closed(1500, -40), closed(500, 5), closed(400, -20)]}
+    try:
+        P.rulebook_guards(led, "CRYPTO", acc, now, False)
+        check("weekly loss limit", False, "not blocked")
+    except P.PaperError as e:
+        check("weekly loss limit", "weekly" in str(e), e)
+    led = {"open": [{"market": "CRYPTO", "key": "CRYPTO:%s" % s, "side": "long"} for s in "ABC"], "closed": []}
+    blocked = False
+    try:
+        P.rulebook_guards(led, "CRYPTO", acc, now, False)
+    except P.PaperError:
+        blocked = True
+    short_ok = True
+    try:
+        P.rulebook_guards(led, "CRYPTO", acc, now, True)
+    except P.PaperError:
+        short_ok = False
+    check("max 3 longs open, a short still allowed", blocked and short_ok, (blocked, short_ok))
+
+
 if __name__ == "__main__":
     rows = engine_checks()
+    zone_checks()
+    guard_checks()
     r = scanner_checks(rows)
     if r and "smcp_doji_long" in r["tags"]:
         agent_checks(r)
