@@ -9,7 +9,8 @@ FRESH breakout (triggered within `fresh_minutes`) goes through the pack's own sc
 
   1 scanner      trader-scanner/scan.py orb
   2 news         trader-news/news.py           (recorded, never acted on)
-  3 entry        trader-entry/entry.py check   (must still say TRIGGERED)
+  3 entry        trader-entry/entry.py check   (must still say TRIGGERED), then the LIVE price must still be
+                 above the range high (else "reversed") and at most max_chase_r R past it
   4 exit         trader-exit/exit.py plan      (stop at the range midpoint, 2R target)
   5 timemachine  trader-timemachine/timemachine.py run   (skips a negative edge)
   6 budget       trader-budget/size.py
@@ -61,7 +62,7 @@ DEFAULTS = {
     "min_history_avg_r": 0.0,
     "allow_short": True,         # also trade opening-range breakdowns, on paper (see the docstring)
     "short_regime": True,        # shorts only while SPY is below its opening-range midpoint and its open
-    "max_chase_r": 0.5,          # shorts: skip if price already ran this many R below the range low
+    "max_chase_r": 0.5,          # skip if the live price already ran this many R past the range (longs and shorts)
     "or_minutes": 15,
 }
 
@@ -266,6 +267,24 @@ def run_one(tk, hit, cfg, log, auto):
     st["4_exit"] = {"entry": entry, "stop": stop, "target": target, "stop_pct": round(stop_pct, 2)}
     if stop_pct < cfg["min_stop_pct"]:
         return done("skipped", "stop too tight: %.2f%% (min %.2f%%)" % (stop_pct, cfg["min_stop_pct"]))
+    # the plan is built from the breakout candle's close; the paper fill is at the LIVE price. Check it is still
+    # above the range high (3 Nov AAPL: the 9:50 candle closed at 333.82 over the 332.67 high, but the fill came at
+    # 331.96, back inside the range, and it stopped out) and not too far past it (same rules as the short path).
+    try:
+        price_now, _ = P.fetch_price("US", tk)
+    except Exception as ex:
+        return done("skipped", "no live price: %s" % ex)
+    trig = float(hit.get("or_high") or e.get("level") or entry)
+    risk_now = price_now - stop
+    chase = (price_now - trig) / risk_now if risk_now > 0 else None
+    st["3_entry"].update({"price_now": price_now, "trigger": trig,
+                          "chase_r": round(chase, 2) if chase is not None else None})
+    if price_now <= trig:
+        return done("skipped", "price %s moved back inside the opening range (high %s): reversed" % (price_now, trig))
+    if risk_now <= 0:
+        return done("skipped", "price %s is already at or under the stop %s" % (price_now, stop))
+    if cfg.get("max_chase_r") and chase > cfg["max_chase_r"]:
+        return done("skipped", "chasing: price is %.2fR above the range high (max %.2fR)" % (chase, cfg["max_chase_r"]))
 
     rc, out = sh([os.path.join("trader-timemachine", "timemachine.py"), "run", "--write"], timeout=300)
     tm = us_json(os.path.join("trader", "timemachine.json")) or {}
