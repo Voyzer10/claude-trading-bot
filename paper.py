@@ -62,15 +62,19 @@ DEFAULT_CONFIG = {
                    "max_position_pct": 25, "max_position_pct_fno": 40, "daily_loss_limit": 2500,
                    "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
                    "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": True,
-                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0},
+                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True},
         "US":     {"capital": 5000, "max_loss_per_trade": 50, "max_position_pct": 25,
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
                    "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
-                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0},
+                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True},
         "CRYPTO": {"capital": 1000, "max_loss_per_trade": 10, "max_position_pct": 25,
                    "daily_loss_limit": 30, "max_trades_per_day": 10, "min_reward_risk": 1.0,
                    "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True,
-                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "max_same_side": 3},
+                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "max_same_side": 3, "risk_limits": False, "trade_setups": True},
+        # risk_limits (False while paper testing, the owner's decision of 4 Nov 2026): when True, the daily loss limit,
+        # max trades per day and the rulebook guards below block new entries. Turn it on before real money.
+        # trade_setups: Scanner v2's setups (the owner's A-B-C-D / playbook / FVG / OB) are paper traded (True) or
+        # only recorded (False).
         # Rulebook risk guards (all accounts): after cooldown_losses losing trades in a row, no new entries for
         # cooldown_minutes; a week's net realised loss of weekly_loss_x x daily_loss_limit stops new entries until
         # Monday; CRYPTO: at most max_same_side open positions on one side (alts move with BTC). 0 = off.
@@ -489,13 +493,14 @@ def cmd_buy(a, cfg, led):
                          "--force to do it anyway." % m)
     if acc.get("flat_by") and sess == "open" and past_flat_by(m, acc, now) and not force:
         raise PaperError("past your flat-by time (%s): no new intraday entries" % acc["flat_by"])
-    lost_today = -sum(c["pnl"] for c in today_closed(led, m, now) if c["pnl"] < 0)
-    if lost_today >= acc["daily_loss_limit"]:
-        raise PaperError("daily loss limit hit for %s (%s lost today of %s): done for the day"
-                         % (account_of(m), money(m, lost_today), money(m, acc["daily_loss_limit"])))
-    if len(trades_today(led, m, now)) >= acc["max_trades_per_day"]:
-        raise PaperError("max %d trades per day reached for %s" % (acc["max_trades_per_day"], account_of(m)))
-    rulebook_guards(led, m, acc, now, short)
+    if acc.get("risk_limits", False):   # off while paper testing (owner's decision); on before real money
+        lost_today = -sum(c["pnl"] for c in today_closed(led, m, now) if c["pnl"] < 0)
+        if lost_today >= acc["daily_loss_limit"]:
+            raise PaperError("daily loss limit hit for %s (%s lost today of %s): done for the day"
+                             % (account_of(m), money(m, lost_today), money(m, acc["daily_loss_limit"])))
+        if len(trades_today(led, m, now)) >= acc["max_trades_per_day"]:
+            raise PaperError("max %d trades per day reached for %s" % (acc["max_trades_per_day"], account_of(m)))
+        rulebook_guards(led, m, acc, now, short)
 
     if getattr(a, "price", None) is not None:
         entry = float(a.price)
@@ -826,11 +831,12 @@ if __name__ == "__main__":
 
 def setup_decision(market, symbol, s, news=None, now_iso=None):
     """One of the owner's setups found by Scanner v2 (smc_playbook.owner_setups dict), taken through the agents
-    without the broker: Entry (the candle close), Exit (stop, 2R, costs in R), Budget (size from this account's
-    limits), Risk (costs <= 0.25R, at least one unit). A setup that passes is recorded as LOG ONLY, not traded
-    (these rules failed their backtests). Returns the decision record for decisions.jsonl."""
+    Entry (the candle close), Exit (stop, 2R, costs in R), Budget (size from this account's limits), Risk (costs <=
+    0.25R, at least one unit), then the Broker: a paper trade at the live price with that stop and 2R target (the
+    owner's decision for paper testing, 4 Nov 2026), or LOG ONLY when the account's trade_setups is off.
+    Returns the decision record for decisions.jsonl."""
     rec = {"time": now_iso or datetime.now(IST).isoformat(), "symbol": "%s:%s" % (market, symbol),
-           "setup": s["setup"], "record_only": True, "steps": {}, "result": None}
+           "setup": s["setup"], "scanner_v2": True, "steps": {}, "result": None}
     st = rec["steps"]
     st["1_scanner"] = {"scanner": "v2", "setup": s["setup"], "setup_name": s.get("name"), "side": s["side"],
                        "bar_end": s.get("bar_end"), "price": s["price"], **(s.get("details") or {})}
@@ -864,8 +870,33 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
                                                                                       acc["max_loss_per_trade"]))
     if cost is not None and cost > 0.25:
         return done("skipped", "fees eat %.2fR of the trade (max 0.25R)" % cost)
-    st["6-8_budget_risk_broker"] = {"verdict": "pass, NOT sent to the broker", "qty": round(qty, 6) if market == "CRYPTO" else qty,
-                                    "entry": entry, "stop": stop, "target": target, "max_loss": round(risk * qty, 2)}
-    st["9_alerts"] = "no trade, nothing to watch"
-    return done("LOG ONLY", "%s: passed the agents; the broker records it only (this rule failed its backtest)"
-                % (s.get("name") or s["setup"]))
+    name = s.get("name") or s["setup"]
+    if not acc.get("trade_setups", True):
+        st["6-8_budget_risk_broker"] = {"verdict": "pass, NOT sent to the broker (trade_setups off)",
+                                        "qty": round(qty, 6) if market == "CRYPTO" else qty, "entry": entry,
+                                        "stop": stop, "target": target, "max_loss": round(risk * qty, 2)}
+        st["9_alerts"] = "no trade, nothing to watch"
+        return done("LOG ONLY", "%s: passed the agents; recorded only (trade_setups is off)" % name)
+    # paper trade it: paper.py sizes at the live price, keeps the stop / 2R target, and its own checks still apply
+    import contextlib
+    import io
+    led = load_ledger(cfg)
+    args = type("A", (), {"symbol": "%s:%s" % (market, symbol), "stop": str(stop), "target": str(target), "qty": None,
+                          "price": None, "note": "scanner v2: %s" % name, "force": False,
+                          "side": "short" if short else "long"})()
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            cmd_buy(args, cfg, led)
+        save_json(LEDGER, led)
+    except PaperError as e:
+        st["6-8_budget_risk_broker"] = "BLOCK: %s" % e
+        return done("blocked", str(e))
+    pos = next(p for p in led["open"] if p["key"] == "%s:%s" % (market, symbol))
+    st["6-8_budget_risk_broker"] = {"verdict": "PASS, paper %s filled" % ("short" if short else "buy"), "qty": pos["qty"],
+                                    "entry": pos["entry"], "stop": pos["stop"], "target": pos["target"],
+                                    "max_loss": round(abs(pos["entry"] - pos["stop"]) * pos["qty"] + pos.get("entry_fee", 0), 2),
+                                    "report": buf.getvalue().strip().splitlines()}
+    st["9_alerts"] = "live.py checks stop %s / target %s every cycle" % (pos["stop"], pos["target"])
+    return done("PAPER SHORT" if short else "PAPER BUY", "%s @ %s, stop %s, target %s (Scanner v2: %s)" % (
+        fmt_qty(market, pos["qty"]), pos["entry"], pos["stop"], pos["target"], name))

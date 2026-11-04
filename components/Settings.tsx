@@ -10,7 +10,7 @@ type SettingsDoc = {
   rule_defaults: Record<string, unknown>;
   rule_fields: Record<string, Field>;
   rules_version: number | null;
-  risk: Record<string, Record<string, number>>;
+  risk: Record<string, Record<string, number | boolean>>;
   risk_fields: Record<string, Field>;
   coins: string[];
   prefs: { usd_inr: number; daily_goal_inr: number };
@@ -56,6 +56,8 @@ const RISK_LABELS: Record<string, string> = {
   max_loss_per_trade_fno: "Max loss per F&O trade",
   daily_loss_limit: "Daily loss limit",
   max_trades_per_day: "Max trades per day",
+  risk_limits: "Risk limits ON (daily loss, trades/day, cooldown, weekly, max per side). Off while paper testing; turn on before real money",
+  trade_setups: "Paper trade Scanner v2 setups (your A-B-C-D / playbook / FVG / OB)",
   cooldown_losses: "Cooldown after N losses in a row (0 = off)",
   cooldown_minutes: "Cooldown length (minutes)",
   weekly_loss_x: "Weekly loss limit (x daily limit, 0 = off)",
@@ -205,7 +207,7 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
 function RiskForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) {
   const names = Object.keys(doc.risk);
   const [acct, setAcct] = useState(names.includes("CRYPTO") ? "CRYPTO" : names[0]);
-  const [v, setV] = useState<Record<string, number | string>>(doc.risk[acct] ?? {});
+  const [v, setV] = useState<Record<string, number | string | boolean>>(doc.risk[acct] ?? {});
   const [busy, setBusy] = useState(false);
   useEffect(() => setV(doc.risk[acct] ?? {}), [doc.risk, acct]);
 
@@ -239,8 +241,13 @@ function RiskForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) {
             <label htmlFor={`risk-${k}`} className="field-label">
               {RISK_LABELS[k] ?? k}{k.includes("loss") ? ` (${cur})` : ""}
             </label>
-            <input id={`risk-${k}`} type="number" inputMode="decimal" step={f.type === "int" ? 1 : "any"} min={f.min} max={f.max}
-                   value={String(v[k] ?? "")} onChange={(e) => setV({ ...v, [k]: e.target.value })} />
+            {f.type === "bool" ? (
+              <input id={`risk-${k}`} type="checkbox" checked={v[k] === true || v[k] === "true"}
+                     onChange={(e) => setV({ ...v, [k]: e.target.checked })} />
+            ) : (
+              <input id={`risk-${k}`} type="number" inputMode="decimal" step={f.type === "int" ? 1 : "any"} min={f.min} max={f.max}
+                     value={String(v[k] ?? "")} onChange={(e) => setV({ ...v, [k]: e.target.value })} />
+            )}
           </div>
         ))}
       </div>

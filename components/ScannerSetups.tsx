@@ -52,8 +52,9 @@ export default function ScannerSetups({ refreshKey }: { refreshKey: number }) {
     <>
       <p className="small muted" style={{ margin: "4px 0 8px" }}>
         Your setups as the scanner finds them on the candle that just closed. Each goes through the agents (its pipe in
-        the list above); the Broker records it and does <b>not</b> trade it (these rules failed their backtests).
-        Today: {today}.
+        the list above) and, while paper testing, the Broker paper trades it with its stop and 2R target (Settings,
+        risk limits: &quot;Paper trade Scanner v2 setups&quot;). Their backtests were negative, so judge them on the paper
+        results. Today: {today}.
       </p>
       <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
         {MARKETS.map((m) => (
@@ -86,7 +87,7 @@ export default function ScannerSetups({ refreshKey }: { refreshKey: number }) {
                   <td className="num">{r.price}</td>
                   <td className="num">{r.stop ?? "-"}</td>
                   <td className="num">{r.target_2r ?? "-"}</td>
-                  <td className="muted small">{r.result === "LOG ONLY" ? "passed, recorded (not traded)" : r.why}</td>
+                  <td className="muted small">{r.result === "LOG ONLY" ? "passed, recorded (not traded)" : r.result.startsWith("PAPER") ? `${r.result}: ${r.why}` : r.why}</td>
                 </tr>
               ))}
             </tbody>

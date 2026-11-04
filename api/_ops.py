@@ -88,6 +88,8 @@ RULE_FIELDS = {
     "smcp_min_disp": {"type": "float", "min": 0.0, "max": 3.0},
 }
 RISK_FIELDS = {
+    "risk_limits": {"type": "bool"},
+    "trade_setups": {"type": "bool"},
     "cooldown_losses": {"type": "int", "min": 0, "max": 20},
     "cooldown_minutes": {"type": "float", "min": 0, "max": 1440},
     "weekly_loss_x": {"type": "float", "min": 0, "max": 10},
@@ -920,11 +922,11 @@ def _iso_age(iso, now):
 
 @router.get("/setups")
 def setups(limit: int = 300):
-    """The owner's setups found by the Scanner (v2) on every market and taken through the agents (record only, no
-    broker): newest first + today's counts by market."""
+    """The owner's setups found by the Scanner (v2) on every market and taken through the agents (paper traded while
+    testing, or recorded when an account's trade_setups is off): newest first + today's counts by market."""
     rows = []
     for ln in _tail_lines(os.path.join(LIVE, "decisions.jsonl")):
-        if '"record_only"' not in ln:
+        if '"scanner_v2"' not in ln and '"record_only"' not in ln:
             continue
         try:
             r = json.loads(ln)
@@ -1060,7 +1062,7 @@ def agents():
                         sc["tf"], at, sc["usable"], sc["scanned"], sc["hits"], sc["new"])
                 return "%s opening range %s: %s of %s stocks usable, %d broke out, %d new" % (
                     sc["market"], at, sc["usable"], sc["scanned"], sc["hits"], sc["new"])
-            v2 = [r for r in todays if r.get("record_only")]
+            v2 = [r for r in todays if r.get("scanner_v2") or r.get("record_only")]
             v2_line = ("your setups: %d today, last %s %s" % (
                 len(v2), (v2[-1].get("symbol") or "").split(":")[-1], _setup_label(v2[-1]))
                 if v2 else "your setups: none yet today")
@@ -1088,7 +1090,7 @@ def agents():
     for r in recs[-15:][::-1]:
         s = r["_stop"]
         flow.append({"time": r["time"], "symbol": (r.get("symbol") or "").split(":")[-1], "setup": _setup_label(r),
-                     "own": bool(r.get("record_only")),
+                     "own": bool(r.get("scanner_v2") or r.get("record_only")),
                      "market": _MKT.get((r.get("symbol") or "").split(":")[0], ""), "result": r.get("result"),
                      "why": r.get("why"), "stopped_at": s,
                      "chain": ["pass" if (s is None or i < s) else
