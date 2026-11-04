@@ -28,7 +28,7 @@ type Flow = {
   result: string;
   why: string;
   stopped_at: number | null;
-  chain: ("pass" | "stop" | "none")[];
+  chain: ("pass" | "stop" | "rec" | "none")[];
 };
 type AgentsResp = {
   generated_at: string;
@@ -181,7 +181,7 @@ export default function Agents({ refreshKey }: { refreshKey: number }) {
 
 function pipeLabel(f: Flow) {
   const passed = f.chain.filter((c) => c === "pass").length;
-  return f.stopped_at === null
-    ? `${f.symbol} passed all ${passed} agents and was traded`
-    : `${f.symbol} passed ${passed} agents, stopped at ${FULL[f.stopped_at - 1]}`;
+  if (f.stopped_at === null) return `${f.symbol} passed all ${passed} agents and was traded`;
+  if (f.result === "LOG ONLY") return `${f.symbol} passed ${passed} agents; the broker recorded it, no trade`;
+  return `${f.symbol} passed ${passed} agents, stopped at ${FULL[f.stopped_at - 1]}`;
 }

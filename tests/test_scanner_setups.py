@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Scanner v2: the scanner finds the owner's setups on the candle that just closed and the agents record them
-(no broker). Offline.
+"""Scanner v2: the scanner finds the owner's setups on the candle that just closed and the agents take them on
+(paper trade while testing, or record when trade_setups is off). Offline.
 
     python tests/test_scanner_setups.py
 """
@@ -46,9 +46,19 @@ if __name__ == "__main__":
     os.chdir(tmp)
     try:
         import paper as P
+        cfg = P.load_config()
+        cfg["accounts"]["US"]["trade_setups"] = False
+        P.save_json(P.CONFIG, cfg)
         rec = P.setup_decision("US", "MAR", dict(a, price=418.9, stop=416.2, target_2r=424.3))
-        check("agents: a US setup passes and the broker only records it (LOG ONLY)",
-              rec["result"] == "LOG ONLY" and rec["record_only"] and rec["steps"]["6-8_budget_risk_broker"]["qty"] >= 1, rec)
+        check("agents: trade_setups off -> a US setup passes and is only recorded (LOG ONLY)",
+              rec["result"] == "LOG ONLY" and rec["scanner_v2"] and rec["steps"]["6-8_budget_risk_broker"]["qty"] >= 1, rec)
+        P.fetch_price = lambda m, t: ({"CRYPTO": 50.0}.get(m, 418.9), None)
+        crypto_ok = dict(a, price=50.0, stop=49.0, target_2r=52.0, name="A-B-C-D long", setup="abcd_long")
+        trec = P.setup_decision("CRYPTO", "TST", crypto_ok, news=[])
+        led = P.load_ledger(P.load_config())
+        check("paper testing (trade_setups on): the setup is paper traded with its stop and 2R target",
+              trec["result"] == "PAPER BUY" and any(p["key"] == "CRYPTO:TST" and p["stop"] == 49.0 and p["target"] == 52.0
+                                                     for p in led["open"]), trec)
         crec = P.setup_decision("CRYPTO", "TEST", a, news=[])
         check("agents: crypto setup stopped by Exit when fees > 0.25R (here 0.26R)",
               crec["result"] == "skipped" and "fees eat" in crec["why"], crec)
@@ -57,9 +67,8 @@ if __name__ == "__main__":
         AC.headlines = lambda sym, n=3: []
         AC.process({}, {"hits": [], "setups": [dict(a, symbol="TEST", market="CRYPTO", bar_end="x")]}, lambda *_: None)
         decs = [json.loads(x) for x in open(AC.DECISIONS)]
-        check("auto_crypto records the setup with its name", any(d.get("setup") == "abcd_long" and d.get("record_only")
-                                                                 for d in decs), decs)
-        check("no paper trade made (no ledger written)", not os.path.exists(os.path.join("trader", "paper", "ledger.json")))
+        check("auto_crypto takes the setup through the agents with its name",
+              any(d.get("setup") == "abcd_long" and d.get("scanner_v2") for d in decs), decs)
         # NSE: setups_scan joins earlier days fetched ONCE a day in one batch
         import scan_nse as S
         calls = []

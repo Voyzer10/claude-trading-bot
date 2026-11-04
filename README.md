@@ -112,7 +112,9 @@ Going live is planned after testing. It needs, at minimum:
 - enough paper results to judge: 30+ trades and at least a month that ends in profit, close to the backtest;
 - a broker/exchange API integration (order placement, fills, cancels) behind the same risk checks paper.py uses;
 - hard limits enforced in code: max loss per trade, daily loss limit, max open positions, a kill switch
-  (the dashboard's "Pause everything"), and alerts when anything fails;
+  (the dashboard's "Pause everything"), and alerts when anything fails. While paper testing the account limits are
+  OFF (paper config `risk_limits: false`, the owner's decision of 4 Nov 2026): turn `risk_limits` ON for every
+  account (Settings > Risk limits) before any real money;
 - starting with a small amount, and tax handled (crypto in India: 30% on gains, 1% TDS on sells; check with a CA).
 
 ## Known limits
