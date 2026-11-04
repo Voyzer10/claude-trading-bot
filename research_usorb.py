@@ -121,10 +121,10 @@ def events_usorb(data, spy, et):
                 for name, (k, stops) in sigs.items():
                     ev = {"sym": sym, "day": day.isoformat(), "entry": name, "side": "short" if short else "long",
                           "k": k, "width": width, "inplay": inplay, "out": {}, "chase": None, "rs": None}
-                    if S and len(S) > k:
-                        sr = (S[k][4] / S[0][1] - 1) * (-1 if short else 1)
-                        r = (bars[k][4] / bars[0][1] - 1)
-                        ev["rs"] = r > sr
+                    if S and len(S) > k:   # real (not mirrored) returns since the open, stock vs SPY
+                        sr = S[k][4] / S[0][1] - 1
+                        r = B[k][4] / B[0][1] - 1
+                        ev["rs"] = (r < sr) if short else (r > sr)
                     for lat in ("close", "next"):
                         if lat == "close":
                             e, start = bars[k][4], k + 1
