@@ -301,7 +301,7 @@ def orb_scan(symbols, market, now, cutoff, or_minutes=15, min_price=20.0, worker
     hits.sort(key=lambda h: h["time"])
     return {"mode": "orb", "market": market, "as_of": cutoff.isoformat(), "universe": len(symbols),
             "scanned": len(data), "failed": len(failed), "usable": usable, "hits": hits,
-            "_data": data}   # _data: the charts, for observer.py; live.py pops it before saving
+            "_data": data}   # _data: the charts, for scanner_v2.py; live.py pops it before saving
 
 
 def cmd_orb(a):

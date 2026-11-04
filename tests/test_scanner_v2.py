@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""observer.py: records the owner's setups on the candle that just closed, once, and never trades (offline).
+"""Scanner v2: finds the owner's setups on the candle that just closed, once, hands them to the agents, never trades.
 
-    python tests/test_observer.py
+    python tests/test_scanner_v2.py
 """
 import json
 import os
@@ -14,7 +14,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "tests"))
 
-import observer as O  # noqa: E402
+import scanner_v2 as O  # noqa: E402
 import test_abcd as T  # noqa: E402
 
 FAILS = []
@@ -32,6 +32,8 @@ def chart(rows):
 
 
 if __name__ == "__main__":
+    import auto_crypto
+    auto_crypto.headlines = lambda sym, n=3: []   # offline
     tmp = tempfile.mkdtemp()
     old = os.getcwd()
     os.chdir(tmp)
@@ -51,7 +53,16 @@ if __name__ == "__main__":
         check("recorded once (no duplicates on a rescan)", len([o for o in first if o["setup"] == "abcd_long"]) == 1
               and not again, (first, again))
         lines = [json.loads(x) for x in open(O.OBS_FILE)]
-        check("written to observations.jsonl and state", lines and state.get("observations"))
+        check("written to scanner_v2.jsonl and state", lines and state.get("scanner_v2"))
+        decs = [json.loads(x) for x in open(O.DECISIONS)]
+        d = next((x for x in decs if x.get("setup") == "v2:abcd_long"), {})
+        check("handed to the agents: decision with the setup name, through Exit (fees 0.26R stop it here)",
+              d.get("result") in ("LOG ONLY", "skipped") and d["steps"]["1_scanner"]["setup_name"] == "A-B-C-D long"
+              and "4_exit" in d["steps"], d)
+        us = O.agents({"market": "US", "symbol": "MAR", "setup": "abcd_long", "side": "long", "bar_end": "x",
+                       "price": 418.9, "stop": 416.2, "target_2r": 424.3, "details": {}})
+        check("US setup passes the agents and is LOG ONLY (the broker does not trade it)",
+              us["result"] == "LOG ONLY" and us["steps"]["6-8_budget_risk_broker"]["qty"] >= 1, us)
         # NSE path: today's 1-day charts + earlier days fetched ONCE in one batch
         calls = []
 
@@ -62,7 +73,7 @@ if __name__ == "__main__":
         O.nse({}, "NSE", {"ABC": chart(rows)}, cutoff, ".NS", fetch_many, S.IST)
         O.nse({}, "NSE", {"ABC": chart(rows)}, cutoff, ".NS", fetch_many, S.IST)
         check("NSE: earlier days fetched once a day", sum(1 for c in calls if c[1] == "5d") == 1, calls)
-        check("no paper trade file touched", not os.path.exists(os.path.join("trader", "paper", "ledger.json")))
+        check("no paper trade made (no ledger written)", not os.path.exists(os.path.join("trader", "paper", "ledger.json")))
     finally:
         os.chdir(old)
         shutil.rmtree(tmp, ignore_errors=True)

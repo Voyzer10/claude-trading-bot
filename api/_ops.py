@@ -860,6 +860,8 @@ def _step_detail(n, rec):
     sym = (rec.get("symbol") or "").split(":")[-1]
     get = lambda pre: next((v for k, v in st.items() if k.startswith(pre)), None)
     s = get("%d_" % n) if n not in (6, 7, 8) else (get("6-8") or get("%d_" % n))
+    if n == 1 and isinstance(s, dict) and s.get("scanner") == "v2":
+        return "%s: Scanner v2 found %s at %s" % (sym, s.get("setup_name") or s.get("setup"), _fmt(s.get("price")))
     if n == 1 and isinstance(s, dict):
         px = s.get("close") or s.get("price")
         vol = s.get("vol_ratio")
@@ -891,6 +893,21 @@ def _step_detail(n, rec):
     return "%s passed" % sym
 
 
+_SETUP_NAMES = {"range_breakout_4h": "4h breakout", "range_breakdown_4h": "4h breakdown", "orb": "ORB",
+                "orb_short": "ORB short", "smc_sweep_long": "SMC sweep long", "smc_sweep_short": "SMC sweep short"}
+
+
+def _setup_label(rec):
+    """The setup name shown with a candidate: Scanner v2's own name, else a short name of the rule."""
+    s1 = (rec.get("steps") or {}).get("1_scanner")
+    if isinstance(s1, dict) and s1.get("scanner") == "v2":
+        return "Scanner v2 · %s" % (s1.get("setup_name") or s1.get("setup"))
+    setup = rec.get("setup") or ""
+    if setup.startswith("smcp_"):
+        return "Playbook · %s" % setup[5:].replace("_", " ")
+    return _SETUP_NAMES.get(setup, setup.replace("_", " "))
+
+
 def _iso_age(iso, now):
     try:
         return (now - datetime.fromisoformat(iso)).total_seconds()
@@ -898,11 +915,11 @@ def _iso_age(iso, now):
         return None
 
 
-@router.get("/observations")
-def observations(limit: int = 100):
-    """The owner's setups seen by observer.py on every market (recorded, never traded): newest first + today's counts."""
+@router.get("/scanner-v2")
+def scanner_v2(limit: int = 100):
+    """Scanner v2: the owner's setups seen on every market (handed to the agents, never traded): newest first + today's counts."""
     rows = []
-    for ln in _tail_lines(os.path.join(LIVE, "observations.jsonl"), 2_000_000):
+    for ln in _tail_lines(os.path.join(LIVE, "scanner_v2.jsonl"), 2_000_000):
         try:
             rows.append(json.loads(ln))
         except ValueError:
@@ -1052,7 +1069,7 @@ def agents():
     flow = []
     for r in recs[-15:][::-1]:
         s = r["_stop"]
-        flow.append({"time": r["time"], "symbol": (r.get("symbol") or "").split(":")[-1],
+        flow.append({"time": r["time"], "symbol": (r.get("symbol") or "").split(":")[-1], "setup": _setup_label(r),
                      "market": _MKT.get((r.get("symbol") or "").split(":")[0], ""), "result": r.get("result"),
                      "why": r.get("why"), "stopped_at": s,
                      "chain": ["pass" if (s is None or i < s) else "stop" if i == s else "none" for i in range(1, 10)]})

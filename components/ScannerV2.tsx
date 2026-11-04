@@ -33,15 +33,15 @@ const NAMES: Record<string, string> = {
 };
 const MARKETS = ["ALL", "CRYPTO", "NSE", "US"];
 
-/** The owner's setups seen live on every market. Observe only: nothing here is traded. */
-export default function Observations({ refreshKey }: { refreshKey: number }) {
+/** Scanner v2: the owner's setups seen live on every market, handed to the agents. Record only: nothing is traded. */
+export default function ScannerV2({ refreshKey }: { refreshKey: number }) {
   const [d, setD] = useState<Resp | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [mkt, setMkt] = useState("ALL");
   const [setup, setSetup] = useState("ALL");
 
   useEffect(() => {
-    getJSON<Resp>(`${OPS}/observations?limit=300`).then((x) => { setD(x); setErr(null); }).catch((e) => setErr(errText(e)));
+    getJSON<Resp>(`${OPS}/scanner-v2?limit=300`).then((x) => { setD(x); setErr(null); }).catch((e) => setErr(errText(e)));
   }, [refreshKey]);
 
   if (err || !d) return null;
@@ -53,14 +53,15 @@ export default function Observations({ refreshKey }: { refreshKey: number }) {
   });
 
   return (
-    <section id="opportunities" className="panel" aria-labelledby="obs-h">
+    <section id="scanner-v2" className="panel" aria-labelledby="obs-h">
       <div className="panel-head">
         <div>
-          <h2 id="obs-h">Opportunities (observe only)</h2>
+          <h2 id="obs-h">Scanner v2 (your setups, record only)</h2>
           <p>
-            Your setups (A-B-C-D, SMC playbook, FVG / order block) as the scanners see them on every market, on the
-            candle that just closed. Recorded to compare with your own charts; <b>nothing here is traded</b> (these
-            rules failed their backtests). Today:{" "}
+            Scanner v2 finds your setups (A-B-C-D, SMC playbook, FVG / order block) on every market, on the candle that
+            just closed, and hands each one to the agents (News, Entry, Exit, Budget, Risk: see the Agents section,
+            setup name shown). The Broker does <b>not</b> trade them: these rules failed their backtests, so they are
+            recorded to compare with your own charts. Today:{" "}
             {Object.keys(totals).length
               ? Object.entries(totals).map(([m, v]) => `${m} ${v}`).join(" · ")
               : "none yet"}

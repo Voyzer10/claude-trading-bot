@@ -236,7 +236,7 @@ def intraday_scan(symbols, now_utc, workers=6, quiet=False):
     hits.sort(key=lambda h: (h["setup"], -h["pct_vs_high"]))
     return {"mode": "intraday", "market": "CRYPTO", "as_of": cutoff.isoformat(), "universe": len(symbols),
             "scanned": len(data), "failed": len(failed), "failed_symbols": failed, "usable": usable,
-            "hits": hits, "coins": coins, "_data": data}   # _data: for observer.py; live.py pops it
+            "hits": hits, "coins": coins, "_data": data}   # _data: for scanner_v2.py; live.py pops it
 
 
 def daily_scan(symbols, now_utc, workers=6, quiet=False):
