@@ -77,6 +77,8 @@ def observe(market, symbol, rows, day_of, step_min=5):
     for s in found:
         if s["setup"] in done:
             continue
+        if s["setup"] in PB.SETUPS and not s.get("struct_before"):
+            continue   # the playbook's order: structure (a BOS/CHoCH before the sweep) comes before the candle
         done.add(s["setup"])
         stop = PB.stop_for(s, 0.1)
         risk = abs(s["entry"] - stop)
