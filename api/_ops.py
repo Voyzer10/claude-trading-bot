@@ -898,6 +898,29 @@ def _iso_age(iso, now):
         return None
 
 
+@router.get("/observations")
+def observations(limit: int = 100):
+    """The owner's setups seen by observer.py on every market (recorded, never traded): newest first + today's counts."""
+    rows = []
+    for ln in _tail_lines(os.path.join(LIVE, "observations.jsonl"), 2_000_000):
+        try:
+            rows.append(json.loads(ln))
+        except ValueError:
+            continue
+    today = _now().astimezone(IST).date().isoformat()
+    counts = {}
+    for r in rows:
+        try:
+            day = datetime.fromisoformat(r["time"]).astimezone(IST).date().isoformat()
+        except (KeyError, ValueError):
+            continue
+        if day == today:
+            k = "%s|%s" % (r.get("market"), r.get("setup"))
+            counts[k] = counts.get(k, 0) + 1
+    rows.reverse()
+    return {"generated_at": _now().isoformat(), "today": counts, "latest": rows[:max(1, min(limit, 500))]}
+
+
 @router.get("/agents")
 def agents():
     now = _now()

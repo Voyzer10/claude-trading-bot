@@ -236,7 +236,7 @@ def intraday_scan(symbols, now_utc, workers=6, quiet=False):
     hits.sort(key=lambda h: (h["setup"], -h["pct_vs_high"]))
     return {"mode": "intraday", "market": "CRYPTO", "as_of": cutoff.isoformat(), "universe": len(symbols),
             "scanned": len(data), "failed": len(failed), "failed_symbols": failed, "usable": usable,
-            "hits": hits, "coins": coins}
+            "hits": hits, "coins": coins, "_data": data}   # _data: for observer.py; live.py pops it
 
 
 def daily_scan(symbols, now_utc, workers=6, quiet=False):
@@ -274,6 +274,7 @@ def main(argv=None):
                   % (res["closes_through"], res["scanned"], len(syms)))
         else:
             res = intraday_scan(syms, now, a.workers)
+            res.pop("_data", None)
             print("Crypto 15-minute scan, candle ending %s IST: %d of %d charts, %d usable."
                   % (datetime.fromisoformat(res["as_of"]).astimezone(S.IST).strftime("%H:%M"),
                      res["scanned"], len(syms), res["usable"]))
