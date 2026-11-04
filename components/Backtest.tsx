@@ -10,6 +10,10 @@ const MODE_NAMES: Record<string, string> = {
   "crypto-v4": "Crypto v4 pro setup: trend, squeeze, session, ATR stop, partial/trailing exit",
   "crypto-v4-short": "Crypto v4 grid for SHORTS (4h breakdowns): ATR stop, trailing, BTC filter, fee cap",
   "crypto-v4-5m": "Crypto v4 on 5-minute candles (compare with Crypto v4)",
+  "crypto-abcd": "A-B-C-D (your entry, crypto 15m): BOS -> red close below swing -> green doji -> close above doji high",
+  "crypto-abcd-5m": "A-B-C-D (your entry, crypto 5m)",
+  "us-abcd": "A-B-C-D (your entry, US stocks 5m, ~100 liquid names incl. MAR)",
+  "nse-abcd": "A-B-C-D (your entry, NSE 5m, India charges)",
   "crypto-smcp": "SMC Playbook (crypto 15m): sweep -> doji / hammer / star -> candle 1-2 close, each setup scored",
   "crypto-smcp-5m": "SMC Playbook (crypto 5m): the same playbook rules on 5-minute candles",
   "nse-smcp": "SMC Playbook (NSE 5m): the playbook on NSE stocks, intraday, India charges",
@@ -129,6 +133,10 @@ export default function Backtest() {
         <button className="btn" onClick={() => start("crypto-v4")} disabled={running}>Crypto v4</button>
         <button className="btn" onClick={() => start("crypto-v4-short")} disabled={running}>Crypto shorts v4 (new)</button>
         <button className="btn" onClick={() => start("crypto-v4-5m")} disabled={running}>Crypto 5m</button>
+        <button className="btn" onClick={() => start("crypto-abcd")} disabled={running}>A-B-C-D crypto 15m</button>
+        <button className="btn" onClick={() => start("crypto-abcd-5m")} disabled={running}>A-B-C-D crypto 5m</button>
+        <button className="btn" onClick={() => start("us-abcd")} disabled={running}>A-B-C-D US</button>
+        <button className="btn" onClick={() => start("nse-abcd")} disabled={running}>A-B-C-D NSE</button>
         <button className="btn" onClick={() => start("crypto-smcp")} disabled={running}>Playbook crypto 15m</button>
         <button className="btn" onClick={() => start("crypto-smcp-5m")} disabled={running}>Playbook crypto 5m</button>
         <button className="btn" onClick={() => start("nse-smcp")} disabled={running}>Playbook NSE</button>
