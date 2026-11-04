@@ -332,6 +332,46 @@ def run_one(tk, hit, cfg, log, auto):
         ("%s fires %+.2fR" % (hist.get("triggered"), hist.get("avg_R"))) if hist.get("triggered") else "n/a"))
 
 
+# Scanner v2 on US stocks: the owner's setups on a fixed list of liquid names, each new 5m candle while the session
+# is open. They go through the agents and are recorded only (paper.setup_decision: LOG ONLY, no broker).
+US_WATCH = ("AAPL MSFT NVDA AMZN GOOGL META TSLA AVGO JPM V MA UNH HD PG COST JNJ XOM CVX ABBV MRK PEP KO WMT BAC "
+            "WFC CSCO ORCL CRM ADBE AMD INTC QCOM TXN AMAT MU NFLX DIS NKE MCD SBUX MAR HLT BKNG ABNB UBER LYFT "
+            "CAT DE BA GE HON LMT RTX UPS FDX GS MS C AXP BLK SCHW PYPL SQ SHOP COIN PLTR SNOW CRWD PANW NOW "
+            "INTU ISRG LLY PFE TMO DHR AMGN GILD CVS CI T VZ TMUS CMCSA CHTR SPGI ICE CME MMM DOW LIN F GM RIVN "
+            "SPY QQQ").split()
+_SETUP_BAR = {"last": None}
+
+
+def scan_setups(log):
+    from zoneinfo import ZoneInfo
+    import scan_nse as S
+    et = ZoneInfo("America/New_York")
+    now = datetime.now(timezone.utc)
+    last = (now - timedelta(minutes=1)).replace(second=0, microsecond=0)
+    last = last - timedelta(minutes=last.minute % 5)     # end of the last closed 5m candle
+    lt = last.astimezone(et)
+    if not ((9, 35) <= (lt.hour, lt.minute) <= (16, 0)) or _SETUP_BAR["last"] == last.isoformat():
+        return
+    _SETUP_BAR["last"] = last.isoformat()
+    data, _ = S.fetch_many(US_WATCH, "1d", "5m", 8, "", True)
+    keep = lambda r: (9, 30) <= (r[0].hour, r[0].minute) < (16, 0)
+    setups = S.setups_scan(data, "US", "", last, et, 8, keep)
+    if not setups:
+        return
+    by = {}
+    for x in setups:
+        try:
+            rec = P.setup_decision("US", x["symbol"], x)
+        except Exception as e:
+            log("AUTO US %s %s failed: %s" % (x["symbol"], x["setup"], e))
+            continue
+        record(rec)
+        by[rec["result"]] = by.get(rec["result"], 0) + 1
+    log("AUTO US: Scanner v2 found %d of your setups (%s): %s" % (
+        len(setups), ", ".join("%s %s" % (x["symbol"], x.get("name")) for x in setups[:8]) + (" ..." if len(setups) > 8 else ""),
+        ", ".join("%d %s" % (v, k) for k, v in sorted(by.items()))))
+
+
 def process(state, log, auto=True):
     cfg = load_cfg()
     utc = datetime.now(timezone.utc)
@@ -340,6 +380,10 @@ def process(state, log, auto=True):
     if P.session("US", utc) != "open":
         ms["status"] = "closed"
         return
+    try:
+        scan_setups(log)
+    except Exception as e:
+        log("US Scanner v2 failed: %s" % e)
     start = et.replace(hour=9, minute=50, second=0, microsecond=0)
     stop = et.replace(hour=15, minute=30, second=0, microsecond=0)
     if not (start <= et < stop):

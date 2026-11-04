@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getJSON, OPS, errText } from "@/lib/api";
 import { ago, timeIST } from "@/lib/format";
 import SymbolIcon from "@/components/SymbolIcon";
+import ScannerSetups from "@/components/ScannerSetups";
 
 type Status = "active" | "working" | "standby" | "paused" | "off" | "n/a";
 type Agent = {
@@ -15,6 +16,7 @@ type Agent = {
   status: Status;
   now: string;
   today?: { checked: number; passed: number; stopped: number };
+  v2_today?: number;
   last?: { time: string; symbol: string; market: string; verdict: "passed" | "stopped" | "traded"; text: string };
 };
 type Flow = {
@@ -22,6 +24,7 @@ type Flow = {
   symbol: string;
   market: string;
   setup?: string;
+  own?: boolean;
   result: string;
   why: string;
   stopped_at: number | null;
@@ -65,6 +68,7 @@ export default function Agents({ refreshKey }: { refreshKey: number }) {
   const [d, setD] = useState<AgentsResp | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [showV2, setShowV2] = useState(false);
 
   useEffect(() => {
     getJSON<AgentsResp>(`${OPS}/agents`).then((x) => { setD(x); setErr(null); }).catch((e) => setErr(errText(e)));
@@ -113,6 +117,11 @@ export default function Agents({ refreshKey }: { refreshKey: number }) {
                 {a.today.stopped > 0 && <> · <span className="neg">{a.today.stopped} stopped</span></>}
               </div>
             )}
+            {a.key === "scanner" && (
+              <button className="btn small" style={{ marginTop: 6 }} onClick={() => setShowV2((x) => !x)}>
+                {showV2 ? "Hide" : "Show"} your setups{a.v2_today !== undefined ? ` (${a.v2_today} today)` : ""}
+              </button>
+            )}
             <details className="agent-job small">
               <summary>What it does</summary>
               <p>{a.job}</p>
@@ -120,6 +129,12 @@ export default function Agents({ refreshKey }: { refreshKey: number }) {
           </li>
         ))}
       </ol>
+      {showV2 && (
+        <div className="v2-box">
+          <h3 className="subhead">1 · Scanner v2: your setups</h3>
+          <ScannerSetups refreshKey={refreshKey} />
+        </div>
+      )}
       {unused.length > 0 && (
         <p className="muted small" style={{ marginTop: 10 }}>
           Not used here: {unused.map((a) => `${a.name} (${a.skill})`).join(", ")}. {unused[0].now}
@@ -137,7 +152,7 @@ export default function Agents({ refreshKey }: { refreshKey: number }) {
                 <div className="flow-head">
                   <b className="mono sym"><SymbolIcon market={f.market === "FNO" ? "NFO" : f.market} symbol={f.symbol} />{f.symbol}</b>
                   <span className="muted small">{f.market} · {timeIST(f.time)}</span>
-                  {f.setup && <span className={`chip plain ${f.setup.startsWith("Scanner v2") ? "c-warn" : "c-off"}`}>{f.setup}</span>}
+                  {f.setup && <span className={`chip plain ${f.own ? "c-warn" : "c-off"}`}>{f.setup}</span>}
                   <span className={`chip plain ${f.stopped_at === null ? "c-good" : f.result === "blocked" ? "c-bad" : "c-off"}`}>
                     {f.stopped_at === null ? f.result : f.result === "LOG ONLY" ? "recorded, not traded" : `stopped at ${FULL[f.stopped_at - 1] ?? f.stopped_at}`}
                   </span>

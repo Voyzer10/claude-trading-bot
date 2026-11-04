@@ -366,3 +366,64 @@ def target_for(ctx, i, s, mode, stop):
     if not cands:
         return None
     return min(cands) if long else max(cands)
+
+
+# ------------------------------------------------------------------ the scanner's view (Scanner v2)
+
+SETUP_NAMES = {"abcd_long": "A-B-C-D long", "abcd_short": "A-B-C-D short",
+               "smcp_doji_long": "Playbook doji long", "smcp_doji_short": "Playbook doji short",
+               "smcp_star_long": "Playbook bottom star", "smcp_hammer_short": "Playbook top hammer",
+               "smcp_fvg_long": "FVG retest long", "smcp_fvg_short": "FVG retest short",
+               "smcp_ob_long": "Order block long", "smcp_ob_short": "Order block short"}
+
+
+def _r(x):
+    if x is None:
+        return None
+    ax = abs(x)
+    return round(x, 2) if ax >= 100 else round(x, 4) if ax >= 1 else float("%.6g" % x)
+
+
+def owner_setups(rows, day_of, ctx=None):
+    """The owner's setups that complete on the LAST row (closed candles, oldest first): the playbook's doji / star /
+    hammer (structure before the sweep, as the playbook orders it), FVG / order-block first retests, and his A-B-C-D
+    (abcd.py). Each: {setup, name, side, price, stop, target_2r, details}."""
+    import abcd as A   # abcd imports this module, so import here
+    if len(rows) < 35:
+        return []
+    i, out, done = len(rows) - 1, [], set()
+    try:
+        ctx = ctx or Context(rows, day_of)
+        found = find_setups(ctx, i) + zone_setups(ctx, i)
+    except Exception:
+        found = []
+    for s in found:
+        key = "smcp_" + s["setup"]
+        if key in done or (s["setup"] in SETUPS and not s.get("struct_before")):
+            continue
+        done.add(key)
+        stop = stop_for(s, 0.1)
+        risk = abs(s["entry"] - stop)
+        out.append({"setup": key, "side": s["side"], "price": _r(s["entry"]), "stop": _r(stop),
+                    "target_2r": _r(s["entry"] + 2 * risk if s["side"] == "long" else s["entry"] - 2 * risk),
+                    "details": {"level": s.get("level_name"), "level_px": _r(s.get("level")),
+                                "confirmed_on_candle": s.get("confirm_at"), "body_pct": round(s.get("body_pct") or 0, 3)}})
+    for short in (False, True):
+        try:
+            _, sigs = A.signals(rows, day_of, short=short, ctx=None if short else ctx)
+        except Exception:
+            sigs = []
+        for s in sigs:
+            if s["i"] != i:
+                continue
+            stop = A.stop_for(s, "c_low")
+            risk = abs(s["entry"] - stop)
+            out.append({"setup": "abcd_short" if short else "abcd_long", "side": s["side"], "price": _r(s["entry"]),
+                        "stop": _r(stop), "target_2r": _r(s["entry"] - 2 * risk if short else s["entry"] + 2 * risk),
+                        "details": {"A_at": rows[s["a"]][0].isoformat(), "B_level": _r(s["b_level"]),
+                                    "C_high": _r(s["c_low"] if short else s["c_high"]),
+                                    "C_low": _r(s["c_high"] if short else s["c_low"]),
+                                    "D_candles_after_C": s["d_offset"], "reclaimed": s["reclaimed"]}})
+    for o in out:
+        o["name"] = SETUP_NAMES.get(o["setup"], o["setup"])
+    return out

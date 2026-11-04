@@ -796,6 +796,19 @@ def process(state, res, log):
                 out.append(run_one(h, cfg, log))
             except Exception as e:
                 log("AUTO %s failed: %s" % (h["symbol"], e))
+    # Scanner v2: the owner's setups on this candle. One ticked in enabled_setups went through run_smcp above (it can
+    # trade); every other one goes through the agents and is recorded only (P.setup_decision: LOG ONLY, no broker).
+    for x in res.get("setups", []):
+        if x["setup"] in cfg["enabled_setups"]:
+            continue
+        try:
+            rec = P.setup_decision("CRYPTO", x["symbol"], x, news=headlines(x["symbol"]))
+        except Exception as e:
+            log("AUTO %s %s failed: %s" % (x["symbol"], x["setup"], e))
+            continue
+        rec["rules"] = dict(_RULES)
+        record(rec)
+        log("AUTO %s: %s %s (%s)" % (x["symbol"], x.get("name"), rec["result"], rec["why"]))
     auto = state.setdefault("auto", {"recent": []})
     auto["recent"] = (auto.get("recent", []) + [{"time": r["time"], "symbol": r["symbol"], "result": r["result"],
                                                  "why": r["why"]} for r in out])[-20:]

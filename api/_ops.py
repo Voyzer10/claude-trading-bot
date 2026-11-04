@@ -787,7 +787,7 @@ def _download_all():
 # paper positions into "which agent is working, and on what".
 
 AGENTS = [
-    (1, "scanner", "Scanner", "trader-scanner"),
+    (1, "scanner", "Scanner v2", "trader-scanner"),
     (2, "news", "News", "trader-news"),
     (3, "entry", "Entry", "trader-entry"),
     (4, "exit", "Exit", "trader-exit"),
@@ -861,7 +861,7 @@ def _step_detail(n, rec):
     get = lambda pre: next((v for k, v in st.items() if k.startswith(pre)), None)
     s = get("%d_" % n) if n not in (6, 7, 8) else (get("6-8") or get("%d_" % n))
     if n == 1 and isinstance(s, dict) and s.get("scanner") == "v2":
-        return "%s: Scanner v2 found %s at %s" % (sym, s.get("setup_name") or s.get("setup"), _fmt(s.get("price")))
+        return "%s: %s at %s" % (sym, s.get("setup_name") or s.get("setup"), _fmt(s.get("price")))
     if n == 1 and isinstance(s, dict):
         px = s.get("close") or s.get("price")
         vol = s.get("vol_ratio")
@@ -900,11 +900,11 @@ _SETUP_NAMES = {"range_breakout_4h": "4h breakout", "range_breakdown_4h": "4h br
 def _setup_label(rec):
     """The setup name shown with a candidate: Scanner v2's own name, else a short name of the rule."""
     s1 = (rec.get("steps") or {}).get("1_scanner")
-    if isinstance(s1, dict) and s1.get("scanner") == "v2":
-        return "Scanner v2 · %s" % (s1.get("setup_name") or s1.get("setup"))
+    if isinstance(s1, dict) and s1.get("setup_name"):
+        return s1["setup_name"]
     setup = rec.get("setup") or ""
     if setup.startswith("smcp_"):
-        return "Playbook · %s" % setup[5:].replace("_", " ")
+        return "Playbook %s" % setup[5:].replace("_", " ")
     return _SETUP_NAMES.get(setup, setup.replace("_", " "))
 
 
@@ -915,27 +915,34 @@ def _iso_age(iso, now):
         return None
 
 
-@router.get("/scanner-v2")
-def scanner_v2(limit: int = 100):
-    """Scanner v2: the owner's setups seen on every market (handed to the agents, never traded): newest first + today's counts."""
+@router.get("/setups")
+def setups(limit: int = 300):
+    """The owner's setups found by the Scanner (v2) on every market and taken through the agents (record only, no
+    broker): newest first + today's counts by market."""
     rows = []
-    for ln in _tail_lines(os.path.join(LIVE, "scanner_v2.jsonl"), 2_000_000):
+    for ln in _tail_lines(os.path.join(LIVE, "decisions.jsonl")):
+        if '"record_only"' not in ln:
+            continue
         try:
-            rows.append(json.loads(ln))
+            r = json.loads(ln)
         except ValueError:
             continue
+        s1 = (r.get("steps") or {}).get("1_scanner") or {}
+        ex = (r.get("steps") or {}).get("4_exit") or {}
+        mkt, _, sym = (r.get("symbol") or "").partition(":")
+        rows.append({"time": r.get("time"), "market": mkt, "symbol": sym, "setup": r.get("setup"),
+                     "name": s1.get("setup_name") or r.get("setup"), "side": s1.get("side"), "bar_end": s1.get("bar_end"),
+                     "price": s1.get("price"), "stop": ex.get("stop"), "target_2r": ex.get("target"),
+                     "result": r.get("result"), "why": r.get("why"),
+                     "details": {k: v for k, v in s1.items() if k not in ("scanner", "setup", "setup_name", "side",
+                                                                          "bar_end", "price")}})
     today = _now().astimezone(IST).date().isoformat()
     counts = {}
     for r in rows:
-        try:
-            day = datetime.fromisoformat(r["time"]).astimezone(IST).date().isoformat()
-        except (KeyError, ValueError):
-            continue
-        if day == today:
-            k = "%s|%s" % (r.get("market"), r.get("setup"))
-            counts[k] = counts.get(k, 0) + 1
+        if (r.get("time") or "")[:10] == today:
+            counts[r["market"]] = counts.get(r["market"], 0) + 1
     rows.reverse()
-    return {"generated_at": _now().isoformat(), "today": counts, "latest": rows[:max(1, min(limit, 500))]}
+    return {"generated_at": _now().isoformat(), "today": counts, "latest": rows[:max(1, min(limit, 1000))]}
 
 
 @router.get("/agents")
@@ -995,8 +1002,11 @@ def agents():
     openpos = led.get("open") or []
     stop_k = cfg.get("stop_atr_k", 1.5)
     jobs = {
-        1: "Checks every coin when a 15-minute candle closes; a fresh close above its 4-hour high is a candidate "
-           "(at most one per coin every 6 hours).",
+        1: "Every market, on each candle that closes. The rules that trade: a crypto coin's fresh close above its "
+           "4-hour high (below its low for shorts), NSE / US opening-range breaks. Your setups (new in v2): A-B-C-D, "
+           "the SMC playbook's doji / bottom star / top hammer (structure before the sweep) and FVG / order-block "
+           "retests; they go through the same agents, and the broker records them instead of trading (those rules "
+           "failed their backtests).",
         2: "Pulls the coin's latest headlines for the record. It never blocks or makes a trade.",
         3: "Is the timing right? Skips thin hours (%s), a price back inside the range, volume under %sx the 4h "
            "average%s%s." % ("%s:00-%s:00 UTC" % (cfg["skip_hours_utc"][0], cfg["skip_hours_utc"][-1] + 1)
@@ -1047,9 +1057,14 @@ def agents():
                         sc["tf"], at, sc["usable"], sc["scanned"], sc["hits"], sc["new"])
                 return "%s opening range %s: %s of %s stocks usable, %d broke out, %d new" % (
                     sc["market"], at, sc["usable"], sc["scanned"], sc["hits"], sc["new"])
-            a.update(status="active", now="; ".join(line(sc) for sc in scans) if scans
-                     else "Waiting for the next candle to close.")
+            v2 = [r for r in todays if r.get("record_only")]
+            v2_line = ("your setups: %d today, last %s %s" % (
+                len(v2), (v2[-1].get("symbol") or "").split(":")[-1], _setup_label(v2[-1]))
+                if v2 else "your setups: none yet today")
+            a.update(status="active", now="; ".join([line(sc) for sc in scans] + [v2_line]) if scans
+                     else "Waiting for the next candle to close. " + v2_line)
             a["scans"] = scans
+            a["v2_today"] = len(v2)
         elif n == 9:
             if openpos:
                 a.update(status="active", now="Watching %d open position%s: %s" % (
@@ -1070,6 +1085,7 @@ def agents():
     for r in recs[-15:][::-1]:
         s = r["_stop"]
         flow.append({"time": r["time"], "symbol": (r.get("symbol") or "").split(":")[-1], "setup": _setup_label(r),
+                     "own": bool(r.get("record_only")),
                      "market": _MKT.get((r.get("symbol") or "").split(":")[0], ""), "result": r.get("result"),
                      "why": r.get("why"), "stopped_at": s,
                      "chain": ["pass" if (s is None or i < s) else "stop" if i == s else "none" for i in range(1, 10)]})

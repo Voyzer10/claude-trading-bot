@@ -280,8 +280,54 @@ def orb_ready(cutoff, or_minutes):
     return cutoff.weekday() < 5 and cutoff >= at(cutoff, OPEN) + timedelta(minutes=or_minutes + 5)
 
 
-def orb_scan(symbols, market, now, cutoff, or_minutes=15, min_price=20.0, workers=8, quiet=False, side="long"):
-    """Fetch and scan. Returns a dict (never prints)."""
+_EARLIER = {}   # (suffix, symbol) -> (date, [rows of earlier days]): Scanner v2's history, fetched once a day
+
+
+def chart_rows(d, tz):
+    """Chart dict -> [(t, o, h, l, c, v)] on the 5-minute grid (t in tz), oldest first."""
+    out = []
+    for t, o, h, l, c, v in zip(d.get("t", []), d.get("o") or d.get("c", []), d.get("h", []), d.get("l", []),
+                                d.get("c", []), d.get("v", [])):
+        st = datetime.fromtimestamp(t, tz)
+        if None in (o, h, l, c) or st.minute % 5 or st.second:
+            continue
+        out.append((st, o, h, l, c, v or 0))
+    out.sort(key=lambda r: r[0])
+    return out
+
+
+def earlier_days(symbols, suffix, today, tz, workers=8, keep=None):
+    """{symbol: rows before `today`} from one 5-day fetch per symbol per day (in one parallel batch).
+    keep(row) filters rows (e.g. US regular hours)."""
+    need = [x for x in symbols if (_EARLIER.get((suffix, x)) or (None,))[0] != today]
+    if need:
+        got, _ = fetch_many(need, "5d", "5m", workers, suffix, True)
+        for x in need:
+            rows = [r for r in chart_rows(got.get(x) or {}, tz) if r[0].date() != today and (keep is None or keep(r))]
+            _EARLIER[(suffix, x)] = (today, rows)
+    return {x: (_EARLIER.get((suffix, x)) or (None, []))[1] for x in symbols}
+
+
+def setups_scan(data, market, suffix, cutoff, tz, workers=8, keep=None):
+    """Scanner v2: the owner's setups (smc_playbook.owner_setups) completing on the last candle closed by `cutoff`,
+    on today's charts `data` joined to earlier days. Returns [setup dicts with symbol / market / bar_end]."""
+    import smc_playbook as PB
+    today = cutoff.astimezone(tz).date()
+    hist = earlier_days(list(data), suffix, today, tz, workers, keep)
+    out = []
+    for sym, d in data.items():
+        rows = [r for r in chart_rows(d, tz) if r[0].date() == today and r[0] + timedelta(minutes=5) <= cutoff
+                and (keep is None or keep(r))]
+        if not rows:
+            continue
+        for x in PB.owner_setups(hist.get(sym, []) + rows, lambda t: t.astimezone(tz).date()):
+            out.append(dict(x, symbol=sym, market=market, bar_end=(rows[-1][0] + timedelta(minutes=5)).isoformat()))
+    return out
+
+
+def orb_scan(symbols, market, now, cutoff, or_minutes=15, min_price=20.0, workers=8, quiet=False, side="long",
+             setups=False):
+    """Fetch and scan. Returns a dict (never prints). setups=True: also Scanner v2's owner setups (res["setups"])."""
     data, failed = fetch_many(symbols, "1d", "5m", workers, SUFFIX[market], quiet)
     hits, usable = [], 0
     for s, d in data.items():
@@ -301,7 +347,7 @@ def orb_scan(symbols, market, now, cutoff, or_minutes=15, min_price=20.0, worker
     hits.sort(key=lambda h: h["time"])
     return {"mode": "orb", "market": market, "as_of": cutoff.isoformat(), "universe": len(symbols),
             "scanned": len(data), "failed": len(failed), "usable": usable, "hits": hits,
-            "_data": data}   # _data: the charts, for scanner_v2.py; live.py pops it before saving
+            "setups": setups_scan(data, market, SUFFIX[market], cutoff, IST, workers) if setups else []}
 
 
 def cmd_orb(a):
@@ -319,7 +365,6 @@ def cmd_orb(a):
     print("Fetching today's 5-minute bars for %d %s symbols (Yahoo, %d at a time)..."
           % (len(syms), a.market, a.workers), file=sys.stderr)
     res = orb_scan(syms, a.market, now, cutoff, a.or_minutes, a.min_price, a.workers)
-    res.pop("_data", None)
     if res["usable"] == 0 and res["scanned"]:
         print("Fetched %d charts but none had every bar from 9:15 to %s IST today "
               "(holiday, or Yahoo lagging). Nothing written." % (res["scanned"], fmt(cutoff)))
