@@ -88,6 +88,7 @@ RULE_FIELDS = {
     "smcp_min_disp": {"type": "float", "min": 0.0, "max": 3.0},
 }
 RISK_FIELDS = {
+    "capital": {"type": "float", "min": 100},
     "risk_limits": {"type": "bool"},
     "trade_setups": {"type": "bool"},
     "cooldown_losses": {"type": "int", "min": 0, "max": 20},
