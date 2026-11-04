@@ -21,6 +21,7 @@ type Flow = {
   time: string;
   symbol: string;
   market: string;
+  setup?: string;
   result: string;
   why: string;
   stopped_at: number | null;
@@ -136,8 +137,9 @@ export default function Agents({ refreshKey }: { refreshKey: number }) {
                 <div className="flow-head">
                   <b className="mono sym"><SymbolIcon market={f.market === "FNO" ? "NFO" : f.market} symbol={f.symbol} />{f.symbol}</b>
                   <span className="muted small">{f.market} · {timeIST(f.time)}</span>
+                  {f.setup && <span className={`chip plain ${f.setup.startsWith("Scanner v2") ? "c-warn" : "c-off"}`}>{f.setup}</span>}
                   <span className={`chip plain ${f.stopped_at === null ? "c-good" : f.result === "blocked" ? "c-bad" : "c-off"}`}>
-                    {f.stopped_at === null ? f.result : `stopped at ${FULL[f.stopped_at - 1] ?? f.stopped_at}`}
+                    {f.stopped_at === null ? f.result : f.result === "LOG ONLY" ? "recorded, not traded" : `stopped at ${FULL[f.stopped_at - 1] ?? f.stopped_at}`}
                   </span>
                 </div>
                 <div className="pipe" role="img" aria-label={pipeLabel(f)}>

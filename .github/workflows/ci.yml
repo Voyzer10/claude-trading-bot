@@ -52,6 +52,8 @@ jobs:
         run: python tests/test_abcd.py
       - name: US long entry live-price check (offline)
         run: python tests/test_us_long_entry.py
+      - name: Scanner v2 finds setups once, hands them to the agents, never trades (offline)
+        run: python tests/test_scanner_v2.py
 
   shell:
     name: Shellcheck (deploy scripts)

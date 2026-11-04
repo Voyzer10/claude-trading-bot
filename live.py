@@ -174,6 +174,12 @@ def crypto_cycle(state, a):
         state["errors"].append("CRYPTO intraday: %s" % e)
         log("CRYPTO %dm scan failed: %s" % (C.BAR_MIN, e))
         return
+    data = res.pop("_data", None)
+    try:  # Scanner v2: the owner's setups (A-B-C-D, playbook, FVG / order block) -> the agents (record only, no trade)
+        import scanner_v2 as V2
+        V2.crypto(state, data, C.BAR_MIN, datetime.fromisoformat(res["as_of"]), log)
+    except Exception as e:
+        log("CRYPTO scanner v2 failed: %s" % e)
     today = now_ist().date().isoformat()
     seen = ms.get("seen") if ms.get("seen_date") == today else {}  # display only: first time seen today
     # Which hits go to the agents, matching the backtest (research.py crypto_events): a FRESH cross of the
@@ -228,6 +234,11 @@ def cycle(state, a, markets):
             except Exception as e:
                 state["errors"].append("US: %s" % e)
                 log("US cycle failed: %s" % e)
+            try:  # Scanner v2 on ~95 liquid US stocks -> the agents (record only, no trade)
+                import scanner_v2 as V2
+                V2.us(state, V2.US_WATCH, S.fetch_many, log)
+            except Exception as e:
+                log("US scanner v2 failed: %s" % e)
             continue
         if m == "FNO":
             if a.auto_paper:
@@ -281,6 +292,12 @@ def cycle(state, a, markets):
             state["errors"].append("%s orb: %s" % (m, e))
             log("%s ORB scan failed: %s" % (m, e))
             continue
+        data = res.pop("_data", None)
+        try:  # Scanner v2 on the same 5m candles -> the agents (record only, no trade)
+            import scanner_v2 as V2
+            V2.nse(state, m, data, cutoff, S.SUFFIX[m], S.fetch_many, S.IST, a.workers, log)
+        except Exception as e:
+            log("%s scanner v2 failed: %s" % (m, e))
         if res["scanned"] and res["usable"] == 0:
             ms["orb"] = res
             ms["orb"]["note"] = "no usable charts: holiday, or Yahoo lagging"

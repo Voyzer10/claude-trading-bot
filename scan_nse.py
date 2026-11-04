@@ -300,7 +300,8 @@ def orb_scan(symbols, market, now, cutoff, or_minutes=15, min_price=20.0, worker
             hits.append(r)
     hits.sort(key=lambda h: h["time"])
     return {"mode": "orb", "market": market, "as_of": cutoff.isoformat(), "universe": len(symbols),
-            "scanned": len(data), "failed": len(failed), "usable": usable, "hits": hits}
+            "scanned": len(data), "failed": len(failed), "usable": usable, "hits": hits,
+            "_data": data}   # _data: the charts, for scanner_v2.py; live.py pops it before saving
 
 
 def cmd_orb(a):
@@ -318,6 +319,7 @@ def cmd_orb(a):
     print("Fetching today's 5-minute bars for %d %s symbols (Yahoo, %d at a time)..."
           % (len(syms), a.market, a.workers), file=sys.stderr)
     res = orb_scan(syms, a.market, now, cutoff, a.or_minutes, a.min_price, a.workers)
+    res.pop("_data", None)
     if res["usable"] == 0 and res["scanned"]:
         print("Fetched %d charts but none had every bar from 9:15 to %s IST today "
               "(holiday, or Yahoo lagging). Nothing written." % (res["scanned"], fmt(cutoff)))
