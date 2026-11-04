@@ -802,7 +802,8 @@ AGENTS = [
 # which agent said no, by the words of its reason (first match wins)
 _STOP_WORDS = [
     ("time machine", 5),
-    ("playbook: target only", 4), ("liquidity left", 4), ("playbook", 3), ("setup cancelled", 3),
+    ("playbook: target only", 4), ("liquidity left", 4), ("playbook:", 3), ("setup cancelled", 3),
+    ("4h range", 3), ("downtrend", 3), ("tight ranges", 3),
     ("fees eat", 4), ("stop too tight", 4), ("atr stop", 4),
     ("past the stop", 3), ("thin hours", 3), ("chasing", 3), ("moved back", 3), ("fell back", 3),
     ("reversed", 3), ("no live price", 3),
@@ -836,6 +837,8 @@ def _stopped_at(rec):
     res = (rec.get("result") or "").upper()
     if res.startswith("PAPER"):
         return None
+    if res == "LOG ONLY":   # passed every agent; the broker only recorded it
+        return 8
     if res == "BLOCKED":
         return 7
     why = (rec.get("why") or "").lower()
@@ -1088,7 +1091,9 @@ def agents():
                      "own": bool(r.get("record_only")),
                      "market": _MKT.get((r.get("symbol") or "").split(":")[0], ""), "result": r.get("result"),
                      "why": r.get("why"), "stopped_at": s,
-                     "chain": ["pass" if (s is None or i < s) else "stop" if i == s else "none" for i in range(1, 10)]})
+                     "chain": ["pass" if (s is None or i < s) else
+                               ("rec" if r.get("result") == "LOG ONLY" else "stop") if i == s else "none"
+                               for i in range(1, 10)]})
     return {"generated_at": now.isoformat(), "running": running, "runner_status": status_txt,
             "next_run": state.get("next_run"), "markets": markets, "thin_hours_now": thin, "thin_until": thin_end,
             "agents": out, "flow": flow,

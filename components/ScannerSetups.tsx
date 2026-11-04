@@ -23,6 +23,11 @@ type Row = {
 type Resp = { generated_at: string; today: Record<string, number>; latest: Row[] };
 
 const MARKETS = ["ALL", "CRYPTO", "NSE", "US"];
+// every setup the scanner looks for (smc_playbook.SETUP_NAMES), listed even before one has been seen
+const ALL_SETUPS = [
+  "A-B-C-D long", "A-B-C-D short", "Playbook doji long", "Playbook doji short", "Playbook bottom star",
+  "Playbook top hammer", "FVG retest long", "FVG retest short", "Order block long", "Order block short",
+];
 
 /** The Scanner's view of the owner's setups (A-B-C-D, playbook, FVG / order block), shown inside agent 1. */
 export default function ScannerSetups({ refreshKey }: { refreshKey: number }) {
@@ -37,7 +42,9 @@ export default function ScannerSetups({ refreshKey }: { refreshKey: number }) {
 
   if (err) return <p className="muted small">Could not load the setups ({err}).</p>;
   if (!d) return <p className="muted small">Loading…</p>;
-  const names = Array.from(new Set(d.latest.map((r) => r.name))).sort();
+  const seen: Record<string, number> = {};
+  d.latest.forEach((r) => { seen[r.name] = (seen[r.name] || 0) + 1; });
+  const names = Array.from(new Set([...ALL_SETUPS, ...d.latest.map((r) => r.name)]));
   const rows = d.latest.filter((r) => (mkt === "ALL" || r.market === mkt) && (setup === "ALL" || r.name === setup));
   const today = Object.entries(d.today).map(([m, v]) => `${m} ${v}`).join(" · ") || "none yet";
 
@@ -54,7 +61,7 @@ export default function ScannerSetups({ refreshKey }: { refreshKey: number }) {
         ))}
         <select value={setup} onChange={(e) => setSetup(e.target.value)} aria-label="Setup">
           <option value="ALL">All setups</option>
-          {names.map((n) => <option key={n} value={n}>{n}</option>)}
+          {names.map((n) => <option key={n} value={n}>{n} ({seen[n] || 0})</option>)}
         </select>
       </div>
       {rows.length === 0 ? (
