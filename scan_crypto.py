@@ -169,11 +169,19 @@ def intraday_one(d, cutoff):
             fresh["smcp_" + x["setup"]] = True
     except Exception:
         pb = []
+    # Scanner v2: the owner's setups (A-B-C-D, playbook with structure, FVG / order block) on this candle. The agents
+    # record them (auto_crypto.process); a playbook setup ticked in enabled_setups is also traded via the hits above.
+    try:
+        import smc_playbook as PB2
+        rows2 = [(b[0], b[5] if b[5] is not None else b[3], b[1], b[2], b[3], b[4] or 0) for b in bars]
+        own = PB2.owner_setups(rows2, lambda t: t.date())
+    except Exception:
+        own = []
     return {"price": last[3], "bar_end": (last[0] + timedelta(minutes=BAR_MIN)).isoformat(),
             "range_high": hi, "range_low": lo, "pct_vs_high": round((last[3] / hi - 1) * 100, 2),
             "rsi_15m": round(rsi, 1) if rsi is not None else None,
             "vol_ratio": (round(last[4] / avg_v, 2) if avg_v and last[4] else None), "tags": tags, "fresh": fresh,
-            "smc": sw, "smcp": {"smcp_" + x["setup"]: x for x in pb}}
+            "smc": sw, "smcp": {"smcp_" + x["setup"]: x for x in pb}, "setups": own}
 
 
 def sig(x):
@@ -212,12 +220,13 @@ def intraday_scan(symbols, now_utc, workers=6, quiet=False):
     # 5 days: the playbook's liquidity map needs yesterday's full high / low and 2 days of swing points
     data, failed = S.fetch_many(symbols, "5d", "%dm" % BAR_MIN, workers, SUFFIX, quiet, fetcher=crypto_chart)
     cutoff = last_bar_close(now_utc)
-    hits, usable, coins = [], 0, {}
+    hits, usable, coins, usable_res = [], 0, {}, []
     for s, d in data.items():
         r = intraday_one(d, cutoff)
         if r is None:
             coins[s] = {"usable": False}
             continue
+        usable_res.append((s, r))
         if r["vol_ratio"] is None and any(t in ("range_breakout_4h", "range_breakdown_4h") for t in r["tags"]):
             r["vol_ratio"], r["vol_source"] = fill_volume(s, r, cutoff)
         usable += 1
@@ -234,9 +243,10 @@ def intraday_scan(symbols, now_utc, workers=6, quiet=False):
                          **({"smc": r["smc"]} if tag.startswith("smc_sweep") and r.get("smc") else {}),
                          **({"smcp": r["smcp"][tag]} if tag in r.get("smcp", {}) else {})})
     hits.sort(key=lambda h: (h["setup"], -h["pct_vs_high"]))
+    setups = [dict(x, symbol=s, market="CRYPTO", bar_end=r["bar_end"]) for s, r in usable_res for x in r.get("setups", [])]
     return {"mode": "intraday", "market": "CRYPTO", "as_of": cutoff.isoformat(), "universe": len(symbols),
             "scanned": len(data), "failed": len(failed), "failed_symbols": failed, "usable": usable,
-            "hits": hits, "coins": coins, "_data": data}   # _data: for scanner_v2.py; live.py pops it
+            "hits": hits, "coins": coins, "setups": setups}
 
 
 def daily_scan(symbols, now_utc, workers=6, quiet=False):
@@ -274,7 +284,6 @@ def main(argv=None):
                   % (res["closes_through"], res["scanned"], len(syms)))
         else:
             res = intraday_scan(syms, now, a.workers)
-            res.pop("_data", None)
             print("Crypto 15-minute scan, candle ending %s IST: %d of %d charts, %d usable."
                   % (datetime.fromisoformat(res["as_of"]).astimezone(S.IST).strftime("%H:%M"),
                      res["scanned"], len(syms), res["usable"]))

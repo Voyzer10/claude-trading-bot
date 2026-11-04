@@ -820,3 +820,52 @@ def main(argv=None):
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# ------------------------------------------------------------------ Scanner v2 setups: the agents, no broker
+
+def setup_decision(market, symbol, s, news=None, now_iso=None):
+    """One of the owner's setups found by Scanner v2 (smc_playbook.owner_setups dict), taken through the agents
+    without the broker: Entry (the candle close), Exit (stop, 2R, costs in R), Budget (size from this account's
+    limits), Risk (costs <= 0.25R, at least one unit). A setup that passes is recorded as LOG ONLY, not traded
+    (these rules failed their backtests). Returns the decision record for decisions.jsonl."""
+    rec = {"time": now_iso or datetime.now(IST).isoformat(), "symbol": "%s:%s" % (market, symbol),
+           "setup": s["setup"], "record_only": True, "steps": {}, "result": None}
+    st = rec["steps"]
+    st["1_scanner"] = {"scanner": "v2", "setup": s["setup"], "setup_name": s.get("name"), "side": s["side"],
+                       "bar_end": s.get("bar_end"), "price": s["price"], **(s.get("details") or {})}
+    st["2_news"] = news if news is not None else "not fetched for stock setups (hundreds a day)"
+
+    def done(result, why):
+        rec["result"], rec["why"] = result, why
+        return rec
+
+    entry, stop, target, short = s["price"], s.get("stop"), s.get("target_2r"), s["side"] == "short"
+    st["3_entry"] = {"side": s["side"], "price_now": entry, "note": "entry = the close of the candle that completed it"}
+    risk = ((stop - entry) if short else (entry - stop)) if stop is not None else 0
+    if risk <= 0:
+        return done("skipped", "price %s is already past the stop %s" % (entry, stop))
+    cfg = load_config()
+    acc = cfg["accounts"][MARKETS[market]["account"]] if market in MARKETS else cfg["accounts"]["US"]
+    units = min(acc["max_loss_per_trade"] / risk, acc["capital"] * acc["max_position_pct"] / 100 / entry)
+    qty = units if market == "CRYPTO" else int(units)
+    cost = None
+    if market in ("NSE", "BSE"):
+        if qty >= 1:
+            o, c = ("sell", "buy") if short else ("buy", "sell")
+            cost = (charges(cfg, "NSE", symbol, o, qty * entry) + charges(cfg, "NSE", symbol, c, qty * target)) / (qty * risk)
+    else:
+        cost = (entry + target) * float(acc.get("fee_pct") or 0) / 100 / risk
+    st["4_exit"] = {"entry": entry, "stop": stop, "target": target, "r_multiple": 2.0,
+                    "stop_pct": round(risk / entry * 100, 3), "fee_r": round(cost, 3) if cost is not None else None}
+    st["5_timemachine"] = "n/a (these setups are backtested instead: research_smcp / research_abcd)"
+    if qty <= 0 or (market != "CRYPTO" and qty < 1):
+        return done("skipped", "0 units fit: the stop is %s away and the max loss is %s" % (round(risk, 6),
+                                                                                      acc["max_loss_per_trade"]))
+    if cost is not None and cost > 0.25:
+        return done("skipped", "fees eat %.2fR of the trade (max 0.25R)" % cost)
+    st["6-8_budget_risk_broker"] = {"verdict": "pass, NOT sent to the broker", "qty": round(qty, 6) if market == "CRYPTO" else qty,
+                                    "entry": entry, "stop": stop, "target": target, "max_loss": round(risk * qty, 2)}
+    st["9_alerts"] = "no trade, nothing to watch"
+    return done("LOG ONLY", "%s: passed the agents; the broker records it only (this rule failed its backtest)"
+                % (s.get("name") or s["setup"]))

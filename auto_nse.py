@@ -239,10 +239,30 @@ def run_one(h, cfg, reg, now, log):
         ("%d fires %+.2fR" % (hist["fired"], hist["avg_r"])) if hist.get("fired") else "none"))
 
 
+def record_setups(setups, log):
+    """Scanner v2: the owner's setups on this candle go through the agents and are recorded only (no broker)."""
+    if not setups:
+        return
+    by = {}
+    with open(DECISIONS, "a", encoding="utf-8") as fh:
+        for x in setups:
+            try:
+                rec = P.setup_decision(x["market"], x["symbol"], x)
+            except Exception as e:
+                log("AUTO NSE %s %s failed: %s" % (x["symbol"], x["setup"], e))
+                continue
+            fh.write(json.dumps(rec) + "\n")
+            by[rec["result"]] = by.get(rec["result"], 0) + 1
+    log("AUTO NSE: Scanner v2 found %d of your setups (%s): %s" % (
+        len(setups), ", ".join("%s %s" % (x["symbol"], x.get("name")) for x in setups[:8]) + (" ..." if len(setups) > 8 else ""),
+        ", ".join("%d %s" % (v, k) for k, v in sorted(by.items()))))
+
+
 def process(state, res, log):
     """Called by live.py after an NSE ORB scan (res = scan_nse.orb_scan result with new/first_seen flags)."""
     cfg = load_cfg()
     now = datetime.now(S.IST)
+    record_setups(res.get("setups", []), log)
     if not (S.at(now, hm(cfg["entry_start"])) <= now < S.at(now, hm(cfg["entry_end"]))):
         return []
     cutoff = datetime.fromisoformat(res["as_of"])

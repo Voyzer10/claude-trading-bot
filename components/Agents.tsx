@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { getJSON, OPS, errText } from "@/lib/api";
 import { ago, timeIST } from "@/lib/format";
 import SymbolIcon from "@/components/SymbolIcon";
-import ScannerV2 from "@/components/ScannerV2";
+import ScannerSetups from "@/components/ScannerSetups";
 
 type Status = "active" | "working" | "standby" | "paused" | "off" | "n/a";
 type Agent = {
@@ -24,6 +24,7 @@ type Flow = {
   symbol: string;
   market: string;
   setup?: string;
+  own?: boolean;
   result: string;
   why: string;
   stopped_at: number | null;
@@ -118,7 +119,7 @@ export default function Agents({ refreshKey }: { refreshKey: number }) {
             )}
             {a.key === "scanner" && (
               <button className="btn small" style={{ marginTop: 6 }} onClick={() => setShowV2((x) => !x)}>
-                {showV2 ? "Hide" : "Show"} Scanner v2 setups{a.v2_today !== undefined ? ` (${a.v2_today} today)` : ""}
+                {showV2 ? "Hide" : "Show"} your setups{a.v2_today !== undefined ? ` (${a.v2_today} today)` : ""}
               </button>
             )}
             <details className="agent-job small">
@@ -131,7 +132,7 @@ export default function Agents({ refreshKey }: { refreshKey: number }) {
       {showV2 && (
         <div className="v2-box">
           <h3 className="subhead">1 · Scanner v2: your setups</h3>
-          <ScannerV2 refreshKey={refreshKey} embedded />
+          <ScannerSetups refreshKey={refreshKey} />
         </div>
       )}
       {unused.length > 0 && (
@@ -151,7 +152,7 @@ export default function Agents({ refreshKey }: { refreshKey: number }) {
                 <div className="flow-head">
                   <b className="mono sym"><SymbolIcon market={f.market === "FNO" ? "NFO" : f.market} symbol={f.symbol} />{f.symbol}</b>
                   <span className="muted small">{f.market} · {timeIST(f.time)}</span>
-                  {f.setup && <span className={`chip plain ${f.setup.startsWith("Scanner v2") ? "c-warn" : "c-off"}`}>{f.setup}</span>}
+                  {f.setup && <span className={`chip plain ${f.own ? "c-warn" : "c-off"}`}>{f.setup}</span>}
                   <span className={`chip plain ${f.stopped_at === null ? "c-good" : f.result === "blocked" ? "c-bad" : "c-off"}`}>
                     {f.stopped_at === null ? f.result : f.result === "LOG ONLY" ? "recorded, not traded" : `stopped at ${FULL[f.stopped_at - 1] ?? f.stopped_at}`}
                   </span>
