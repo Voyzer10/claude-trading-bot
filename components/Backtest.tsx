@@ -10,6 +10,7 @@ const MODE_NAMES: Record<string, string> = {
   "crypto-v4": "Crypto v4 pro setup: trend, squeeze, session, ATR stop, partial/trailing exit",
   "crypto-v4-short": "Crypto v4 grid for SHORTS (4h breakdowns): ATR stop, trailing, BTC filter, fee cap",
   "crypto-v4-5m": "Crypto v4 on 5-minute candles (compare with Crypto v4)",
+  "us-orb": "US ORB (the live US rule) vs earlier entries: opening drive, squeeze, pullback; range width, in-play, RS filters",
   "crypto-abcd": "A-B-C-D (your entry, crypto 15m): BOS -> red close below swing -> green doji -> close above doji high",
   "crypto-abcd-5m": "A-B-C-D (your entry, crypto 5m)",
   "us-abcd": "A-B-C-D (your entry, US stocks 5m, ~100 liquid names incl. MAR)",
@@ -133,6 +134,7 @@ export default function Backtest() {
         <button className="btn" onClick={() => start("crypto-v4")} disabled={running}>Crypto v4</button>
         <button className="btn" onClick={() => start("crypto-v4-short")} disabled={running}>Crypto shorts v4 (new)</button>
         <button className="btn" onClick={() => start("crypto-v4-5m")} disabled={running}>Crypto 5m</button>
+        <button className="btn" onClick={() => start("us-orb")} disabled={running}>US ORB + early entries</button>
         <button className="btn" onClick={() => start("crypto-abcd")} disabled={running}>A-B-C-D crypto 15m</button>
         <button className="btn" onClick={() => start("crypto-abcd-5m")} disabled={running}>A-B-C-D crypto 5m</button>
         <button className="btn" onClick={() => start("us-abcd")} disabled={running}>A-B-C-D US</button>
