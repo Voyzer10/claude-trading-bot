@@ -149,8 +149,14 @@ def events_v4(data, btc, rb=16, step=15, short=False):
             trend = "none"
             if entry > e50[i] and e50[i] > e200[i]:
                 trend = "ema+slope" if e200[i] > e200[i - 4] else "ema"
+            # rulebook 43: crypto volume is seasonal (thin at night), so also compare with the SAME time of day
+            # on the previous (up to) 5 days instead of only the 4 hours before
+            bpd = 96 * scale
+            tod = [rows[i - dd * bpd][5] for dd in range(1, 6) if i - dd * bpd >= 0]
+            tod_v = sum(tod) / len(tod) if tod else 0.0
             ev = {"sym": sym, "day": rows[i][0].date().isoformat(), "hour": rows[i][0].hour,
-                  "vol_x": rows[i][5] / avg_v if avg_v else 0.0, "regime": regime, "trend": trend,
+                  "vol_x": rows[i][5] / avg_v if avg_v else 0.0,
+                  "vol_tod_x": rows[i][5] / tod_v if tod_v else 0.0, "regime": regime, "trend": trend,
                   "range_pct": (hi - lo) / abs(entry) * 100, "out": {}, "stop_pct": {}, "fee_r": {}, "chase": {}}
             for sname, stop in (("mid", mid), ("atr1.5", entry - 1.5 * atr)):
                 risk = entry - stop
@@ -176,7 +182,7 @@ def events_v4(data, btc, rb=16, step=15, short=False):
     return evs
 
 
-GRID = {"stop": list(STOPS), "exit": list(EXITS), "hold": [48], "min_vol_x": [0.0, 1.0, 1.5],
+GRID = {"stop": list(STOPS), "exit": list(EXITS), "hold": [48], "min_vol_x": [0.0, 1.0, 1.5], "vol_base": ["4h", "tod"],
         "regime": [False, True], "trend": ["off", "ema", "ema+slope"], "max_range_pct": [None, 1.0],
         "session": ["all", "active"], "max_fee_r": [0.25, 0.40], "max_chase_r": [None, 0.5]}
 PRO = {"stop": "atr1.5", "exit": "partial", "hold": 48, "min_vol_x": 1.5, "regime": True, "trend": "ema",
@@ -188,7 +194,8 @@ def keep(ev, f):
     s = f["stop"]
     if s not in ev["stop_pct"]:
         return False
-    if ev["vol_x"] < f["min_vol_x"] or (f["regime"] and ev["regime"] is not True):
+    vx = ev.get("vol_tod_x", 0.0) if f.get("vol_base", "4h") == "tod" else ev["vol_x"]
+    if vx < f["min_vol_x"] or (f["regime"] and ev["regime"] is not True):
         return False
     if f.get("trend", "off") == "ema" and ev["trend"] not in ("ema", "ema+slope"):
         return False
@@ -235,7 +242,7 @@ def row(r, label=""):
             x["trades"], x["trades"] / max(1, x["days_traded"]), 100 * x["win_rate"], x["avg_r"], x["total_r"],
             x["worst_day_r"], x["max_drawdown_r"])
     parts = ["stop=%s" % f["stop"], "exit=%s" % f["exit"], "hold=%dh" % (f["hold"] // 4),
-             "vol>=%.1f" % f["min_vol_x"], "btc=%s" % ("on" if f["regime"] else "off")]
+             "vol>=%.1f%s" % (f["min_vol_x"], " (time-of-day)" if f.get("vol_base") == "tod" else ""), "btc=%s" % ("on" if f["regime"] else "off")]
     if "trend" in f:
         parts.append("trend=%s" % f["trend"])
     if "max_range_pct" in f:
@@ -298,7 +305,7 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist, step=15, short=Fal
              "LIVE RULE NEIGHBOURS (one setting changed at a time; a robust rule has neighbours that also do well):"]
     for k, vals in GRID.items():
         for v in vals:
-            if v == cur[k]:
+            if v == cur.get(k, "4h" if k == "vol_base" else None):
                 continue
             f = dict(cur, **{k: v})
             lines.append(row(score(events, f, split, stats), "  %s=%s -> " % (k, v)))
@@ -306,7 +313,8 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, ist, step=15, short=Fal
              row(pro, "PRO SETUP (all 7 checks): "), "",
              "WHICH INGREDIENT HELPS (average OUT-sample R of the combinations with it vs without it):",
              effect("trend", "ema", "off"), effect("max_range_pct", 1.0, None), effect("session", "active", "all"),
-             effect("regime", True, False), effect("min_vol_x", 1.0, 1.5), effect("min_vol_x", 1.5, 0.0), effect("stop", "atr1.5", "mid"),
+             effect("regime", True, False), effect("min_vol_x", 1.0, 1.5), effect("min_vol_x", 1.5, 0.0),
+             effect("vol_base", "tod", "4h"), effect("stop", "atr1.5", "mid"),
              effect("exit", "partial", "2R"), effect("exit", "trail", "2R"), effect("max_fee_r", 0.40, 0.25),
              effect("max_chase_r", 0.5, None), "",
              "TOP 10 BY IN-SAMPLE (the OUT-sample line is the honest one):"]

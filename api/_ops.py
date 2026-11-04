@@ -52,7 +52,8 @@ router = APIRouter(prefix="/api/py/ops")
 RULE_FIELDS = {
     "enabled_setups": {"type": "setups", "choices": ["range_breakout_4h", "range_breakdown_4h", "smc_sweep_long",
                                                      "smc_sweep_short", "smcp_doji_long", "smcp_doji_short",
-                                                     "smcp_star_long", "smcp_hammer_short"]},
+                                                     "smcp_star_long", "smcp_hammer_short", "smcp_fvg_long",
+                                                     "smcp_fvg_short", "smcp_ob_long", "smcp_ob_short"]},
     "stop": {"type": "choice", "choices": ["atr", "range-mid", "range-low"]},
     "stop_atr_k": {"type": "float", "min": 0.5, "max": 4.0},
     "exit": {"type": "choice", "choices": ["trail", "target"]},
@@ -83,8 +84,14 @@ RULE_FIELDS = {
     "smcp_min_rr": {"type": "float", "min": 0.5, "max": 5.0},
     "smcp_regime": {"type": "bool"},
     "smcp_skip_thin_hours": {"type": "bool"},
+    "smcp_liq": {"type": "choice", "choices": ["base", "all", "strong"]},
+    "smcp_min_disp": {"type": "float", "min": 0.0, "max": 3.0},
 }
 RISK_FIELDS = {
+    "cooldown_losses": {"type": "int", "min": 0, "max": 20},
+    "cooldown_minutes": {"type": "float", "min": 0, "max": 1440},
+    "weekly_loss_x": {"type": "float", "min": 0, "max": 10},
+    "max_same_side": {"type": "int", "min": 0, "max": 20, "accounts": ["CRYPTO"]},
     "max_loss_per_trade": {"type": "float", "min": 0.01},
     "max_loss_per_trade_fno": {"type": "float", "min": 0.01, "accounts": ["INDIA"]},
     "daily_loss_limit": {"type": "float", "min": 0.01},
@@ -801,7 +808,7 @@ _STOP_WORDS = [
     ("reversed", 3), ("no live price", 3),
     ("volume", 3), ("regime", 3), ("triggered", 3), ("opened ", 3), ("older than", 3),
     ("lots fit", 6), ("units fit", 6), ("budget", 6),
-    ("risk", 7), ("daily loss limit", 7), ("max ", 7), ("block", 7),
+    ("risk", 7), ("daily loss limit", 7), ("weekly loss limit", 7), ("cooldown", 7), ("max ", 7), ("block", 7),
 ]
 _MKT = {"CRYPTO": "CRYPTO", "NSE": "NSE", "BSE": "NSE", "NFO": "FNO", "US": "US"}
 

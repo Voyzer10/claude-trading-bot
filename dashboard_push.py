@@ -72,11 +72,14 @@ CATEGORIES = [
     ("older than", "Stale signal"),
     ("auto_buy is off", "Log only"),
     ("lots fit", "Too big for budget"), ("units fit", "Too big for budget"),
-    ("daily loss limit", "Daily loss limit"), ("max ", "Trade limit"),
+    ("daily loss limit", "Daily loss limit"), ("weekly loss limit", "Weekly loss limit"),
+    ("cooldown:", "Cooldown after losses"), ("positions in crypto", "Too many on one side"), ("max ", "Trade limit"),
     ("no live price", "No price"),
     ("playbook: target only", "Playbook: target too close"), ("liquidity left", "Playbook: target too close"),
     ("bos/choch", "Playbook: no structure"), ("playbook: confirmed on candle", "Playbook: candle 2"),
-    ("playbook: doji body", "Playbook: doji too big"), ("setup cancelled", "Reversed"),
+    ("playbook: doji body", "Playbook: doji too big"),
+    ("no displacement", "Playbook: no displacement"), ("not strong liquidity", "Playbook: weak liquidity"),
+    ("ignores weekly levels", "Playbook: weekly level"), ("setup cancelled", "Reversed"),
 ]
 
 
