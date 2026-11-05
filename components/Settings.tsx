@@ -59,7 +59,7 @@ const RISK_LABELS: Record<string, string> = {
   capital: "Paper capital (changing it adds / removes the difference as cash; P&L kept)",
   risk_limits: "Risk limits ON (daily loss, trades/day, cooldown, weekly, max per side). Off while paper testing; turn on before real money",
   trade_setups: "Paper trade Scanner setups (v3 sweep reversal, A-B-C-D, playbook, FVG / OB)",
-  scanner_version: "Scanner version (v2 = rollback: v3 sweep reversal off)",
+  scanner_version: "Scanner version (v2 = rollback: v3 sweep reversal and FVG/OB retest off)",
   cooldown_losses: "Cooldown after N losses in a row (0 = off)",
   cooldown_minutes: "Cooldown length (minutes)",
   weekly_loss_x: "Weekly loss limit (x daily limit, 0 = off)",
@@ -241,7 +241,7 @@ function RiskForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) {
         {fields.map(([k, f]) => (
           <div key={k} className="field">
             <label htmlFor={`risk-${k}`} className="field-label">
-              {RISK_LABELS[k] ?? k}{k.includes("loss") ? ` (${cur})` : ""}
+              {RISK_LABELS[k] ?? k}{k.startsWith("max_loss") || k === "daily_loss_limit" ? ` (${cur})` : ""}
             </label>
             {f.type === "bool" ? (
               <input id={`risk-${k}`} type="checkbox" checked={v[k] === true || v[k] === "true"}
