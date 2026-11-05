@@ -278,6 +278,29 @@ def lot_of(m, t):
 
 # ------------------------------------------------------------------ prices
 
+def _newest_quote(res):
+    """(price, time) from one Yahoo chart result: the newer of meta.regularMarketPrice (at regularMarketTime) and
+    the last 1-minute close (at its candle's end). None if neither exists."""
+    meta = res.get("meta") or {}
+    cands = []
+    if meta.get("regularMarketPrice") is not None:
+        ts = meta.get("regularMarketTime")
+        cands.append((datetime.fromtimestamp(ts, timezone.utc) if ts else None, float(meta["regularMarketPrice"])))
+    q = ((res.get("indicators") or {}).get("quote") or [{}])[0]
+    for ts, c in reversed(list(zip(res.get("timestamp") or [], q.get("close") or []))):
+        if c is not None and ts is not None:
+            cands.append((datetime.fromtimestamp(ts, timezone.utc) + timedelta(minutes=1), float(c)))
+            break
+    if not cands:
+        return None
+    now = datetime.now(timezone.utc)
+    dated = [(min(t, now), p) for t, p in cands if t is not None]
+    if dated:
+        t, p = max(dated, key=lambda x: x[0])
+        return p, t
+    return cands[0][1], now
+
+
 def fetch_price(m, t):
     """Return (price, quote_time_utc). Raises PaperError."""
     if m == "NFO":
@@ -290,30 +313,42 @@ def fetch_price(m, t):
         except Exception as e:
             raise PaperError("could not price %s: %s" % (t, e))
     ysym = urllib.parse.quote(yahoo_symbol(m, t), safe="")
-    last = None
+    last, best = None, None
     for host in ("query2", "query1"):
-        url = "https://%s.finance.yahoo.com/v8/finance/chart/%s?range=1d&interval=1m" % (host, ysym)
+        # _=<now> makes every request unique, so no cache between us and Yahoo can hand back an old answer
+        url = "https://%s.finance.yahoo.com/v8/finance/chart/%s?range=1d&interval=1m&includePrePost=false&_=%d" % (
+            host, ysym, int(time.time()))
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            req = urllib.request.Request(url, headers={"User-Agent": UA, "Cache-Control": "no-cache"})
             with urllib.request.urlopen(req, timeout=8) as r:
                 doc = json.loads(r.read())
             res = (doc.get("chart") or {}).get("result") or []
             if not res:
                 raise PaperError("Yahoo has no data for %s" % yahoo_symbol(m, t))
-            meta = res[0].get("meta") or {}
-            p = meta.get("regularMarketPrice")
-            ts = meta.get("regularMarketTime")
-            if p is None:
-                closes = [c for c in ((res[0].get("indicators") or {}).get("quote") or [{}])[0].get("close") or [] if c]
-                if not closes:
-                    raise PaperError("no price for %s" % yahoo_symbol(m, t))
-                p = closes[-1]
-            qt = datetime.fromtimestamp(ts, timezone.utc) if ts else datetime.now(timezone.utc)
-            return float(p), qt
+            best = _newest_quote(res[0])
+            if best is None:
+                raise PaperError("no price for %s" % yahoo_symbol(m, t))
+            break
         except PaperError:
             raise
         except Exception as e:
             last = e
+    if best is not None:
+        price, qt = best
+        # 5 Nov 2026: US quotes stayed frozen for 15+ minutes while the market was open (crypto was fine). If the
+        # 1-minute answer is stale in an open session, ask for the 5-minute chart the scanner uses (it was fresh).
+        now = datetime.now(timezone.utc)
+        if m in ("US", "NSE", "BSE") and session(m, now) == "open" and now - qt > timedelta(minutes=10):
+            try:
+                import scan_nse as SN
+                d = SN.yahoo_chart(t, "1d", "5m", suffix=MARKETS[m]["suffix"])
+                if d and d["t"]:
+                    t5 = datetime.fromtimestamp(d["t"][-1], timezone.utc) + timedelta(minutes=5)
+                    if t5 > qt:
+                        price, qt = float(d["c"][-1]), min(t5, now)
+            except Exception:
+                pass
+        return float(price), qt
     if m == "CRYPTO":  # cloud servers are sometimes refused by Yahoo: Coinbase's public ticker as a fallback
         try:
             req = urllib.request.Request("https://api.exchange.coinbase.com/products/%s-USD/ticker" % t,
@@ -820,6 +855,7 @@ def check_once(cfg, led):
             continue
         # the price the dashboard shows: the one just fetched (no second request per position)
         pos["last_price"], pos["last_price_at"] = price, now.isoformat()
+        pos["quote_time"] = qt.isoformat() if qt else None
         try:
             check_position(cfg, led, pos, price, bars, now)
         except Exception as e:   # one bad position never stops the others (or the dashboard's prices)
@@ -868,9 +904,12 @@ def check_position(cfg, led, pos, price, bars, now):
     else:
         to_stop = abs(price / pos["stop"] - 1) * 100
         to_tgt = abs(pos["target"] / price - 1) * 100 if pos.get("target") else float("nan")
-        print("%-16s %s%s  open P&L %s   %.2f%% from the stop%s, %.2f%% from the target"
+        qa = _iso(pos.get("quote_time"))
+        age = (now - qa).total_seconds() / 60 if qa else None
+        print("%-16s %s%s  open P&L %s   %.2f%% from the stop%s, %.2f%% from the target%s"
               % (pos["key"], "SHORT " if sh else "", money(m, price), money(m, upnl), to_stop,
-                 " (breakeven)" if pos.get("breakeven") else "", to_tgt))
+                 " (breakeven)" if pos.get("breakeven") else "", to_tgt,
+                 "" if age is None else "   quote %.0f min old%s" % (age, "  STALE" if age > 10 else "")))
 
 
 def cmd_check(a, cfg, led):
