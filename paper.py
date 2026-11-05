@@ -301,6 +301,74 @@ def _newest_quote(res):
     return cands[0][1], now
 
 
+_MONTHS = {m: i for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov",
+                                        "dec"), 1)}
+
+
+def _nasdaq_quote(t, opener=None):
+    """(price, trade time UTC) from Nasdaq's public quote API (last sale; no key), or None. Tries stock, then ETF."""
+    import re
+    opener = opener or urllib.request.urlopen
+    for cls in ("stocks", "etf"):
+        url = "https://api.nasdaq.com/api/quote/%s/info?assetclass=%s" % (urllib.parse.quote(t), cls)
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json, text/plain, */*",
+                                                       "Origin": "https://www.nasdaq.com",
+                                                       "Referer": "https://www.nasdaq.com/"})
+            with opener(req, timeout=8) as r:
+                doc = json.loads(r.read())
+            pd = ((doc or {}).get("data") or {}).get("primaryData") or {}
+            px = str(pd.get("lastSalePrice") or "").replace("$", "").replace(",", "").strip()
+            if not px:
+                continue
+            ts = str(pd.get("lastTradeTimestamp") or "")
+            mt = re.search(r"([A-Za-z]{3})\w*\.? (\d{1,2}), (\d{4}),? (\d{1,2}):(\d{2}) ?([AP]M)", ts)
+            if not mt:
+                return float(px), None
+            mon, day, yr, hh, mm, ap = mt.groups()
+            h = int(hh) % 12 + (12 if ap.upper() == "PM" else 0)
+            local = datetime(int(yr), _MONTHS[mon.lower()], int(day), h, int(mm), tzinfo=timezone.utc)
+            utc = local - us_offset(local + timedelta(hours=5))     # ET -> UTC
+            return float(px), utc
+        except Exception:
+            continue
+    return None
+
+
+def _stooq_quote(t, opener=None):
+    """(price, time UTC) from Stooq's CSV quote (no key), or None. Stooq times are Polish local time."""
+    opener = opener or urllib.request.urlopen
+    url = "https://stooq.com/q/l/?s=%s.us&f=sd2t2c&h&e=csv" % urllib.parse.quote(t.lower())
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": UA})
+        with opener(req, timeout=8) as r:
+            lines = r.read().decode("utf-8", "replace").strip().splitlines()
+        sym, d, tm, close = lines[1].split(",")[:4]
+        if close in ("N/D", ""):
+            return None
+        try:
+            from zoneinfo import ZoneInfo
+            local = datetime.fromisoformat("%sT%s" % (d, tm)).replace(tzinfo=ZoneInfo("Europe/Warsaw"))
+            return float(close), local.astimezone(timezone.utc)
+        except Exception:
+            return float(close), None
+    except Exception:
+        return None
+
+
+def us_backup_quote(t):
+    """The newest of the backup US quotes: (price, time UTC) or None. Nasdaq's last sale is real time, so a Nasdaq
+    price whose trade time cannot be read counts as now (checked from the VPS, 6 Nov 2026: Nasdaq answers, Stooq
+    does not)."""
+    now = datetime.now(timezone.utc)
+    n = _nasdaq_quote(t)
+    got = [(n[0], n[1] or now)] if n else []
+    st = _stooq_quote(t)
+    if st and st[1] is not None:
+        got.append(st)
+    return max(got, key=lambda q: q[1]) if got else None
+
+
 def fetch_price(m, t):
     """Return (price, quote_time_utc). Raises PaperError."""
     if m == "NFO":
@@ -348,7 +416,16 @@ def fetch_price(m, t):
                         price, qt = float(d["c"][-1]), min(t5, now)
             except Exception:
                 pass
+        # still stale (5-6 Nov 2026: Yahoo served US quotes frozen 87 min from the VPS): Nasdaq / Stooq
+        if m == "US" and session(m, now) == "open" and now - qt > timedelta(minutes=10):
+            b = us_backup_quote(t)
+            if b and b[1] > qt:
+                price, qt = b[0], min(b[1], now)
         return float(price), qt
+    if m == "US":      # Yahoo failed outright: the backup sources
+        b = us_backup_quote(t)
+        if b:
+            return float(b[0]), min(b[1], datetime.now(timezone.utc))
     if m == "CRYPTO":  # cloud servers are sometimes refused by Yahoo: Coinbase's public ticker as a fallback
         try:
             req = urllib.request.Request("https://api.exchange.coinbase.com/products/%s-USD/ticker" % t,

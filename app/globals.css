@@ -155,6 +155,7 @@ td.why { min-width: 260px; }
 .decision-setup .setup-ver { display: inline-flex; margin-left: 6px; padding: 0 7px; font-size: 11px; }
 .list-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 4px 0 8px; }
 .pos { color: var(--good); } .neg { color: var(--bad); }
+.stale { color: var(--warn); font-weight: 600; }
 
 /* logs */
 .logs { font-family: var(--font-mono); font-size: 12.5px; max-height: 480px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }

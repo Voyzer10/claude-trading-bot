@@ -710,6 +710,10 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
                     <td data-label="Entry" className="num">{price(p.entry)}</td>
                     <td data-label="Now" className="num">
                       {p.last !== undefined ? price(p.last) : "—"}
+                      {(() => {
+                        const age = p.quote_time ? (Date.now() - new Date(p.quote_time).getTime()) / 60000 : 0;
+                        return age > 10 ? <span className="small stale" title="The price feed has not updated this quote">{" "}quote {Math.round(age)} min old</span> : null;
+                      })()}
                       {p.open_pnl !== undefined && (
                         <span className={`small ${p.open_pnl > 0 ? "pos" : p.open_pnl < 0 ? "neg" : ""}`}>
                           {" "}{money(p.open_pnl, currencyOf(acctOf(p.market)))}
