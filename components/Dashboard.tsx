@@ -659,8 +659,8 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
       </div>
       {open.length > 0 && (
         <>
-          <div className="filters" style={{ justifyContent: "space-between", margin: "4px 0 8px" }}>
-            <h3 style={{ fontSize: 14, margin: 0 }}>Open positions</h3>
+          <div className="list-head">
+            <h3 className="subtitle">Open positions ({open.length})</h3>
             {available && (
               <button className="btn danger" onClick={() => close()} disabled={waiting(null)}>
                 {cmds.pending.some((c) => c.action === "close_all") ? "Closing all…" : "Close all"}
@@ -710,7 +710,11 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
           </div>
         </>
       )}
-      <div className="tablewrap">
+      <div className="list-head">
+        <h3 className="subtitle">Closed trades ({closed.length})</h3>
+        <span className="small muted">newest first</span>
+      </div>
+      <div className="scroll">
         <table className="rtable">
           <thead>
             <tr><th>Closed</th><th>Instrument</th><th>Entry → exit</th><th>P&amp;L</th><th>R</th><th>Exit</th></tr>
