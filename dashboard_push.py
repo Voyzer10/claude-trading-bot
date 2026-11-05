@@ -150,6 +150,13 @@ def _with_quotes(opens, state):
         for k in ("last", "open_pnl"):
             if q.get(k) is not None:
                 row[k] = q[k]
+        if row.get("last") is None and p.get("last_price") is not None:   # the ledger keeps the last checked price
+            row["last"] = p["last_price"]
+            try:
+                import paper as P
+                row["open_pnl"] = round(P.pnl_of(p, p["last_price"]), 2)
+            except Exception:
+                pass
         out.append(row)
     return out
 

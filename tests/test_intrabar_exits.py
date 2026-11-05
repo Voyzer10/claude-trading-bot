@@ -151,6 +151,32 @@ if __name__ == "__main__":
         finally:
             P.datetime = real_now
 
+        # 5 Nov night: prices froze on the dashboard. One position with odd data (a time saved without a zone, no
+        # entry_date, a missing stop) must not stop the others, and every checked position keeps its price.
+        cfg = P.load_config()
+        led = P.load_ledger(cfg)
+        led["open"], led["closed"] = [], []
+        P.fetch_price = lambda mk, t: (100.0, datetime.now(timezone.utc))
+        for sym in ("ODD", "BAD", "OK"):
+            P.cmd_buy(type("A", (), {"symbol": "CRYPTO:" + sym, "stop": "99", "target": "102", "qty": None,
+                                     "price": None, "note": "t", "force": True, "side": "long"})(), cfg, led)
+        tn = datetime.now(timezone.utc)
+        odd, bad, ok = led["open"]
+        odd["entry_time"] = (tn - timedelta(minutes=30)).replace(tzinfo=None).isoformat()   # no zone
+        odd.pop("entry_date", None)
+        odd.pop("last_seen", None)
+        bad["stop"] = None                                                                   # broken record
+        ok["last_seen"] = (tn - timedelta(minutes=5)).isoformat()
+        P.fetch_minutes = lambda mk, t, days=1: [m(tn, 3, 100, 100.2, 98.8, 99.9)]
+        P.fetch_price = lambda mk, t: (99.9, tn)
+        P.check_once(cfg, led)
+        keys_open = [x["key"] for x in led["open"]]
+        check("12. a broken position does not stop the others: OK and ODD both hit the stop and close",
+              "CRYPTO:OK" not in keys_open and "CRYPTO:ODD" not in keys_open and "CRYPTO:BAD" in keys_open,
+              (keys_open, [c["key"] for c in led["closed"]]))
+        check("    the broken one still gets its price for the dashboard",
+              led["open"] and led["open"][0].get("last_price") == 99.9, led["open"])
+
         pos, closed = run(P, "long", lambda n: [], 98.7, 99.0, 102.0)
         check("9. no 1-minute data (fallback): the live price past the stop still exits", closed and closed[0]["reason"] == "stop", closed)
     finally:

@@ -112,14 +112,22 @@ def paper_snapshot():
     cfg = P.load_config()
     led = P.load_ledger(cfg)
     if led["open"]:
-        P.check_once(cfg, led)
+        try:
+            P.check_once(cfg, led)
+        except Exception as e:   # never leave the dashboard without prices because the check failed
+            log("paper check failed: %s" % e)
         P.save_json(P.LEDGER, led)
     today = now_ist().date().isoformat()
     opens = []
+    fresh = timedelta(minutes=10)
     for p in led["open"]:
         row = dict(p)
         try:
-            row["last"] = P.fetch_price(p["market"], p["symbol"])[0]
+            at = datetime.fromisoformat(p["last_price_at"]) if p.get("last_price_at") else None
+            if at is not None and datetime.now(timezone.utc) - at <= fresh:
+                row["last"] = p["last_price"]          # the price check_once just fetched: no second request
+            else:
+                row["last"] = P.fetch_price(p["market"], p["symbol"])[0]
             row["open_pnl"] = round(P.pnl_of(p, row["last"]), 2)   # sign-aware: a short gains when price falls
         except Exception:
             pass
