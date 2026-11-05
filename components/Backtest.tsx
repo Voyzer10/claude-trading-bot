@@ -11,6 +11,10 @@ const MODE_NAMES: Record<string, string> = {
   "crypto-v4-short": "Crypto v4 grid for SHORTS (4h breakdowns): ATR stop, trailing, BTC filter, fee cap",
   "crypto-v4-5m": "Crypto v4 on 5-minute candles (compare with Crypto v4)",
   "us-orb": "US ORB (the live US rule) vs earlier entries: opening drive, squeeze, pullback; range width, in-play, RS filters",
+  "crypto-v3": "Scanner v3 sweep reversal (crypto 15m): BOS -> close beyond the swept swing -> doji / hammer -> close past trigger",
+  "crypto-v3-5m": "Scanner v3 sweep reversal (crypto 5m)",
+  "us-v3": "Scanner v3 sweep reversal (US stocks 5m, ~100 liquid names)",
+  "nse-v3": "Scanner v3 sweep reversal (NSE 5m, India charges)",
   "crypto-abcd": "A-B-C-D (your entry, crypto 15m): BOS -> red close below swing -> green doji -> close above doji high",
   "crypto-abcd-5m": "A-B-C-D (your entry, crypto 5m)",
   "us-abcd": "A-B-C-D (your entry, US stocks 5m, ~100 liquid names incl. MAR)",
@@ -131,6 +135,10 @@ export default function Backtest() {
       </div>
       <div className="actions">
         <span className="small muted" style={{ alignSelf: "center" }}>Quick:</span>
+        <button className="btn" onClick={() => start("crypto-v3")} disabled={running}>Scanner v3 crypto 15m</button>
+        <button className="btn" onClick={() => start("crypto-v3-5m")} disabled={running}>Scanner v3 crypto 5m</button>
+        <button className="btn" onClick={() => start("us-v3")} disabled={running}>Scanner v3 US</button>
+        <button className="btn" onClick={() => start("nse-v3")} disabled={running}>Scanner v3 NSE</button>
         <button className="btn" onClick={() => start("crypto-v4")} disabled={running}>Crypto v4</button>
         <button className="btn" onClick={() => start("crypto-v4-short")} disabled={running}>Crypto shorts v4 (new)</button>
         <button className="btn" onClick={() => start("crypto-v4-5m")} disabled={running}>Crypto 5m</button>

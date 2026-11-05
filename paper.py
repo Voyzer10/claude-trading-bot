@@ -841,18 +841,18 @@ if __name__ == "__main__":
     sys.exit(main())
 
 
-# ------------------------------------------------------------------ Scanner v2 setups: the agents, no broker
+# ------------------------------------------------------------------ Scanner v3 setups: the agents, then the paper broker
 
 def setup_decision(market, symbol, s, news=None, now_iso=None):
-    """One of the owner's setups found by Scanner v2 (smc_playbook.owner_setups dict), taken through the agents
-    Entry (the candle close), Exit (stop, 2R, costs in R), Budget (size from this account's limits), Risk (costs <=
+    """One of the owner's setups found by the Scanner (v3; smc_playbook.owner_setups dict), taken through the agents
+    Entry (the candle close), Exit (stop, 2R or the v3 liquidity target, costs in R), Budget (size from this account's limits), Risk (costs <=
     0.25R, at least one unit), then the Broker: a paper trade at the live price with that stop and 2R target (the
     owner's decision for paper testing, 4 Nov 2026), or LOG ONLY when the account's trade_setups is off.
     Returns the decision record for decisions.jsonl."""
     rec = {"time": now_iso or datetime.now(IST).isoformat(), "symbol": "%s:%s" % (market, symbol),
            "setup": s["setup"], "scanner_v2": True, "steps": {}, "result": None}
     st = rec["steps"]
-    st["1_scanner"] = {"scanner": "v2", "setup": s["setup"], "setup_name": s.get("name"), "side": s["side"],
+    st["1_scanner"] = {"scanner": "v3", "setup": s["setup"], "setup_name": s.get("name"), "side": s["side"],
                        "bar_end": s.get("bar_end"), "price": s["price"], **(s.get("details") or {})}
     st["2_news"] = news if news is not None else "not fetched for stock setups (hundreds a day)"
 
@@ -860,7 +860,9 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
         rec["result"], rec["why"] = result, why
         return rec
 
-    entry, stop, target, short = s["price"], s.get("stop"), s.get("target_2r"), s["side"] == "short"
+    # Scanner v3's sweep reversal carries its own target (the opposing liquidity); the older setups use 2R
+    entry, stop, short = s["price"], s.get("stop"), s["side"] == "short"
+    target = s.get("target") or s.get("target_2r")
     st["3_entry"] = {"side": s["side"], "price_now": entry, "note": "entry = the close of the candle that completed it"}
     risk = ((stop - entry) if short else (entry - stop)) if stop is not None else 0
     if risk <= 0:
@@ -876,7 +878,7 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
             cost = (charges(cfg, "NSE", symbol, o, qty * entry) + charges(cfg, "NSE", symbol, c, qty * target)) / (qty * risk)
     else:
         cost = (entry + target) * float(acc.get("fee_pct") or 0) / 100 / risk
-    st["4_exit"] = {"entry": entry, "stop": stop, "target": target, "r_multiple": 2.0,
+    st["4_exit"] = {"entry": entry, "stop": stop, "target": target, "r_multiple": round(abs(target - entry) / risk, 2),
                     "stop_pct": round(risk / entry * 100, 3), "fee_r": round(cost, 3) if cost is not None else None}
     st["5_timemachine"] = "n/a (these setups are backtested instead: research_smcp / research_abcd)"
     if qty <= 0 or (market != "CRYPTO" and qty < 1):
@@ -896,7 +898,7 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     import io
     led = load_ledger(cfg)
     args = type("A", (), {"symbol": "%s:%s" % (market, symbol), "stop": str(stop), "target": str(target), "qty": None,
-                          "price": None, "note": "scanner v2: %s" % name, "force": False,
+                          "price": None, "note": "scanner v3: %s" % name, "force": False,
                           "side": "short" if short else "long"})()
     buf = io.StringIO()
     try:
@@ -912,5 +914,5 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
                                     "max_loss": round(abs(pos["entry"] - pos["stop"]) * pos["qty"] + pos.get("entry_fee", 0), 2),
                                     "report": buf.getvalue().strip().splitlines()}
     st["9_alerts"] = "live.py checks stop %s / target %s every cycle" % (pos["stop"], pos["target"])
-    return done("PAPER SHORT" if short else "PAPER BUY", "%s @ %s, stop %s, target %s (Scanner v2: %s)" % (
+    return done("PAPER SHORT" if short else "PAPER BUY", "%s @ %s, stop %s, target %s (Scanner v3: %s)" % (
         fmt_qty(market, pos["qty"]), pos["entry"], pos["stop"], pos["target"], name))

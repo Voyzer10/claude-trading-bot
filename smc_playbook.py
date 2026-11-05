@@ -374,7 +374,8 @@ SETUP_NAMES = {"abcd_long": "A-B-C-D long", "abcd_short": "A-B-C-D short",
                "smcp_doji_long": "Playbook doji long", "smcp_doji_short": "Playbook doji short",
                "smcp_star_long": "Playbook bottom star", "smcp_hammer_short": "Playbook top hammer",
                "smcp_fvg_long": "FVG retest long", "smcp_fvg_short": "FVG retest short",
-               "smcp_ob_long": "Order block long", "smcp_ob_short": "Order block short"}
+               "smcp_ob_long": "Order block long", "smcp_ob_short": "Order block short",
+               "v3_sweep_long": "v3 sweep long", "v3_sweep_short": "v3 sweep short"}
 
 
 def _r(x):
@@ -387,7 +388,8 @@ def _r(x):
 def owner_setups(rows, day_of, ctx=None):
     """The owner's setups that complete on the LAST row (closed candles, oldest first): the playbook's doji / star /
     hammer (structure before the sweep, as the playbook orders it), FVG / order-block first retests, and his A-B-C-D
-    (abcd.py). Each: {setup, name, side, price, stop, target_2r, details}."""
+    (abcd.py), and Scanner v3's sweep reversal (sweep_reversal.py). Each: {setup, name, side, price, stop, target_2r,
+    details}; a v3 setup also has "target" (the opposing liquidity, R:R >= 1)."""
     import abcd as A   # abcd imports this module, so import here
     if len(rows) < 35:
         return []
@@ -424,6 +426,37 @@ def owner_setups(rows, day_of, ctx=None):
                                     "C_high": _r(s["c_low"] if short else s["c_high"]),
                                     "C_low": _r(s["c_high"] if short else s["c_low"]),
                                     "D_candles_after_C": s["d_offset"], "reclaimed": s["reclaimed"]}})
+    out += v3_setups(rows, day_of, i, ctx)
     for o in out:
         o["name"] = SETUP_NAMES.get(o["setup"], o["setup"])
+    return out
+
+
+def v3_setups(rows, day_of, i, ctx=None):
+    """Scanner v3 (the owner's workflow PDF, 5 Nov 2026): BOS -> a close below the swept low -> doji / inverted hammer
+    -> a close above the trigger within 2 candles; extended moves skipped; target = the opposing liquidity, R:R >= 1.
+    Live reading: either low (the BOS move's start or a later swing low), either trigger (signal or sweep candle)."""
+    import sweep_reversal as V
+    out = []
+    for short in (False, True):
+        try:
+            _, sigs = V.signals(rows, day_of, short=short, ctx=None if short else ctx)
+        except Exception:
+            sigs = []
+        for s in sigs:
+            if s["i"] != i:
+                continue
+            stop = V.stop_for(s)
+            tgt = V.target_for(s, "swing", stop)
+            r = V.rr(s, stop, tgt)
+            if tgt is None or r < 1.0:
+                continue
+            risk = abs(s["entry"] - stop)
+            out.append({"setup": "v3_sweep_short" if short else "v3_sweep_long", "side": s["side"],
+                        "price": _r(s["entry"]), "stop": _r(stop), "target": _r(tgt),
+                        "target_2r": _r(s["entry"] - 2 * risk if short else s["entry"] + 2 * risk),
+                        "details": {"swept": s["level_name"], "swept_px": _r(s["level"]), "BOS_at": rows[s["bos"]][0].isoformat(),
+                                    "signal": s["signal_pattern"], "trigger_px": _r(s["trigger_px"]),
+                                    "above_signal_candle": s["above_signal"], "above_sweep_candle": s["above_sweep"],
+                                    "confirmed_on_candle": s["conf_offset"], "rr": round(r, 2)}})
     return out

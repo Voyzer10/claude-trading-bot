@@ -131,7 +131,7 @@ export default function Agents({ refreshKey }: { refreshKey: number }) {
       </ol>
       {showV2 && (
         <div className="v2-box">
-          <h3 className="subhead">1 · Scanner v2: your setups</h3>
+          <h3 className="subhead">1 · Scanner v3: your setups</h3>
           <ScannerSetups refreshKey={refreshKey} />
         </div>
       )}
