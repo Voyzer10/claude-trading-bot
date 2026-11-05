@@ -650,40 +650,81 @@ DOWNLOADS = {"ledger.json": LEDGER, "log.txt": LOG, "decisions.jsonl": os.path.j
              "auto_config.json": RULES, "paper_config.json": PAPER_CFG}
 
 
-def _trades_csv(led):
-    cols = ["exit_date", "market", "symbol", "side", "qty", "entry", "exit", "stop", "target", "pnl", "r",
-            "reason", "note", "entry_time", "exit_time"]
+_ACCT = {"NSE": "INDIA", "BSE": "INDIA", "NFO": "INDIA"}
+
+
+def _csv(rows, cols):
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(cols)
-    for c in led.get("closed") or []:
-        w.writerow([c.get(k, "long" if k == "side" else "") for k in cols])
+    for r in rows:
+        w.writerow(["" if r.get(k) is None else r.get(k) for k in cols])
     return buf.getvalue()
 
 
-def _setup_of(note):
-    n = (note or "").replace("auto:", "").replace("auto_us:", "").replace("auto_nse:", "").strip()
-    return n.split()[0] if n else "manual"
+def _setup_of(t):
+    """The setup behind a trade: its own setup_name (from 5 Nov 2026), else the agent's note."""
+    if isinstance(t, dict):
+        if t.get("setup_name") or t.get("setup"):
+            return t.get("setup_name") or t.get("setup")
+        note = t.get("note")
+    else:
+        note = t
+    n = re.sub(r"^(auto(_nse|_us|_fno)?|scanner v\d)\s*:\s*", "", (note or "").strip(), flags=re.I)
+    return n.replace("_", " ") or "manual"
 
 
-def _summary(led):
-    """Quick totals for the analyst: closed trades by account and setup, and every decision by result/reason."""
-    by = {}
-    for c in led.get("closed") or []:
-        k = "%s | %s | %s" % (c.get("market"), _setup_of(c.get("note")), c.get("side", "long"))
-        x = by.setdefault(k, {"trades": 0, "wins": 0, "pnl": 0.0, "r_sum": 0.0})
-        x["trades"] += 1
-        x["wins"] += (c.get("pnl") or 0) > 0
-        x["pnl"] = round(x["pnl"] + (c.get("pnl") or 0), 4)
-        x["r_sum"] = round(x["r_sum"] + (c.get("r") or 0), 3)
-    for x in by.values():
-        x["avg_r"] = round(x["r_sum"] / x["trades"], 3) if x["trades"] else None
-    dec = {"by_result": {}, "by_reason": {}, "by_day": {}}
+def _scanner_of(t):
+    if t.get("scanner"):
+        return t["scanner"]
+    m = re.match(r"scanner (v\d)", t.get("note") or "", re.I)
+    return m.group(1).lower() if m else ("rules" if (t.get("note") or "").startswith("auto") else "manual")
+
+
+def _minutes(a, b):
+    try:
+        return round((datetime.fromisoformat(b) - datetime.fromisoformat(a)).total_seconds() / 60, 1)
+    except (TypeError, ValueError):
+        return None
+
+
+def _trade_row(c, closed=True):
+    entry, rs = c.get("entry"), c.get("risk_stop", c.get("stop"))
+    risk_pu = abs(entry - rs) if entry is not None and rs is not None else None
+    row = dict(c)
+    row.update({"account": _ACCT.get(c.get("market"), c.get("market")), "side": c.get("side") or "long",
+                "setup_name": _setup_of(c), "scanner": _scanner_of(c),
+                "risk_per_unit": round(risk_pu, 6) if risk_pu is not None else None,
+                "risk_money": round(risk_pu * c.get("qty", 0), 2) if risk_pu is not None else None,
+                "planned_rr": round(abs(c.get("target", entry) - entry) / risk_pu, 2) if risk_pu else None,
+                "fees": round((c.get("entry_fee") or 0) + (c.get("exit_fee") or 0), 4)})
+    if closed:
+        row.update({"exit_reason": c.get("reason"), "result": "win" if (c.get("pnl") or 0) > 0 else "loss",
+                    "held_minutes": _minutes(c.get("entry_time"), c.get("exit_time"))})
+    return row
+
+
+TRADE_COLS = ["exit_date", "account", "market", "symbol", "side", "setup_name", "scanner", "liquidity", "entry_reason",
+              "qty", "entry", "stop", "risk_stop", "target", "planned_rr", "exit", "exit_reason", "result", "pnl", "r",
+              "risk_money", "fees", "entry_time", "exit_time", "held_minutes", "breakeven", "trailing", "setup", "note"]
+OPEN_COLS = ["account", "market", "symbol", "side", "setup_name", "scanner", "liquidity", "entry_reason", "qty", "entry",
+             "stop", "risk_stop", "target", "planned_rr", "risk_money", "entry_time", "breakeven", "trailing",
+             "covered_until", "setup", "note"]
+DECISION_COLS = ["time", "market", "symbol", "setup", "setup_name", "scanner", "liquidity", "result", "stopped_at_agent",
+                 "category", "why", "price", "stop", "target", "stop_pct", "r_multiple", "fee_r", "vol", "own_setup"]
+
+
+def _trades_csv(led):
+    return _csv([_trade_row(c) for c in led.get("closed") or []], TRADE_COLS)
+
+
+def _decision_rows():
     try:
         import dashboard_push as D
         cat = D.category
     except Exception:
         cat = lambda res, why: res or "?"
+    out = []
     try:
         with open(os.path.join(LIVE, "decisions.jsonl"), encoding="utf-8", errors="replace") as fh:
             for ln in fh:
@@ -691,17 +732,78 @@ def _summary(led):
                     r = json.loads(ln)
                 except ValueError:
                     continue
-                res, day = r.get("result") or "?", (r.get("time") or "")[:10]
-                mk = (r.get("symbol") or "?").split(":")[0]
-                dec["by_result"][res] = dec["by_result"].get(res, 0) + 1
-                c = "%s | %s" % (mk, cat(res, r.get("why")))
-                dec["by_reason"][c] = dec["by_reason"].get(c, 0) + 1
-                d = dec["by_day"].setdefault(day, {})
-                d[res] = d.get(res, 0) + 1
+                st = r.get("steps") or {}
+                sc = st.get("1_scanner") if isinstance(st.get("1_scanner"), dict) else {}
+                ex = st.get("4_exit") if isinstance(st.get("4_exit"), dict) else {}
+                en = st.get("3_entry") if isinstance(st.get("3_entry"), dict) else {}
+                n = _stopped_at(r)
+                out.append({"time": r.get("time"), "market": (r.get("symbol") or ":").split(":")[0],
+                            "symbol": r.get("symbol"), "setup": r.get("setup"),
+                            "setup_name": sc.get("setup_name") or _setup_label(r), "scanner": sc.get("scanner"),
+                            "liquidity": sc.get("liquidity") or (
+                                "swept %s %s" % (sc.get("liquidity_swept") or "level", sc.get("level"))
+                                if sc.get("level") is not None else None),
+                            "result": r.get("result"),
+                            "stopped_at_agent": "" if n is None else "%d %s" % (n, dict((a[0], a[2]) for a in AGENTS).get(n, "")),
+                            "category": cat(r.get("result"), r.get("why")), "why": r.get("why"),
+                            "price": en.get("price_now") or ex.get("entry") or sc.get("price") or sc.get("close"),
+                            "stop": ex.get("stop"), "target": ex.get("target"), "stop_pct": ex.get("stop_pct"),
+                            "r_multiple": ex.get("r_multiple"), "fee_r": ex.get("fee_r"),
+                            "vol": sc.get("vol_ratio") if sc.get("vol_ratio") is not None else sc.get("vol_x_recent"),
+                            "own_setup": "yes" if (r.get("scanner_v2") or r.get("record_only")) else ""})
     except OSError:
         pass
-    return {"closed_by_market_setup_side": by, "open_positions": len(led.get("open") or []),
-            "accounts": led.get("accounts"), "decisions": dec}
+    return out
+
+
+def _agg(trades):
+    x = {"trades": len(trades), "wins": sum(1 for c in trades if (c.get("pnl") or 0) > 0)}
+    x["win_rate"] = round(x["wins"] / x["trades"], 3) if trades else None
+    x["pnl"] = round(sum(c.get("pnl") or 0 for c in trades), 2)
+    x["total_r"] = round(sum(c.get("r") or 0 for c in trades), 2)
+    x["avg_r"] = round(x["total_r"] / len(trades), 3) if trades else None
+    x["best_r"] = max((c.get("r") or 0 for c in trades), default=None)
+    x["worst_r"] = min((c.get("r") or 0 for c in trades), default=None)
+    return x
+
+
+def _group(trades, key):
+    g = {}
+    for c in trades:
+        g.setdefault(key(c), []).append(c)
+    return {k: _agg(v) for k, v in sorted(g.items(), key=lambda kv: str(kv[0]))}
+
+
+def _daily_rows(trades):
+    rows = []
+    for (day, acct), v in sorted(_group(trades, lambda c: (c.get("exit_date"), _ACCT.get(c.get("market"), c.get("market")))).items(),
+                                 key=lambda kv: (str(kv[0][0]), str(kv[0][1]))):
+        rows.append(dict(v, day=day, account=acct))
+    return rows
+
+
+def _summary(led, decisions=None):
+    """Totals for the analyst: closed trades by setup / scanner version / market / side / exit reason / day, open
+    positions, accounts, and every decision by result, reason, agent that stopped it and day."""
+    closed = led.get("closed") or []
+    decisions = decisions if decisions is not None else _decision_rows()
+    dec = {"by_result": {}, "by_reason": {}, "by_stopped_at_agent": {}, "by_setup_and_result": {}, "by_day": {}}
+    for d in decisions:
+        res, day = d.get("result") or "?", (d.get("time") or "")[:10]
+        for k, v in (("by_result", res), ("by_reason", "%s | %s" % (d["market"], d["category"])),
+                     ("by_stopped_at_agent", d["stopped_at_agent"] or "traded"),
+                     ("by_setup_and_result", "%s | %s" % (d.get("setup_name") or d.get("setup"), res))):
+            dec[k][v] = dec[k].get(v, 0) + 1
+        dd = dec["by_day"].setdefault(day, {})
+        dd[res] = dd.get(res, 0) + 1
+    return {"closed_all": _agg(closed),
+            "closed_by_setup": _group(closed, _setup_of),
+            "closed_by_scanner_version": _group(closed, _scanner_of),
+            "closed_by_market_setup_side": _group(closed, lambda c: "%s | %s | %s" % (
+                c.get("market"), _setup_of(c), c.get("side") or "long")),
+            "closed_by_exit_reason": _group(closed, lambda c: c.get("reason") or "?"),
+            "closed_by_day": _group(closed, lambda c: c.get("exit_date") or "?"),
+            "open_positions": len(led.get("open") or []), "accounts": led.get("accounts"), "decisions": dec}
 
 
 @router.get("/download/{name}")
@@ -757,17 +859,36 @@ def _download_all():
             for name in sorted(os.listdir(JOBS)):
                 if name.endswith((".log", ".json")):
                     add_file(os.path.join(JOBS, name), "research/jobs/" + name)
+        decisions = _decision_rows()
+        closed = led.get("closed") or []
         z.writestr("trades.csv", _trades_csv(led))
-        summary = _summary(led)
+        z.writestr("open_positions.csv", _csv([_trade_row(p, closed=False) for p in led.get("open") or []], OPEN_COLS))
+        z.writestr("decisions.csv", _csv(decisions, DECISION_COLS))
+        z.writestr("daily_summary.csv", _csv(_daily_rows(closed), ["day", "account", "trades", "wins", "win_rate",
+                                                                   "pnl", "total_r", "avg_r", "best_r", "worst_r"]))
+        summary = _summary(led, decisions)
         z.writestr("summary.json", json.dumps(summary, indent=1, default=str))
+        made = ["trades.csv", "open_positions.csv", "decisions.csv", "daily_summary.csv", "summary.json"]
         state = _read_json(os.path.join(LIVE, "state.json"), {})
         readme = [
             "Trader bot export, %s IST" % now.strftime("%Y-%m-%d %H:%M"),
             "Host %s. Paper trading only. Runner status: %s." % (
                 os.uname().nodename if hasattr(os, "uname") else "?", state.get("status")),
             "",
-            "summary.json    totals: closed trades by market | setup | side, decisions by result / reason / day",
-            "trades.csv      every closed paper trade (note = which agent/setup opened it)",
+            "Scanner version per account: %s." % ", ".join(
+                "%s %s" % (k, (v or {}).get("scanner_version", "v3")) for k, v in
+                (_paper_cfg().get("accounts") or {}).items()),
+            "",
+            "trades.csv          every closed paper trade, one row each:",
+            "                    setup_name / scanner (v3, v2, rules = the 4h breakout / ORB / SMC rules, manual),",
+            "                    liquidity (the level swept or the zone retested), entry_reason, planned_rr,",
+            "                    exit_reason, result, pnl, r, risk_money, fees, held_minutes",
+            "open_positions.csv  open paper trades with the same setup / liquidity / risk columns",
+            "decisions.csv       every candidate from decisions.jsonl flattened: setup, liquidity, result, the agent",
+            "                    that stopped it (stopped_at_agent), reason, price / stop / target, R multiple, fee R",
+            "daily_summary.csv   per day and account: trades, wins, win rate, P&L, total / average / best / worst R",
+            "summary.json        totals: closed trades by setup, scanner version, market | setup | side, exit reason",
+            "                    and day; decisions by result, reason, stopping agent, setup and day",
             "paper/          ledger.json (accounts, open and closed trades), config.json (risk limits, fees)",
             "live/           decisions.jsonl (every candidate and why), log.txt (runner log), state.json,",
             "                auto_*config.json (rules per market), coin_profiles.json, control.json, backups",
@@ -778,7 +899,7 @@ def _download_all():
             "Files:",
         ] + ["  %-48s %10s bytes" % (a, "{:,}".format(s)) for a, s in added]
         z.writestr("README.txt", "\n".join(readme) + "\n")
-    audit("export: all data downloaded (%d files)" % (len(added) + 3))
+    audit("export: all data downloaded (%d files)" % (len(added) + len(made) + 1))
     fname = "trader-export-%s.zip" % now.strftime("%Y%m%d-%H%M")
     return Response(mem.getvalue(), media_type="application/zip",
                     headers={"Content-Disposition": "attachment; filename=%s" % fname})
@@ -1012,12 +1133,12 @@ def agents():
     stop_k = cfg.get("stop_atr_k", 1.5)
     jobs = {
         1: "Every market, on each candle that closes. The rules that trade: a crypto coin's fresh close above its "
-           "4-hour high (below its low for shorts), NSE / US opening-range breaks. Your setups: v3 sweep reversal (BOS, a close "
+           "4-hour high (below its low for shorts), NSE / US opening-range breaks. Your setups, one scanner version per account "
+           "(Settings: Scanner version), never mixed. v3 = your 5 Nov workflow only: sweep reversal (BOS, a close "
            "below / above the swept swing, doji or (inverted) hammer, a close past the trigger within 2 candles) and its "
-           "FVG / order-block retest (the first pullback into the gap / OB the move left, then a close past the "
-           "pullback candle), "
-           "A-B-C-D, the SMC playbook's doji / bottom star / top hammer and FVG / order-block retests. They go "
-           "through the same agents and, while paper testing, the broker paper trades them (Settings: risk limits).",
+           "FVG / order-block retest. v2 = A-B-C-D, the SMC playbook's doji / bottom star / top hammer and FVG / "
+           "order-block retests. They go through the same agents and, while paper testing, the broker paper trades "
+           "them; every trade records its setup and the liquidity it used.",
         2: "Pulls the coin's latest headlines for the record. It never blocks or makes a trade.",
         3: "Is the timing right? Skips thin hours (%s), a price back inside the range, volume under %sx the 4h "
            "average%s%s." % ("%s:00-%s:00 UTC" % (cfg["skip_hours_utc"][0], cfg["skip_hours_utc"][-1] + 1)

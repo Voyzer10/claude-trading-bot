@@ -34,19 +34,27 @@ def chart(rows):
 
 if __name__ == "__main__":
     rows = T.build([T.B, T.C, T.D])
-    got = PB.owner_setups(rows, lambda t: t.date())
+    got = PB.owner_setups(rows, lambda t: t.date(), version="v2")
     a = next((o for o in got if o["setup"] == "abcd_long"), {})
     check("owner_setups: A-B-C-D long on the D candle", bool(a), got)
     check("   name, stop below C-low, 2R, details", a.get("name") == "A-B-C-D long" and a.get("stop", 99) < 100.25
           and a.get("target_2r") and a.get("details", {}).get("C_high") == 100.55, a)
     check("   nothing on the candle before D",
-          not [o for o in PB.owner_setups(rows[:-1], lambda t: t.date()) if o["setup"] == "abcd_long"])
+          not [o for o in PB.owner_setups(rows[:-1], lambda t: t.date(), version="v2") if o["setup"] == "abcd_long"])
+    # v3 and v2 never mix (owner, 5 Nov 2026)
+    v3 = PB.owner_setups(rows, lambda t: t.date(), version="v3")
+    check("Scanner v3 has only v3 setups (no A-B-C-D / playbook / FVG / OB)",
+          v3 and all(o["setup"].startswith("v3_") and o["scanner"] == "v3" for o in v3), v3)
+    check("Scanner v2 has no v3 setup", not [o for o in got if o["setup"].startswith("v3_")], got)
+    check("every setup says which liquidity it used", all(o.get("liquidity") for o in got + v3), got + v3)
 
     tmp, old = tempfile.mkdtemp(), os.getcwd()
     os.chdir(tmp)
     try:
         import paper as P
         cfg = P.load_config()
+        for acc in cfg["accounts"].values():
+            acc["scanner_version"] = "v2"          # these are v2 setups
         cfg["accounts"]["US"]["trade_setups"] = False
         P.save_json(P.CONFIG, cfg)
         rec = P.setup_decision("US", "MAR", dict(a, price=418.9, stop=416.2, target_2r=424.3))

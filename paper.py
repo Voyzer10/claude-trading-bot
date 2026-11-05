@@ -76,11 +76,11 @@ DEFAULT_CONFIG = {
                    "scanner_version": "v3"},
         # risk_limits (False while paper testing, the owner's decision of 4 Nov 2026): when True, the daily loss limit,
         # max trades per day and the rulebook guards below block new entries. Turn it on before real money.
-        # trade_setups: Scanner v2's setups (the owner's A-B-C-D / playbook / FVG / OB) are paper traded (True) or
+        # trade_setups: the Scanner's setups (v3 or v2, per scanner_version) are paper traded (True) or
         # only recorded (False).
-        # scanner_version: "v3" (Scanner v2's setups + the v3 sweep reversal, 5 Nov 2026) or "v2" (rollback: the v3
-        # setups are neither scanned nor traded). Switch it per account from Settings > Risk limits; nothing else
-        # changes, and the next candle uses it.
+        # scanner_version: "v3" (only the owner's 5 Nov workflow: sweep reversal + FVG/OB retest) or "v2" (A-B-C-D,
+        # playbook, FVG/OB). Never mixed: the scanner looks for one version's setups and the broker skips the other's.
+        # Switch it per account from Settings > Risk limits; the next candle uses it.
         # Rulebook risk guards (all accounts): after cooldown_losses losing trades in a row, no new entries for
         # cooldown_minutes; a week's net realised loss of weekly_loss_x x daily_loss_limit stops new entries until
         # Monday; CRYPTO: at most max_same_side open positions on one side (alts move with BTC). 0 = off.
@@ -687,6 +687,12 @@ def cmd_buy(a, cfg, led):
         pos["lots"], pos["lot_size"] = int(q // lot), lot
     if margin is not None:
         pos["margin"] = margin
+    # why this trade was taken (dashboard, downloads): the setup, the scanner that found it, the liquidity it
+    # swept / the zone it retested, and the entry reason in words. Optional: callers that know them pass them.
+    for f in ("setup", "setup_name", "scanner", "liquidity", "entry_reason"):
+        v = getattr(a, f, None)
+        if v not in (None, ""):
+            pos[f] = v
     led["open"].append(pos)
     print("PAPER %s %s  %s%s @ %s   stop %s   target %s (%.1fR)" % (
         "SHORT" if short else "BUY", k, fmt_qty(m, q), (" (%d lot)" % (q // lot)) if lot > 1 else "", money(m, entry),
@@ -974,8 +980,9 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     rec = {"time": now_iso or datetime.now(IST).isoformat(), "symbol": "%s:%s" % (market, symbol),
            "setup": s["setup"], "scanner_v2": True, "steps": {}, "result": None}
     st = rec["steps"]
-    st["1_scanner"] = {"scanner": "v3", "setup": s["setup"], "setup_name": s.get("name"), "side": s["side"],
-                       "bar_end": s.get("bar_end"), "price": s["price"], **(s.get("details") or {})}
+    st["1_scanner"] = {"scanner": s.get("scanner", "v3"), "setup": s["setup"], "setup_name": s.get("name"),
+                       "side": s["side"], "liquidity": s.get("liquidity"), "bar_end": s.get("bar_end"),
+                       "price": s["price"], **(s.get("details") or {})}
     st["2_news"] = news if news is not None else "not fetched for stock setups (hundreds a day)"
 
     def done(result, why):
@@ -987,8 +994,11 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     acc = cfg["accounts"][MARKETS[market]["account"]] if market in MARKETS else cfg["accounts"]["US"]
     version = acc.get("scanner_version", "v3")
     st["1_scanner"]["scanner"] = version
-    if version == "v2" and s["setup"].startswith("v3_"):   # rolled back after it was scanned: never trade it
-        return done("skipped", "Scanner rolled back to v2 for this account: v3 setups are off")
+    # v3 and v2 never mix (owner, 5 Nov 2026): a setup of the other version (switched after it was scanned) is skipped
+    if version == "v2" and s["setup"].startswith("v3_"):
+        return done("skipped", "this account runs Scanner v2: v3 setups are off")
+    if version == "v3" and not s["setup"].startswith("v3_"):
+        return done("skipped", "this account runs Scanner v3 (your 5 Nov workflow only): v2 setups are off")
     entry, stop, short = s["price"], s.get("stop"), s["side"] == "short"
     target = s.get("target") or s.get("target_2r")
     st["3_entry"] = {"side": s["side"], "price_now": entry, "note": "entry = the close of the candle that completed it"}
@@ -1006,7 +1016,7 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
         cost = (entry + target) * float(acc.get("fee_pct") or 0) / 100 / risk
     st["4_exit"] = {"entry": entry, "stop": stop, "target": target, "r_multiple": round(abs(target - entry) / risk, 2),
                     "stop_pct": round(risk / entry * 100, 3), "fee_r": round(cost, 3) if cost is not None else None}
-    st["5_timemachine"] = "n/a (these setups are backtested instead: research_smcp / research_abcd)"
+    st["5_timemachine"] = "n/a (these setups are backtested instead: research_v3 / research_smcp / research_abcd)"
     if qty <= 0 or (market != "CRYPTO" and qty < 1):
         return done("skipped", "0 units fit: the stop is %s away and the max loss is %s" % (round(risk, 6),
                                                                                       acc["max_loss_per_trade"]))
@@ -1025,7 +1035,10 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     led = load_ledger(cfg)
     args = type("A", (), {"symbol": "%s:%s" % (market, symbol), "stop": str(stop), "target": str(target), "qty": None,
                           "price": None, "note": "scanner %s: %s" % (version, name), "force": False,
-                          "side": "short" if short else "long"})()
+                          "side": "short" if short else "long", "setup": s["setup"], "setup_name": name,
+                          "scanner": version, "liquidity": s.get("liquidity"),
+                          "entry_reason": "found by Scanner %s; entry on the close of the %s candle, planned R:R %.1f" % (
+                              version, (s.get("bar_end") or "")[11:16] or "last", abs(target - entry) / risk)})()
     buf = io.StringIO()
     try:
         with contextlib.redirect_stdout(buf):

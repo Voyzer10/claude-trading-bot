@@ -206,7 +206,12 @@ def build(state=None):
         sc = st.get("1_scanner") if isinstance(st.get("1_scanner"), dict) else {}
         en = st.get("3_entry") if isinstance(st.get("3_entry"), dict) else {}
         decisions.append({"time": r.get("time"), "symbol": r.get("symbol"), "market": (r.get("symbol") or ":").split(":")[0],
-                          "setup": r.get("setup"), "result": r.get("result"), "why": r.get("why"),
+                          "setup": r.get("setup"), "setup_name": sc.get("setup_name"),
+                          "scanner": sc.get("scanner") if sc.get("setup_name") else None,
+                          "liquidity": sc.get("liquidity") or (
+                              "swept %s %s" % (sc.get("liquidity_swept") or "level", sc.get("level"))
+                              if sc.get("level") is not None else None),
+                          "result": r.get("result"), "why": r.get("why"),
                           "category": category(r.get("result"), r.get("why")),
                           "price": en.get("price_now") or ex.get("entry") or sc.get("price"),
                           "stop": ex.get("stop"), "target": ex.get("target"), "stop_pct": ex.get("stop_pct"),

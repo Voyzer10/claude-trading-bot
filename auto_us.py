@@ -142,7 +142,8 @@ def run_short(tk, hit, cfg, log, auto):
     rec = {"time": datetime.now(P.IST).isoformat(), "symbol": "US:" + tk, "setup": "orb_short", "steps": {},
            "result": None}
     st = rec["steps"]
-    st["1_scanner"] = hit
+    st["1_scanner"] = dict(hit, setup_name="ORB short", scanner="rules",
+                            liquidity="opening range low %s" % hit.get("or_low"))
 
     def done(result, why):
         rec["result"], rec["why"] = result, why
@@ -193,7 +194,10 @@ def run_short(tk, hit, cfg, log, auto):
     pcfg = P.load_config()
     led = P.load_ledger(pcfg)
     args = type("A", (), {"symbol": "US:" + tk, "stop": str(stop), "target": str(target), "qty": None, "lots": None,
-                          "price": str(price), "note": "auto_us: orb short", "force": False, "side": "short"})()
+                          "price": str(price), "note": "auto_us: orb short", "force": False, "side": "short",
+                          "setup": "orb_short", "scanner": "rules", "setup_name": "ORB short",
+                          "liquidity": "opening range low %s" % lo,
+                          "entry_reason": "close below the opening range low %s" % lo})()
     buf = io.StringIO()
     try:
         with contextlib.redirect_stdout(buf):
@@ -239,7 +243,8 @@ def run_one(tk, hit, cfg, log, auto):
         return run_short(tk, hit, cfg, log, auto)
     rec = {"time": datetime.now(P.IST).isoformat(), "symbol": "US:" + tk, "setup": "orb", "steps": {}, "result": None}
     st = rec["steps"]
-    st["1_scanner"] = hit
+    st["1_scanner"] = dict(hit, setup_name="ORB", scanner="rules",
+                            liquidity="opening range high %s" % hit.get("or_high"))
 
     def done(result, why):
         rec["result"], rec["why"] = result, why
@@ -332,7 +337,7 @@ def run_one(tk, hit, cfg, log, auto):
         ("%s fires %+.2fR" % (hist.get("triggered"), hist.get("avg_R"))) if hist.get("triggered") else "n/a"))
 
 
-# Scanner v2 on US stocks: the owner's setups on a fixed list of liquid names, each new 5m candle while the session
+# The Scanner (v3 or v2, per Settings) on US stocks: the owner's setups on a fixed list of liquid names, each new 5m candle while the session
 # is open. They go through the agents and are recorded only (paper.setup_decision: LOG ONLY, no broker).
 US_WATCH = ("AAPL MSFT NVDA AMZN GOOGL META TSLA AVGO JPM V MA UNH HD PG COST JNJ XOM CVX ABBV MRK PEP KO WMT BAC "
             "WFC CSCO ORCL CRM ADBE AMD INTC QCOM TXN AMAT MU NFLX DIS NKE MCD SBUX MAR HLT BKNG ABNB UBER LYFT "
@@ -367,8 +372,9 @@ def scan_setups(log):
             continue
         record(rec)
         by[rec["result"]] = by.get(rec["result"], 0) + 1
-    log("AUTO US: Scanner v2 found %d of your setups (%s): %s" % (
-        len(setups), ", ".join("%s %s" % (x["symbol"], x.get("name")) for x in setups[:8]) + (" ..." if len(setups) > 8 else ""),
+    ver = (setups[0].get("scanner") if setups else None) or __import__("smc_playbook").scanner_version("US")
+    log("AUTO US: Scanner %s found %d of your setups (%s): %s" % (
+        ver, len(setups), ", ".join("%s %s" % (x["symbol"], x.get("name")) for x in setups[:8]) + (" ..." if len(setups) > 8 else ""),
         ", ".join("%d %s" % (v, k) for k, v in sorted(by.items()))))
 
 
@@ -383,7 +389,7 @@ def process(state, log, auto=True):
     try:
         scan_setups(log)
     except Exception as e:
-        log("US Scanner v2 failed: %s" % e)
+        log("US Scanner failed: %s" % e)
     start = et.replace(hour=9, minute=50, second=0, microsecond=0)
     stop = et.replace(hour=15, minute=30, second=0, microsecond=0)
     if not (start <= et < stop):

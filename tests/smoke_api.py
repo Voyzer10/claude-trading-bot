@@ -76,6 +76,14 @@ names = _zf.ZipFile(_io.BytesIO(r.content)).namelist() if r.status_code == 200 e
 blob = b"".join(_zf.ZipFile(_io.BytesIO(r.content)).read(n) for n in names) if names else b""
 check("export zip", r.status_code == 200 and {"README.txt", "summary.json", "trades.csv", "paper/ledger.json"} <= set(names)
       and b"SECRET" not in blob and not any(n.endswith("alerts.json") for n in names), str(names)[:120])
+if names:
+    _z = _zf.ZipFile(_io.BytesIO(r.content))
+    _hdr = _z.read("trades.csv").decode().splitlines()[0]
+    check("export: detailed files (open positions, decisions, daily summary)",
+          {"open_positions.csv", "decisions.csv", "daily_summary.csv"} <= set(names), str(names)[:160])
+    check("export: trades carry setup, scanner, liquidity, entry reason, R",
+          all(k in _hdr for k in ("setup_name", "scanner", "liquidity", "entry_reason", "r", "held_minutes"))
+          and "range breakout 4h" in _z.read("trades.csv").decode(), _hdr)
 
 shutil.rmtree(work, ignore_errors=True)
 print("\n%d failed" % len(fails) if fails else "\nall passed")

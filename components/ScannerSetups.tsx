@@ -52,9 +52,9 @@ export default function ScannerSetups({ refreshKey }: { refreshKey: number }) {
     <>
       <p className="small muted" style={{ margin: "4px 0 8px" }}>
         Your setups as the scanner finds them on the candle that just closed. Each goes through the agents (its pipe in
-        the list above) and, while paper testing, the Broker paper trades it with its stop and target (2R; v3 sweep: the
-        opposing liquidity) (Settings, risk limits: &quot;Paper trade Scanner setups&quot;). Judge them on the paper
-        results and the backtests. Today: {today}.
+        the list above) and, while paper testing, the Broker paper trades it with its stop and target (v3: the opposing
+        liquidity; v2: 2R). Each account runs one scanner version (Settings, risk limits: &quot;Scanner version&quot;).
+        Judge them on the paper results and the backtests. Today: {today}.
       </p>
       <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
         {MARKETS.map((m) => (

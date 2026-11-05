@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Coin, CoinProfile, Decision, Snapshot, SnapshotResponse } from "@/lib/types";
+import type { Coin, CoinProfile, Decision, Position, Snapshot, SnapshotResponse } from "@/lib/types";
 import { ago, currencyOf, duration, money, pct, price, timeIST } from "@/lib/format";
 import ControlPanel from "@/components/ControlPanel";
 import Performance from "@/components/Performance";
@@ -600,6 +600,13 @@ function DecisionsSection({ decisions }: { decisions: Decision[] }) {
                 <td data-label="Result">{resultChip(d.result)}</td>
                 <td data-label="Reason" className="why">
                   <b>{d.category}</b>
+                  {(d.setup_name || d.setup) && (
+                    <div className="small decision-setup">
+                      {d.setup_name ?? d.setup?.replace(/_/g, " ")}
+                      {d.scanner && d.scanner !== "rules" && <span className="chip plain c-accent setup-ver">{d.scanner}</span>}
+                      {d.liquidity && <span className="muted"> · {d.liquidity}</span>}
+                    </div>
+                  )}
                   <div className="muted small">{d.why}</div>
                 </td>
                 <td data-label="Price" className="num">{price(d.price)}</td>
@@ -618,6 +625,26 @@ function DecisionsSection({ decisions }: { decisions: Decision[] }) {
 }
 
 // ------------------------------------------------------------------ ledger
+
+/** The setup behind a paper trade: its own fields, or (older trades) the agent's note. */
+function setupOf(p: Position): { name: string; liq?: string; why?: string; scanner?: string } {
+  if (p.setup_name || p.setup) return { name: p.setup_name ?? p.setup ?? "", liq: p.liquidity, why: p.entry_reason, scanner: p.scanner };
+  const n = (p.note ?? "").replace(/^(auto(_nse|_us|_fno)?|scanner v\d)\s*:\s*/i, "").replace(/_/g, " ").trim();
+  const v = /^scanner (v\d)/i.exec(p.note ?? "");
+  return { name: n || "manual", scanner: v ? v[1].toLowerCase() : undefined };
+}
+
+function SetupCell({ p }: { p: Position }) {
+  const s = setupOf(p);
+  return (
+    <td data-label="Setup" className="setup-cell" title={s.why}>
+      <span className="setup-name">{s.name}</span>
+      {s.scanner && s.scanner !== "rules" && <span className="chip plain c-accent setup-ver">{s.scanner}</span>}
+      {s.liq && <span className="small muted setup-liq">{s.liq}</span>}
+      {s.why && <span className="small muted setup-why">{s.why}</span>}
+    </td>
+  );
+}
 
 function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => void }) {
   const { accounts, open, closed } = snap.ledger;
@@ -671,12 +698,13 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
           <div className="tablewrap" style={{ marginBottom: 14 }}>
             <table className="rtable">
               <thead>
-                <tr><th>Instrument</th><th>Side</th><th>Qty</th><th>Entry</th><th>Now</th><th>Stop</th><th>Target</th><th>Opened</th>{available && <th><span className="sr-only">Action</span></th>}</tr>
+                <tr><th>Instrument</th><th>Setup · liquidity</th><th>Side</th><th>Qty</th><th>Entry</th><th>Now</th><th>Stop</th><th>Target</th><th>Opened</th>{available && <th><span className="sr-only">Action</span></th>}</tr>
               </thead>
               <tbody>
                 {open.map((p) => (
                   <tr key={p.key}>
                     <td data-label="Instrument" className="num"><span className="sym"><SymbolIcon id={p.key} />{p.key}</span></td>
+                    <SetupCell p={p} />
                     <td data-label="Side">{p.side ?? "long"}</td>
                     <td data-label="Qty" className="num">{p.qty}</td>
                     <td data-label="Entry" className="num">{price(p.entry)}</td>
@@ -717,16 +745,17 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
       <div className="scroll">
         <table className="rtable">
           <thead>
-            <tr><th>Closed</th><th>Instrument</th><th>Entry → exit</th><th>P&amp;L</th><th>R</th><th>Exit</th></tr>
+            <tr><th>Closed</th><th>Instrument</th><th>Setup · liquidity</th><th>Entry → exit</th><th>P&amp;L</th><th>R</th><th>Exit</th></tr>
           </thead>
           <tbody>
             {closed.length === 0 && (
-              <tr><td colSpan={6} className="muted">No closed paper trades yet.</td></tr>
+              <tr><td colSpan={7} className="muted">No closed paper trades yet.</td></tr>
             )}
             {closed.slice().reverse().map((c, i) => (
               <tr key={i}>
                 <td data-label="Closed" className="num">{timeIST(c.exit_time, true)}</td>
                 <td data-label="Instrument" className="num"><span className="sym"><SymbolIcon id={c.key} />{c.key}</span></td>
+                <SetupCell p={c} />
                 <td data-label="Entry → exit" className="num">{price(c.entry)} → {price(c.exit)}</td>
                 <td data-label="P&L" className={`num ${(c.pnl ?? 0) > 0 ? "pos" : "neg"}`}>{money(c.pnl, currencyOf(acctOf(c.market)))}</td>
                 <td data-label="R" className={`num ${(c.r ?? 0) > 0 ? "pos" : "neg"}`}>{c.r !== undefined ? `${c.r > 0 ? "+" : ""}${c.r}` : "—"}</td>
