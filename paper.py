@@ -357,8 +357,15 @@ def _stooq_quote(t, opener=None):
 
 
 def us_backup_quote(t):
-    """The newest of the backup US quotes (Nasdaq, Stooq) with a trade time: (price, time UTC) or None."""
-    got = [q for q in (_nasdaq_quote(t), _stooq_quote(t)) if q and q[1] is not None]
+    """The newest of the backup US quotes: (price, time UTC) or None. Nasdaq's last sale is real time, so a Nasdaq
+    price whose trade time cannot be read counts as now (checked from the VPS, 6 Nov 2026: Nasdaq answers, Stooq
+    does not)."""
+    now = datetime.now(timezone.utc)
+    n = _nasdaq_quote(t)
+    got = [(n[0], n[1] or now)] if n else []
+    st = _stooq_quote(t)
+    if st and st[1] is not None:
+        got.append(st)
     return max(got, key=lambda q: q[1]) if got else None
 
 

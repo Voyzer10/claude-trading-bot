@@ -90,6 +90,13 @@ if __name__ == "__main__":
         sq = P._stooq_quote("TSLA", opener=lambda req, timeout=0: Resp(csv_txt.encode()))
         check("6. Stooq quote parsed (Polish time -> UTC, about 3 min ago)",
               sq and sq[0] == 350.8 and abs((datetime.now(timezone.utc) - sq[1]).total_seconds() - 180) < 120, sq)
+        nodate = {"data": {"primaryData": {"lastSalePrice": "$341.03", "lastTradeTimestamp": "N/A"}}}
+        real_nq, real_sq = P._nasdaq_quote, P._stooq_quote
+        P._nasdaq_quote = lambda t, opener=None: real_nq(t, opener=lambda req, timeout=0: Resp(json.dumps(nodate).encode()))
+        P._stooq_quote = lambda t, opener=None: real_sq(t, opener=lambda req, timeout=0: Resp(b"<meta charset=utf-8>Stooq page does not exist"))
+        bq = P.us_backup_quote("TSLA")
+        check("   Nasdaq price without a readable time still counts (as now); Stooq's error page is ignored",
+              bq and bq[0] == 341.03, bq)
         P._nasdaq_quote = lambda t, opener=None: q
         P._stooq_quote = lambda t, opener=None: sq
         P.session = lambda m, now: "open"
