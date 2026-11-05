@@ -25,7 +25,7 @@ type Resp = { generated_at: string; today: Record<string, number>; latest: Row[]
 const MARKETS = ["ALL", "CRYPTO", "NSE", "US"];
 // every setup the scanner looks for (smc_playbook.SETUP_NAMES), listed even before one has been seen
 const ALL_SETUPS = [
-  "A-B-C-D long", "A-B-C-D short", "Playbook doji long", "Playbook doji short", "Playbook bottom star",
+  "v3 sweep long", "v3 sweep short", "v3 FVG/OB retest long", "v3 FVG/OB retest short", "A-B-C-D long", "A-B-C-D short", "Playbook doji long", "Playbook doji short", "Playbook bottom star",
   "Playbook top hammer", "FVG retest long", "FVG retest short", "Order block long", "Order block short",
 ];
 
@@ -52,9 +52,9 @@ export default function ScannerSetups({ refreshKey }: { refreshKey: number }) {
     <>
       <p className="small muted" style={{ margin: "4px 0 8px" }}>
         Your setups as the scanner finds them on the candle that just closed. Each goes through the agents (its pipe in
-        the list above) and, while paper testing, the Broker paper trades it with its stop and 2R target (Settings,
-        risk limits: &quot;Paper trade Scanner v2 setups&quot;). Their backtests were negative, so judge them on the paper
-        results. Today: {today}.
+        the list above) and, while paper testing, the Broker paper trades it with its stop and target (2R; v3 sweep: the
+        opposing liquidity) (Settings, risk limits: &quot;Paper trade Scanner setups&quot;). Judge them on the paper
+        results and the backtests. Today: {today}.
       </p>
       <div className="row" style={{ flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
         {MARKETS.map((m) => (

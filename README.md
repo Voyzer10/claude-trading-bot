@@ -93,6 +93,10 @@ up there, open it on your phone and send back the code) -> `start`. `screen` sho
 - **Positions**: close one position or all, at the market price (the runner does it within ~5 s).
 - **Settings**: crypto strategy rules (with the backtested defaults and a reset), risk limits per account,
   coins watched, goal and US$ rate. Every change is written to the runner log as "Dashboard: ...".
+- **Scanner version (rollback)**: Settings > Risk limits > "Scanner version", per account (CRYPTO, INDIA, US).
+  `v3` = Scanner v2's setups plus the v3 sweep reversal (`sweep_reversal.py`); `v2` = the rollback: the scanners
+  stop looking for v3 setups and the broker skips any already found. Nothing is redeployed; the next candle uses
+  it, and switching back to `v3` turns it on again. Backtest first: Backtest > "Scanner v3 ...".
 - **Operations**: scan now, restart the runner, CPU / memory / disk, market-data check, downloads
   (trades CSV, ledger, log, decisions, settings).
 - **Backtest**: runs research.py on the machine with fresh data and shows the report.

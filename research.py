@@ -620,7 +620,7 @@ def live_timing_main(a, syms, src):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="Walk-forward backtest of the breakout rules. Not financial advice.")
-    p.add_argument("mode", choices=["nse", "nse-v2", "crypto", "crypto-short", "crypto-mr", "crypto-5m", "crypto-live", "crypto-v4", "crypto-v4-5m", "crypto-v4-short", "crypto-smc", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-abcd", "crypto-abcd-5m", "nse-abcd", "us-abcd", "us-orb", "fno"])
+    p.add_argument("mode", choices=["nse", "nse-v2", "crypto", "crypto-short", "crypto-mr", "crypto-5m", "crypto-live", "crypto-v4", "crypto-v4-5m", "crypto-v4-short", "crypto-smc", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-abcd", "crypto-abcd-5m", "nse-abcd", "us-abcd", "us-orb", "crypto-v3", "crypto-v3-5m", "nse-v3", "us-v3", "fno"])
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--workers", type=int, default=6)
     p.add_argument("--top", type=int, default=10)
@@ -650,6 +650,22 @@ def main(argv=None):
         if a.limit:
             syms = syms[:a.limit]
         return research_usorb.main(a, syms, src, fetch_all, fetch, stats, OUT, IST)
+    if a.mode in ("nse-v3", "us-v3"):  # Scanner v3's sweep reversal on stocks: research_v3.py
+        import research_abcd
+        import research_v3
+        if a.mode == "nse-v3":
+            syms, src = S.universe_for("NSE")
+        else:
+            syms, src = list(research_abcd.US_LIQUID), "built-in liquid US list"
+            if a.universe:
+                with open(a.universe, encoding="utf-8") as fh:
+                    syms = S.dedup([ln.split("|")[0].strip().upper() for ln in fh
+                                    if ln.strip() and not ln.lstrip().startswith("#")])
+                src = a.universe
+        if a.limit:
+            syms = syms[:a.limit]
+        return research_v3.main(a, syms, src, fetch_all, fetch, stats, OUT, IST,
+                                market="nse" if a.mode == "nse-v3" else "us")
     if a.mode in ("nse-abcd", "us-abcd"):  # the owner's A-B-C-D entry on stocks: research_abcd.py
         import research_abcd
         if a.mode == "nse-abcd":
@@ -700,6 +716,10 @@ def main(argv=None):
         if a.mode == "crypto-smc":  # liquidity sweep and reclaim: research_smc.py
             import research_smc
             return research_smc.main(a, syms, src, fetch_all, fetch, stats, OUT, IST)
+        if a.mode in ("crypto-v3", "crypto-v3-5m"):  # Scanner v3's sweep reversal: research_v3.py
+            import research_v3
+            return research_v3.main(a, syms, src, fetch_all, fetch, stats, OUT, IST,
+                                    step=5 if a.mode.endswith("5m") else 15)
         if a.mode in ("crypto-abcd", "crypto-abcd-5m"):  # the owner's A-B-C-D entry: research_abcd.py
             import research_abcd
             return research_abcd.main(a, syms, src, fetch_all, fetch, stats, OUT, IST,

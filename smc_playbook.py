@@ -374,7 +374,9 @@ SETUP_NAMES = {"abcd_long": "A-B-C-D long", "abcd_short": "A-B-C-D short",
                "smcp_doji_long": "Playbook doji long", "smcp_doji_short": "Playbook doji short",
                "smcp_star_long": "Playbook bottom star", "smcp_hammer_short": "Playbook top hammer",
                "smcp_fvg_long": "FVG retest long", "smcp_fvg_short": "FVG retest short",
-               "smcp_ob_long": "Order block long", "smcp_ob_short": "Order block short"}
+               "smcp_ob_long": "Order block long", "smcp_ob_short": "Order block short",
+               "v3_sweep_long": "v3 sweep long", "v3_sweep_short": "v3 sweep short",
+               "v3_retest_long": "v3 FVG/OB retest long", "v3_retest_short": "v3 FVG/OB retest short"}
 
 
 def _r(x):
@@ -384,10 +386,28 @@ def _r(x):
     return round(x, 2) if ax >= 100 else round(x, 4) if ax >= 1 else float("%.6g" % x)
 
 
-def owner_setups(rows, day_of, ctx=None):
+SCANNER_VERSIONS = ("v3", "v2")
+
+
+def scanner_version(market):
+    """Which Scanner a market runs: "v3" (v2's setups + the sweep reversal) or "v2" (the rollback: v3's setups off).
+    One switch per paper account (paper_config.json accounts.<X>.scanner_version, Settings > Risk limits). Defaults
+    to v3 if the config cannot be read."""
+    try:
+        import paper as P
+        acc = P.MARKETS.get(market, {}).get("account", market)
+        v = P.load_config()["accounts"].get(acc, {}).get("scanner_version", "v3")
+        return v if v in SCANNER_VERSIONS else "v3"
+    except Exception:
+        return "v3"
+
+
+def owner_setups(rows, day_of, ctx=None, version="v3"):
     """The owner's setups that complete on the LAST row (closed candles, oldest first): the playbook's doji / star /
     hammer (structure before the sweep, as the playbook orders it), FVG / order-block first retests, and his A-B-C-D
-    (abcd.py). Each: {setup, name, side, price, stop, target_2r, details}."""
+    (abcd.py), and Scanner v3's sweep reversal (sweep_reversal.py). Each: {setup, name, side, price, stop, target_2r,
+    details}; a v3 setup also has "target" (the opposing liquidity, R:R >= 1). version="v2" = the rollback: exactly
+    Scanner v2's setups, no sweep reversal."""
     import abcd as A   # abcd imports this module, so import here
     if len(rows) < 35:
         return []
@@ -424,6 +444,61 @@ def owner_setups(rows, day_of, ctx=None):
                                     "C_high": _r(s["c_low"] if short else s["c_high"]),
                                     "C_low": _r(s["c_high"] if short else s["c_low"]),
                                     "D_candles_after_C": s["d_offset"], "reclaimed": s["reclaimed"]}})
+    if version == "v3":
+        out += v3_setups(rows, day_of, i, ctx)
     for o in out:
         o["name"] = SETUP_NAMES.get(o["setup"], o["setup"])
+    return out
+
+
+def v3_setups(rows, day_of, i, ctx=None):
+    """Scanner v3 (the owner's workflow PDFs, 5 Nov 2026), two entries. Sweep reversal: BOS -> a close below the swept low -> doji / inverted hammer
+    -> a close above the trigger within 2 candles; extended moves skipped; target = the opposing liquidity, R:R >= 1.
+    Live reading: either low (the BOS move's start or a later swing low), either trigger (signal or sweep candle).
+    FVG / OB retest: after that reversal, the first return into its order block / fair value gap, then a close above
+    the retest candle's high within 2 candles; stop below the zone, same target, R:R >= 1."""
+    import sweep_reversal as V
+    out = []
+    for short in (False, True):
+        try:
+            _, sigs = V.signals(rows, day_of, short=short, ctx=None if short else ctx)
+        except Exception:
+            sigs = []
+        for s in sigs:
+            if s["i"] != i:
+                continue
+            stop = V.stop_for(s)
+            tgt = V.target_for(s, "swing", stop)
+            r = V.rr(s, stop, tgt)
+            if tgt is None or r < 1.0:
+                continue
+            risk = abs(s["entry"] - stop)
+            out.append({"setup": "v3_sweep_short" if short else "v3_sweep_long", "side": s["side"],
+                        "price": _r(s["entry"]), "stop": _r(stop), "target": _r(tgt),
+                        "target_2r": _r(s["entry"] - 2 * risk if short else s["entry"] + 2 * risk),
+                        "details": {"swept": s["level_name"], "swept_px": _r(s["level"]), "BOS_at": rows[s["bos"]][0].isoformat(),
+                                    "signal": s["signal_pattern"], "trigger_px": _r(s["trigger_px"]),
+                                    "above_signal_candle": s["above_signal"], "above_sweep_candle": s["above_sweep"],
+                                    "confirmed_on_candle": s["conf_offset"], "reclaimed": s["reclaimed"],
+                                    "rr": round(r, 2)}})
+        # the FVG / OB retest after a sweep reversal (third PDF): stop below the zone, same liquidity target
+        try:
+            _, rts = V.retest_signals(rows, day_of, short=short)
+        except Exception:
+            rts = []
+        for s in rts:
+            if s["i"] != i or s["swing_target"] is None:
+                continue
+            stop, tgt = s["stop"], s["swing_target"]
+            r = V.rr(s, stop, tgt)
+            if r < 1.0 or (tgt <= s["entry"] if not short else tgt >= s["entry"]):
+                continue
+            risk = abs(s["entry"] - stop)
+            out.append({"setup": "v3_retest_short" if short else "v3_retest_long", "side": s["side"],
+                        "price": _r(s["entry"]), "stop": _r(stop), "target": _r(tgt),
+                        "target_2r": _r(s["entry"] - 2 * risk if short else s["entry"] + 2 * risk),
+                        "details": {"zone": s["zone"], "zone_top": _r(s["zone_top"]), "zone_bottom": _r(s["zone_bottom"]),
+                                    "reversal_at": rows[s["reversal_at"]][0].isoformat(),
+                                    "first_entry_was_extended": s["reversal_extended"],
+                                    "confirmed_on_candle": s["conf_offset"], "rr": round(r, 2)}})
     return out

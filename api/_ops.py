@@ -91,6 +91,7 @@ RISK_FIELDS = {
     "capital": {"type": "float", "min": 100},
     "risk_limits": {"type": "bool"},
     "trade_setups": {"type": "bool"},
+    "scanner_version": {"type": "choice", "choices": ["v3", "v2"]},
     "cooldown_losses": {"type": "int", "min": 0, "max": 20},
     "cooldown_minutes": {"type": "float", "min": 0, "max": 1440},
     "weekly_loss_x": {"type": "float", "min": 0, "max": 10},
@@ -105,7 +106,7 @@ RISK_FIELDS = {
 PREF_FIELDS = {"usd_inr": {"type": "float", "min": 50, "max": 200},
                "daily_goal_inr": {"type": "float", "min": 0, "max": 1e7}}
 PREF_DEFAULT = {"usd_inr": 88.0, "daily_goal_inr": 500.0}
-BACKTEST_MODES = ["us-orb", "crypto-abcd", "crypto-abcd-5m", "us-abcd", "nse-abcd", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-v4", "crypto-v4-short", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
+BACKTEST_MODES = ["crypto-v3", "crypto-v3-5m", "us-v3", "nse-v3", "us-orb", "crypto-abcd", "crypto-abcd-5m", "us-abcd", "nse-abcd", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-v4", "crypto-v4-short", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
 
 
 # ------------------------------------------------------------------ small helpers
@@ -790,7 +791,7 @@ def _download_all():
 # paper positions into "which agent is working, and on what".
 
 AGENTS = [
-    (1, "scanner", "Scanner v2", "trader-scanner"),
+    (1, "scanner", "Scanner v3", "trader-scanner"),
     (2, "news", "News", "trader-news"),
     (3, "entry", "Entry", "trader-entry"),
     (4, "exit", "Exit", "trader-exit"),
@@ -866,7 +867,7 @@ def _step_detail(n, rec):
     sym = (rec.get("symbol") or "").split(":")[-1]
     get = lambda pre: next((v for k, v in st.items() if k.startswith(pre)), None)
     s = get("%d_" % n) if n not in (6, 7, 8) else (get("6-8") or get("%d_" % n))
-    if n == 1 and isinstance(s, dict) and s.get("scanner") == "v2":
+    if n == 1 and isinstance(s, dict) and s.get("scanner") in ("v2", "v3"):
         return "%s: %s at %s" % (sym, s.get("setup_name") or s.get("setup"), _fmt(s.get("price")))
     if n == 1 and isinstance(s, dict):
         px = s.get("close") or s.get("price")
@@ -904,11 +905,13 @@ _SETUP_NAMES = {"range_breakout_4h": "4h breakout", "range_breakdown_4h": "4h br
 
 
 def _setup_label(rec):
-    """The setup name shown with a candidate: Scanner v2's own name, else a short name of the rule."""
+    """The setup name shown with a candidate: the Scanner's own name (v2 / v3), else a short name of the rule."""
     s1 = (rec.get("steps") or {}).get("1_scanner")
     if isinstance(s1, dict) and s1.get("setup_name"):
         return s1["setup_name"]
     setup = rec.get("setup") or ""
+    if setup.startswith("v3_"):
+        return "v3 %s" % setup[3:].replace("_", " ")
     if setup.startswith("smcp_"):
         return "Playbook %s" % setup[5:].replace("_", " ")
     return _SETUP_NAMES.get(setup, setup.replace("_", " "))
@@ -1009,10 +1012,12 @@ def agents():
     stop_k = cfg.get("stop_atr_k", 1.5)
     jobs = {
         1: "Every market, on each candle that closes. The rules that trade: a crypto coin's fresh close above its "
-           "4-hour high (below its low for shorts), NSE / US opening-range breaks. Your setups (new in v2): A-B-C-D, "
-           "the SMC playbook's doji / bottom star / top hammer (structure before the sweep) and FVG / order-block "
-           "retests; they go through the same agents, and the broker records them instead of trading (those rules "
-           "failed their backtests).",
+           "4-hour high (below its low for shorts), NSE / US opening-range breaks. Your setups: v3 sweep reversal (BOS, a close "
+           "below / above the swept swing, doji or (inverted) hammer, a close past the trigger within 2 candles) and its "
+           "FVG / order-block retest (the first pullback into the gap / OB the move left, then a close past the "
+           "pullback candle), "
+           "A-B-C-D, the SMC playbook's doji / bottom star / top hammer and FVG / order-block retests. They go "
+           "through the same agents and, while paper testing, the broker paper trades them (Settings: risk limits).",
         2: "Pulls the coin's latest headlines for the record. It never blocks or makes a trade.",
         3: "Is the timing right? Skips thin hours (%s), a price back inside the range, volume under %sx the 4h "
            "average%s%s." % ("%s:00-%s:00 UTC" % (cfg["skip_hours_utc"][0], cfg["skip_hours_utc"][-1] + 1)
@@ -1034,7 +1039,16 @@ def agents():
     }
 
     out = []
+    try:
+        _accs = _paper_cfg().get("accounts", {})
+    except Exception:
+        _accs = {}
+    vers = {acc: (_accs.get(acc, {}).get("scanner_version") or "v3") for acc in ("CRYPTO", "INDIA", "US")}
     for n, key, name, skill in AGENTS:
+        if n == 1:   # the Scanner's version per account (Settings > Risk limits; v2 = the rollback)
+            u = sorted(set(vers.values()))
+            name = "Scanner %s" % u[0] if len(u) == 1 else "Scanner (%s)" % ", ".join(
+                "%s %s" % (k, v) for k, v in vers.items())
         a = {"n": n, "key": key, "name": name, "skill": skill, "job": jobs[n]}
         if n >= 10:
             a.update(status="n/a", now="Not part of the crypto pipeline" +
