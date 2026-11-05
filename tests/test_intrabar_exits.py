@@ -38,7 +38,7 @@ def run(P, side, bars_fn, now_price, stop, target, seen_min_ago=5, entry_min_ago
     pos["entry_time"] = (now - timedelta(minutes=entry_min_ago)).isoformat()
     if seen_min_ago is not None:
         pos["last_seen"] = (now - timedelta(minutes=seen_min_ago)).isoformat()
-    P.fetch_minutes = lambda m, t: bars_fn(now)
+    P.fetch_minutes = lambda m, t, days=1: bars_fn(now)
     P.fetch_price = lambda m, t: (now_price, now)
     P.check_once(cfg, led)
     return (led["open"][0] if led["open"] else None), led["closed"]
@@ -92,6 +92,64 @@ if __name__ == "__main__":
         pos, closed = run(P, "long", lambda n: [m(n, 25, 100, 100.1, 97.0, 100.0), m(n, 3, 100, 100.5, 99.5, 100.2)],
                           100.2, 99.0, 102.0, seen_min_ago=None)
         check("8. a candle from before the entry does not stop it out", pos is not None and not closed, closed)
+
+        # second report (5 Nov evening): the 1-minute feed lags, or a fetch fails. The minutes not yet delivered
+        # must be read on the NEXT check, not skipped.
+        cfg = P.load_config()
+        led = P.load_ledger(cfg)
+        led["open"], led["closed"] = [], []
+        P.fetch_price = lambda m, t: (100.0, datetime.now(timezone.utc))
+        P.cmd_buy(type("A", (), {"symbol": "CRYPTO:LAG", "stop": "99", "target": "102", "qty": None, "price": None,
+                                 "note": "t", "force": True, "side": "long"})(), cfg, led)
+        t0 = datetime.now(timezone.utc)
+        pos = led["open"][0]
+        pos["entry_time"] = (t0 - timedelta(minutes=30)).isoformat()
+        pos.pop("last_seen", None)
+        # check 1 at t0: the feed only has candles up to t0-4 min (late); price fine
+        feed = [m(t0, 20, 100, 100.5, 99.6, 100.2), m(t0, 4, 100.2, 100.4, 99.9, 100.1)]
+        P.fetch_minutes = lambda mk, t, days=1: list(feed)
+        P.fetch_price = lambda mk, t: (100.1, t0)
+        real_now = P.datetime
+        class FakeDT(datetime):
+            current = t0
+            @classmethod
+            def now(cls, tz=None):
+                return cls.current
+        P.datetime = FakeDT
+        try:
+            P.check_once(cfg, led)
+            cov1 = led["open"][0].get("covered_until") if led["open"] else None
+            check("10. late feed: still open, covered only up to the last candle that came back (not 'now')",
+                  led["open"] and cov1 and datetime.fromisoformat(cov1) <= t0 - timedelta(minutes=2), cov1)
+            # the late minutes arrive: at t0-2 min price touched the stop and came back
+            feed.append(m(t0, 2, 100.1, 100.2, 98.9, 99.8))
+            feed.append(m(t0, 1, 99.8, 100.3, 99.7, 100.2))
+            FakeDT.current = t0 + timedelta(minutes=5)
+            P.fetch_price = lambda mk, t: (100.2, FakeDT.current)
+            P.check_once(cfg, led)
+            check("    ...next check reads the late minutes: exit at the stop 99",
+                  not led["open"] and led["closed"] and led["closed"][-1]["exit"] == 99.0, led["closed"][-1:])
+            # failed fetch: the window is kept and read later
+            led["open"], led["closed"] = [], []
+            FakeDT.current = t0
+            P.fetch_price = lambda mk, t: (100.0, FakeDT.current)
+            P.cmd_buy(type("A", (), {"symbol": "CRYPTO:GAP", "stop": "99", "target": "102", "qty": None, "price": None,
+                                     "note": "t", "force": True, "side": "long"})(), cfg, led)
+            led["open"][0]["covered_until"] = (t0 - timedelta(minutes=1)).isoformat()
+            P.fetch_minutes = lambda mk, t, days=1: []
+            FakeDT.current = t0 + timedelta(minutes=5)
+            P.fetch_price = lambda mk, t: (100.4, FakeDT.current)
+            P.check_once(cfg, led)
+            check("11. fetch failed: still open and the covered point did not move",
+                  led["open"] and led["open"][0]["covered_until"] == (t0 - timedelta(minutes=1)).isoformat(), led["open"])
+            P.fetch_minutes = lambda mk, t, days=1: [m(t0, -2, 100, 102.3, 99.9, 101.0), m(t0, -7, 101, 101.2, 100.6, 100.8)]
+            FakeDT.current = t0 + timedelta(minutes=10)
+            P.fetch_price = lambda mk, t: (100.8, FakeDT.current)
+            P.check_once(cfg, led)
+            check("    ...next check walks the missed window: target 102 taken",
+                  not led["open"] and led["closed"] and led["closed"][-1]["reason"] == "target", led["closed"][-1:])
+        finally:
+            P.datetime = real_now
 
         pos, closed = run(P, "long", lambda n: [], 98.7, 99.0, 102.0)
         check("9. no 1-minute data (fallback): the live price past the stop still exits", closed and closed[0]["reason"] == "stop", closed)
