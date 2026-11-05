@@ -295,7 +295,7 @@ def fetch_price(m, t):
         url = "https://%s.finance.yahoo.com/v8/finance/chart/%s?range=1d&interval=1m" % (host, ysym)
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
-            with urllib.request.urlopen(req, timeout=15) as r:
+            with urllib.request.urlopen(req, timeout=8) as r:
                 doc = json.loads(r.read())
             res = (doc.get("chart") or {}).get("result") or []
             if not res:
@@ -338,7 +338,7 @@ def fetch_minutes(m, t, days=1):
         url = "https://%s.finance.yahoo.com/v8/finance/chart/%s?range=%s&interval=1m" % (host, ysym, rng)
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
-            with urllib.request.urlopen(req, timeout=15) as r:
+            with urllib.request.urlopen(req, timeout=8) as r:
                 doc = json.loads(r.read())
             res = ((doc.get("chart") or {}).get("result") or [None])[0]
             if not res:
@@ -367,10 +367,12 @@ def fetch_minutes(m, t, days=1):
 
 
 def _iso(x):
+    """ISO text -> aware datetime (a time saved without a zone is taken as UTC), or None."""
     try:
-        return datetime.fromisoformat(x) if x else None
+        d = datetime.fromisoformat(x) if x else None
     except (TypeError, ValueError):
         return None
+    return d.replace(tzinfo=timezone.utc) if d is not None and d.tzinfo is None else d
 
 
 def covered_since(pos):
@@ -778,67 +780,97 @@ def step_bar(led, cfg, pos, acc, b, now, sh):
     return False
 
 
+def _quotes(positions, now):
+    """Live price and the 1-minute candles to walk for every open position, fetched in parallel (8 at a time) so a
+    slow or rate-limited data feed cannot stretch the runner's cycle (5 Nov 2026: the dashboard froze with many
+    open US positions). Returns {key: (price, quote_time, bars, error)}."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def one(pos):
+        m, t = pos["market"], pos["symbol"]
+        try:
+            price, qt = fetch_price(m, t)
+        except Exception as e:
+            return pos["key"], (None, None, [], str(e))
+        bars = []
+        if session(m, now) != "closed":
+            since = covered_since(pos)
+            days = 1 if since is None else 1 + max(0, (now.date() - since.astimezone(timezone.utc).date()).days)
+            try:
+                bars = fetch_minutes(m, t, days)
+            except Exception:
+                bars = []
+        return pos["key"], (price, qt, bars, None)
+    if not positions:
+        return {}
+    with ThreadPoolExecutor(max_workers=min(8, len(positions))) as ex:
+        return dict(ex.map(one, positions))
+
+
 def check_once(cfg, led):
     now = datetime.now(timezone.utc)
     if not led["open"]:
         print("No open paper positions.")
         return 0
+    quotes = _quotes(list(led["open"]), now)
     for pos in list(led["open"]):
-        m = pos["market"]
-        acc = acct_cfg(cfg, m)
-        sess = session(m, now)
+        price, qt, bars, err = quotes.get(pos["key"], (None, None, [], "no quote"))
+        if price is None:
+            print("%-16s %s" % (pos["key"], err))
+            continue
+        # the price the dashboard shows: the one just fetched (no second request per position)
+        pos["last_price"], pos["last_price_at"] = price, now.isoformat()
         try:
-            price, qt = fetch_price(m, pos["symbol"])
-        except PaperError as e:
-            print("%-16s %s" % (pos["key"], e))
-            continue
-        upnl = pnl_of(pos, price)
-        sh = is_short(pos)
-        if sess == "closed":
-            print("%-16s %s closed; last %s (open P&L %s). Checked again when it opens."
-                  % (pos["key"], m, money(m, price), money(m, upnl)))
-            continue
-        intraday = bool(acc.get("flat_by")) and MARKETS[m]["open"] is not None
-        # Walk every 1-minute candle since the last check, then the live price: a stop or target touched between two
-        # checks (5 min apart) counts even if price came back by the time we look (owner's report, 5 Nov 2026).
-        since = covered_since(pos)
-        days = 1 if since is None else 1 + max(0, (now.date() - since.astimezone(timezone.utc).date()).days)
-        try:
-            bars = fetch_minutes(m, pos["symbol"], days)
-        except Exception:
-            bars = []
-        path = path_since(pos, bars, now, price)
-        walked = [b for b in path if len(b) == 5]
-        pos["last_seen"] = now.isoformat()
-        if walked:   # covered up to the end of the last candle that came back, never past it
-            end = min(now, walked[-1][0] + timedelta(seconds=60))
-            prev = _iso(pos.get("covered_until"))
-            pos["covered_until"] = max(end, prev).isoformat() if prev else end.isoformat()
-        elif not pos.get("covered_until") and since is not None:
-            # first check with no candles: pin the start so a later last_seen cannot skip the window
-            entry = _iso(pos.get("entry_time"))
-            pos["covered_until"] = (since if since == entry else since + timedelta(seconds=60)).isoformat()
-        if not walked:
-            print("%-16s no new 1-minute candles (late feed or fetch failed): checked the live price only; the "
-                  "missing minutes are read on the next check" % pos["key"])
-        closed = False
-        for b in path:
-            if step_bar(led, cfg, pos, acc, b, now, sh):
-                closed = True
-                break
-        if closed:
-            continue
-        if intraday and pos["entry_date"] != local_now(m, now).date().isoformat():
-            close_position(led, cfg, pos, price, "carried overnight: missed the flat-by", now)
-        elif intraday and past_flat_by(m, acc, now):
-            close_position(led, cfg, pos, price, "flat by %s" % acc["flat_by"], now)
-        else:
-            to_stop = abs(price / pos["stop"] - 1) * 100
-            to_tgt = abs(pos["target"] / price - 1) * 100
-            print("%-16s %s%s  open P&L %s   %.2f%% from the stop%s, %.2f%% from the target"
-                  % (pos["key"], "SHORT " if sh else "", money(m, price), money(m, upnl), to_stop,
-                     " (breakeven)" if pos.get("breakeven") else "", to_tgt))
+            check_position(cfg, led, pos, price, bars, now)
+        except Exception as e:   # one bad position never stops the others (or the dashboard's prices)
+            print("%-16s check failed: %s: %s" % (pos.get("key"), type(e).__name__, e))
     return len(led["open"])
+
+
+def check_position(cfg, led, pos, price, bars, now):
+    """One open position: walk its 1-minute candles and the live price (stop first, then target), then the
+    flat-by / overnight exits. Raises on bad data; check_once catches it so the other positions still run."""
+    m = pos["market"]
+    acc = acct_cfg(cfg, m)
+    sess = session(m, now)
+    upnl = pnl_of(pos, price)
+    sh = is_short(pos)
+    if sess == "closed":
+        print("%-16s %s closed; last %s (open P&L %s). Checked again when it opens."
+              % (pos["key"], m, money(m, price), money(m, upnl)))
+        return
+    intraday = bool(acc.get("flat_by")) and MARKETS[m]["open"] is not None
+    # Walk every 1-minute candle since the last check, then the live price: a stop or target touched between two
+    # checks (5 min apart) counts even if price came back by the time we look (owner's report, 5 Nov 2026).
+    since = covered_since(pos)
+    path = path_since(pos, bars, now, price)
+    walked = [b for b in path if len(b) == 5]
+    pos["last_seen"] = now.isoformat()
+    if walked:   # covered up to the end of the last candle that came back, never past it
+        end = min(now, walked[-1][0] + timedelta(seconds=60))
+        prev = _iso(pos.get("covered_until"))
+        pos["covered_until"] = max(end, prev).isoformat() if prev else end.isoformat()
+    elif not pos.get("covered_until") and since is not None:
+        # first check with no candles: pin the start so a later last_seen cannot skip the window
+        entry = _iso(pos.get("entry_time"))
+        pos["covered_until"] = (since if since == entry else since + timedelta(seconds=60)).isoformat()
+    if not walked:
+        print("%-16s no new 1-minute candles (late feed or fetch failed): checked the live price only; the "
+              "missing minutes are read on the next check" % pos["key"])
+    for b in path:
+        if step_bar(led, cfg, pos, acc, b, now, sh):
+            return
+    entry_day = pos.get("entry_date") or (_iso(pos.get("entry_time")) or now).date().isoformat()
+    if intraday and entry_day != local_now(m, now).date().isoformat():
+        close_position(led, cfg, pos, price, "carried overnight: missed the flat-by", now)
+    elif intraday and past_flat_by(m, acc, now):
+        close_position(led, cfg, pos, price, "flat by %s" % acc["flat_by"], now)
+    else:
+        to_stop = abs(price / pos["stop"] - 1) * 100
+        to_tgt = abs(pos["target"] / price - 1) * 100 if pos.get("target") else float("nan")
+        print("%-16s %s%s  open P&L %s   %.2f%% from the stop%s, %.2f%% from the target"
+              % (pos["key"], "SHORT " if sh else "", money(m, price), money(m, upnl), to_stop,
+                 " (breakeven)" if pos.get("breakeven") else "", to_tgt))
 
 
 def cmd_check(a, cfg, led):
