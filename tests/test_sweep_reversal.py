@@ -85,6 +85,39 @@ if __name__ == "__main__":
     check("Scanner v3: owner_setups names it on the confirmation candle", len(v3) == 1 and v3[0]["name"] == "v3 sweep long", own)
     if v3:
         check("   it carries the liquidity target", abs(v3[0]["target"] - 101.6) < 1e-9, v3[0])
+    # FVG / OB retest (third PDF): reversal, an up-move that leaves gaps, a pullback into the gap, a close above
+    # the pullback candle's high
+    BIG_UP = (101.0, 103.0, 100.95, 102.9)          # the BOS move runs to 103 (the target)
+    SWEEP_BIG = (102.9, 102.95, 99.6, 99.7)
+    LEG = [(100.4, 100.9, 100.35, 100.85), (100.85, 101.45, 100.8, 101.4), (101.4, 101.55, 101.2, 101.5)]
+    PULL = (101.5, 101.52, 101.1, 101.15)           # dips into the FVG 100.9..101.2, closes inside
+    RT_CONF = (101.15, 101.58, 101.1, 101.55)       # closes above the pullback high 101.52
+    rows_rt = build([BIG_UP, SWEEP_BIG, STAR, CONF] + LEG + [PULL, RT_CONF])
+    rt = V.retest_signals(rows_rt, lambda x: x.date())[1]
+    check("retest: no entry before the confirmation", not V.retest_signals(rows_rt[:-1], lambda x: x.date())[1])
+    check("retest: pullback into the FVG + close above its high -> one buy",
+          len(rt) == 1 and rt[0]["zone"] == "FVG" and abs(rt[0]["zone_top"] - 101.2) < 1e-9 and rt[0]["entry"] == 101.55, rt)
+    if rt:
+        check("   stop below the FVG (100.9), target the BOS move high 103",
+              rt[0]["stop"] < 100.9 and abs(rt[0]["swing_target"] - 103.0) < 1e-9, rt[0])
+    check("retest: a wick above the pullback high, close below -> no buy",
+          not V.retest_signals(build([BIG_UP, SWEEP_BIG, STAR, CONF] + LEG + [PULL, (101.15, 101.58, 101.1, 101.45)]),
+                               lambda x: x.date())[1])
+    low_fvg = V.retest_signals(build([BIG_UP, SWEEP_BIG, STAR, CONF] + LEG + [(101.5, 101.52, 100.6, 100.7), RT_CONF]),
+                               lambda x: x.date())[1]
+    check("retest: closes below the upper gap but inside the lower one -> the lower FVG is the retest",
+          len(low_fvg) == 1 and abs(low_fvg[0]["zone_top"] - 100.8) < 1e-9, low_fvg)
+    check("retest: pullback closes below every zone -> no buy",
+          not V.retest_signals(build([BIG_UP, SWEEP_BIG, STAR, CONF] + LEG + [(101.5, 101.52, 100.0, 100.1), RT_CONF]),
+                               lambda x: x.date())[1])
+    own_rt = [o for o in PB.owner_setups(rows_rt, lambda x: x.date()) if o["setup"] == "v3_retest_long"]
+    check("Scanner v3 names it 'v3 FVG/OB retest long' with the liquidity target",
+          len(own_rt) == 1 and own_rt[0]["name"] == "v3 FVG/OB retest long" and own_rt[0]["target"] == 103.0, own_rt)
+    check("rollback v2: no retest setups either",
+          not [o for o in PB.owner_setups(rows_rt, lambda x: x.date(), version="v2") if o["setup"].startswith("v3_")])
+    sh_rt = V.retest_signals(V.mirror(rows_rt), lambda x: x.date(), short=True)[1]
+    check("retest mirror: one short", len(sh_rt) == 1 and sh_rt[0]["side"] == "short", sh_rt)
+
     # rollback to Scanner v2: one switch per account, scanners and the broker both obey it
     check("rollback: owner_setups(version='v2') has no v3 setup",
           not [o for o in PB.owner_setups(build([SWEEP, STAR, CONF]), lambda x: x.date(), version="v2")

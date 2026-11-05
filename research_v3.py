@@ -12,6 +12,9 @@ Grid (small on purpose, so a lucky combination is less likely): side (long, shor
 move's start, a swing low after the BOS) x trigger (signal candle high, sweep candle high, either) x extended filter
 (on, off) x reclaim (the second PDF's gate 3: a close back above the swept level by the entry; off, required) x target (1R, 2R, liquidity with R:R >= 1, liquidity with R:R >= 2) x hours (crypto). One trade per symbol
 at a time. "Live" = what Scanner v3 trades: both sides, any low, either trigger, extended skipped, liquidity R:R >= 1.
+
+Second section: the FVG / OB retest entry (third PDF) after the same reversal: side x zone (any, OB, FVG) x stop
+(below the zone, below the sweep low) x target. Live: both sides, any zone, stop below the zone, liquidity R:R >= 1.
 """
 import itertools
 import os
@@ -24,12 +27,16 @@ UTC = timezone.utc
 TARGETS = ("1R", "2R", "liq_rr1", "liq_rr2")
 LEVELS = ("any", "origin", "post")
 TRIGGERS = ("signal", "sweep", "either")
+RT_ZONES = ("any", "ob", "fvg")
+RT_STOPS = ("zone", "sweep")
+RT_LIVE = {"side": "both", "zone": "any", "stop": "zone", "target": "liq_rr1"}
 LIVE = {"side": "both", "level": "any", "trigger": "either", "ext": True, "reclaim": False, "target": "liq_rr1",
         "session": "all"}
 
 
 def events_v3(data, day_of, hold, cost_fn, entry_ok=None, path_end=None):
-    evs = []
+    """Returns (sweep-reversal entries, FVG / OB retest entries)."""
+    evs, rts = [], []
     for sym, d in data.items():
         rows = [(datetime.fromtimestamp(t, UTC), o, h, l, c, v or 0) for t, o, h, l, c, v in
                 zip(d["t"], d["o"], d["h"], d["l"], d["c"], d["v"]) if None not in (o, h, l, c)]
@@ -69,8 +76,41 @@ def events_v3(data, day_of, hold, cost_fn, entry_ok=None, path_end=None):
                             ev["out"][tg] = r - cost
                         if ev["out"]:
                             evs.append(ev)
+        # the FVG / OB retest entry (third PDF): zone x stop variants
+        for short in (False, True):
+            src, sg = (mrows if short else rows), (-1 if short else 1)
+            for zn in RT_ZONES:
+                for sm in RT_STOPS:
+                    try:
+                        _, rsigs = V.retest_signals(rows, day_of, short=short, zone=zn, stop_mode=sm)
+                    except Exception:
+                        rsigs = []
+                    for s in rsigs:
+                        i = s["i"]
+                        if entry_ok and not entry_ok(rows[i][0]):
+                            continue
+                        end = path_end(rows[i][0]) if path_end else None
+                        path = [b for b in src[i + 1:i + 1 + hold] if end is None or b[0] < end]
+                        stop = s["stop"]
+                        if not path or (s["entry"] - stop) * sg <= 0:
+                            continue
+                        ev = {"sym": sym, "day": rows[i][0].date().isoformat(), "i": i, "hour": rows[i][0].hour,
+                              "side": s["side"], "zone": zn, "stop": sm, "out": {}}
+                        for tg in TARGETS:
+                            tp = V.target_for(s, "swing" if tg.startswith("liq") else tg, stop)
+                            if tp is None or (tp - s["entry"]) * sg <= 0:
+                                continue
+                            if tg.startswith("liq") and V.rr(s, stop, tp) < (1.0 if tg == "liq_rr1" else 2.0):
+                                continue
+                            cost = cost_fn(sym, s["entry"], stop, tp, s["side"])
+                            if cost is None:
+                                continue
+                            ev["out"][tg] = RA._exit(path, sg * s["entry"], sg * stop, sg * tp) - cost
+                        if ev["out"]:
+                            rts.append(ev)
     evs.sort(key=lambda e: (e["day"], e["sym"], e["i"]))
-    return evs
+    rts.sort(key=lambda e: (e["day"], e["sym"], e["i"]))
+    return evs, rts
 
 
 def keep(ev, f):
@@ -87,10 +127,23 @@ def keep(ev, f):
     return True
 
 
-def score(events, f, split, stats, spacing):
+def keep_rt(ev, f):
+    return ((f["side"] == "both" or ev["side"] == f["side"]) and ev["zone"] == f["zone"] and ev["stop"] == f["stop"]
+            and f["target"] in ev["out"])
+
+
+def row_rt(r, label=""):
+    f = r["filters"]
+    base = row(dict(r, filters={"side": f["side"], "level": "-", "trigger": "-", "ext": False, "target": f["target"]}))
+    head = "%sside=%s zone=%s stop=%s target=%s" % (label, f["side"], f["zone"], f["stop"], f["target"])
+    return head + "\n" + "\n".join(base.split("\n")[1:])
+
+
+def score(events, f, split, stats, spacing, keep_fn=None):
+    keep_fn = keep_fn or keep
     ins, oos, last, rs = {}, {}, {}, []
     for ev in events:
-        if not keep(ev, f):
+        if not keep_fn(ev, f):
             continue
         if ev["sym"] in last and ev["i"] - last[ev["sym"]] < spacing:
             continue
@@ -128,7 +181,7 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
         def cost_fn(sym, entry, stop, exit_px, side):
             return (entry + exit_px) * fee / abs(entry - stop)
 
-        events = events_v3(data, lambda t: t.date(), hold=12 * 60 // step, cost_fn=cost_fn)
+        events, rtev = events_v3(data, lambda t: t.date(), hold=12 * 60 // step, cost_fn=cost_fn)
         spacing, mode = 240 // step, "crypto-v3" + ("" if step == 15 else "-%dm" % step)
         what, costs = "%d coins, %s candles, 12h max hold" % (len(data), iv), "%.3f%% fee a side" % (fee * 100)
         grid_extra = {"session": ["all", "active"]}
@@ -153,7 +206,7 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
         def path_end(t):
             return t.astimezone(tz_local).replace(hour=15, minute=15, second=0, microsecond=0)
 
-        events = events_v3(data, lambda t: t.astimezone(tz_local).date(), hold=75, cost_fn=cost_fn,
+        events, rtev = events_v3(data, lambda t: t.astimezone(tz_local).date(), hold=75, cost_fn=cost_fn,
                            entry_ok=entry_ok, path_end=path_end)
         spacing, mode = 24, "nse-v3"
         what, costs = "%d NSE stocks, 5m candles, intraday" % len(data), "paper.py India charges (STT, brokerage, ...)"
@@ -175,7 +228,7 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
         def path_end(t):
             return t.astimezone(et).replace(hour=15, minute=55, second=0, microsecond=0)
 
-        events = events_v3(data, lambda t: t.astimezone(et).date(), hold=78, cost_fn=cost_fn,
+        events, rtev = events_v3(data, lambda t: t.astimezone(et).date(), hold=78, cost_fn=cost_fn,
                            entry_ok=entry_ok, path_end=path_end)
         spacing, mode = 24, "us-v3"
         what = "%d US stocks/ETFs, 5m candles, intraday" % len(data)
@@ -248,6 +301,29 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
                 if v != best["filters"][k]:
                     lines.append(row(score(events, dict(best["filters"], **{k: v}), split, stats, spacing),
                                      "  %s=%s -> " % (k, v)))
+    # ---- the FVG / OB retest entry (third PDF)
+    lines += ["", "=" * 100, "FVG / OB RETEST ENTRY (third PDF): after the sweep reversal, the first return into its order block",
+              "or fair value gap, then a close above the retest candle's high within 2 candles. %d entries (all variants)."
+              % len(rtev)]
+    if rtev:
+        rgrid = {"side": ["long", "short", "both"], "zone": list(RT_ZONES), "stop": list(RT_STOPS), "target": list(TARGETS)}
+        rres = [score(rtev, dict(zip(rgrid, c)), split, stats, spacing, keep_rt) for c in itertools.product(*rgrid.values())]
+        rok = [r for r in rres if r["in_sample"].get("trades", 0) >= 20 and r["out_of_sample"].get("trades", 0) >= 10]
+        rstable = sorted([r for r in rok if r["in_sample"]["avg_r"] > 0 and r["out_of_sample"]["avg_r"] > 0],
+                         key=lambda r: -min(r["in_sample"]["avg_r"], r["out_of_sample"]["avg_r"]))
+        lines += [row_rt(score(rtev, RT_LIVE, split, stats, spacing, keep_rt), "LIVE (what Scanner v3 paper trades):  "),
+                  row_rt(score(rtev, dict(RT_LIVE, side="long"), split, stats, spacing, keep_rt), "LIVE, longs only:  "),
+                  row_rt(score(rtev, dict(RT_LIVE, side="short"), split, stats, spacing, keep_rt), "LIVE, shorts only:  "),
+                  "", "%d of %d retest combinations (with enough trades) were positive both in- and out-of-sample."
+                  % (len(rstable), len(rok))]
+        if rstable:
+            best = rstable[0]
+            lines += ["MOST CONSISTENT:", row_rt(best, "  "), RA.concentration(best), "ITS NEIGHBOURS:"]
+            for k, vals in rgrid.items():
+                for v in vals:
+                    if v != best["filters"][k]:
+                        lines.append(row_rt(score(rtev, dict(best["filters"], **{k: v}), split, stats, spacing, keep_rt),
+                                            "  %s=%s -> " % (k, v)))
     lines += ["", "Luck check: on random-walk test data some combinations look positive in both halves by chance alone",
               "(about 1% with crypto fees; about 10% with the low US costs). Trust a result only if its neighbours agree.",
               "Decision rule: keep it trading (paper) only if positive out-of-sample with 20+ trades and its neighbours",

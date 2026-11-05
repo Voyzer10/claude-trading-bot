@@ -1013,7 +1013,9 @@ def agents():
     jobs = {
         1: "Every market, on each candle that closes. The rules that trade: a crypto coin's fresh close above its "
            "4-hour high (below its low for shorts), NSE / US opening-range breaks. Your setups: v3 sweep reversal (BOS, a close "
-           "below / above the swept swing, doji or (inverted) hammer, a close past the trigger within 2 candles), "
+           "below / above the swept swing, doji or (inverted) hammer, a close past the trigger within 2 candles) and its "
+           "FVG / order-block retest (the first pullback into the gap / OB the move left, then a close past the "
+           "pullback candle), "
            "A-B-C-D, the SMC playbook's doji / bottom star / top hammer and FVG / order-block retests. They go "
            "through the same agents and, while paper testing, the broker paper trades them (Settings: risk limits).",
         2: "Pulls the coin's latest headlines for the record. It never blocks or makes a trade.",

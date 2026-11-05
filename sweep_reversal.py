@@ -128,3 +128,79 @@ def target_for(sig, mode, stop):
 def rr(sig, stop, target):
     risk = abs(sig["entry"] - stop)
     return abs(target - sig["entry"]) / risk if risk > 0 and target is not None else 0.0
+
+
+# ------------------------------------------------------------------ the FVG / OB retest entry (third PDF, 5 Nov 2026)
+
+def retest_signals(rows, day_of, short=False, ctx=None, zone="any", stop_mode="zone", retest_max=48, leg_max=12,
+                   conf_max=2, buffer_atr=0.1):
+    """The "Trading Setups Workflow - FVG + OB" PDF (pages 5-7): after a confirmed sweep reversal (BOS -> close below
+    the swept low -> doji / inverted hammer -> close above the trigger; extended or not: an extended first entry is
+    skipped, so this is its second chance), do not chase: wait for price to come back into the order block or a fair
+    value gap the up-move created, then BUY on a bullish rejection with a break-and-close confirmation.
+
+      OB:   the last red candle from the sweep to the confirmation (its high..low). Usable once a close has gone
+            above it after the confirmation (price left the zone).
+      FVG:  a gap in the up-move after the signal candle: candle t's low above candle t-2's high, candle t-1 green,
+            formed within leg_max candles of the confirmation.
+      Retest: a candle trades into a live zone (low <= its top) without closing below it; the zone with the highest
+            top that was touched. Confirmation: one of the next conf_max (2) candles CLOSES above the retest candle's
+            high. A close below a zone kills it; a close below the swept low, the move reaching its target, or
+            retest_max candles end the setup. One retest entry per reversal.
+      Stop: below the retested zone ("zone", the PDF's chart) or below the sweep low ("sweep"), minus buffer x ATR.
+      Target: the reversal's opposing liquidity (BOS move high / untaken swing high).
+    Shorts = the mirror. Returns (ctx, [signal dicts]) in normal prices."""
+    ctx, revs = signals(rows, day_of, ext=False, short=short, ctx=ctx)
+    src = mirror(rows) if short else rows
+    sg, n, out, taken = (-1 if short else 1), len(src), [], set()
+    for r in revs:
+        i, j, s_i = r["i"], r["sweep"], r["signal"]
+        low_sw = sg * r["extreme"]
+        tgt = sg * r["swing_target"] if r["swing_target"] is not None else None
+        zones = []        # dicts: name, top, bot, born, left (price closed above the top after it was born)
+        if zone in ("any", "ob"):
+            reds = [k for k in range(j, i) if src[k][4] < src[k][1]]
+            k = reds[-1] if reds else s_i
+            zones.append({"name": "OB", "top": src[k][2], "bot": src[k][3], "born": i, "left": False})
+        pending = None    # (retest candle index, zone)
+        for t in range(i + 1, min(n, i + retest_max + 1)):
+            o, h, l, c = src[t][1], src[t][2], src[t][3], src[t][4]
+            if c < low_sw or (tgt is not None and h >= tgt):
+                break
+            if pending:
+                rt, z = pending
+                if c > src[rt][2]:                                  # confirmation: close above the retest high
+                    a = ctx.atr[t]
+                    if not a or t in taken:
+                        break
+                    base = z["bot"] if stop_mode == "zone" else low_sw
+                    stop = base - buffer_atr * a
+                    if stop < c:
+                        taken.add(t)
+                        out.append({"i": t, "side": "short" if short else "long", "reversal_at": i, "sweep": j,
+                                    "retest": rt, "zone": z["name"], "zone_top": sg * z["top"], "zone_bottom": sg * z["bot"],
+                                    "entry": sg * c, "stop": sg * stop, "extreme": sg * low_sw, "atr": a,
+                                    "swing_target": sg * tgt if tgt is not None else None,
+                                    "conf_offset": t - rt, "reversal_extended": r["extended"]})
+                    break
+                if c < z["bot"]:
+                    z["dead"] = True
+                    pending = None
+                elif t - rt >= conf_max:
+                    pending = None
+                if pending:
+                    continue
+            for z in zones:                                         # zone bookkeeping on this candle
+                if z.get("dead"):
+                    continue
+                if z["born"] < t and c < z["bot"]:
+                    z["dead"] = True
+                elif z["born"] < t and c > z["top"]:
+                    z["left"] = True
+            touched = [z for z in zones if not z.get("dead") and z["left"] and z["born"] < t and l <= z["top"] and c >= z["bot"]]
+            if touched and not pending:
+                pending = (t, max(touched, key=lambda z: z["top"]))
+            if zone in ("any", "fvg") and t - i <= leg_max and t - 2 >= s_i:
+                if l > src[t - 2][2] and src[t - 1][4] > src[t - 1][1]:
+                    zones.append({"name": "FVG", "top": l, "bot": src[t - 2][2], "born": t, "left": True})
+    return ctx, out

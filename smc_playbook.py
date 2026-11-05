@@ -375,7 +375,8 @@ SETUP_NAMES = {"abcd_long": "A-B-C-D long", "abcd_short": "A-B-C-D short",
                "smcp_star_long": "Playbook bottom star", "smcp_hammer_short": "Playbook top hammer",
                "smcp_fvg_long": "FVG retest long", "smcp_fvg_short": "FVG retest short",
                "smcp_ob_long": "Order block long", "smcp_ob_short": "Order block short",
-               "v3_sweep_long": "v3 sweep long", "v3_sweep_short": "v3 sweep short"}
+               "v3_sweep_long": "v3 sweep long", "v3_sweep_short": "v3 sweep short",
+               "v3_retest_long": "v3 FVG/OB retest long", "v3_retest_short": "v3 FVG/OB retest short"}
 
 
 def _r(x):
@@ -451,9 +452,11 @@ def owner_setups(rows, day_of, ctx=None, version="v3"):
 
 
 def v3_setups(rows, day_of, i, ctx=None):
-    """Scanner v3 (the owner's workflow PDF, 5 Nov 2026): BOS -> a close below the swept low -> doji / inverted hammer
+    """Scanner v3 (the owner's workflow PDFs, 5 Nov 2026), two entries. Sweep reversal: BOS -> a close below the swept low -> doji / inverted hammer
     -> a close above the trigger within 2 candles; extended moves skipped; target = the opposing liquidity, R:R >= 1.
-    Live reading: either low (the BOS move's start or a later swing low), either trigger (signal or sweep candle)."""
+    Live reading: either low (the BOS move's start or a later swing low), either trigger (signal or sweep candle).
+    FVG / OB retest: after that reversal, the first return into its order block / fair value gap, then a close above
+    the retest candle's high within 2 candles; stop below the zone, same target, R:R >= 1."""
     import sweep_reversal as V
     out = []
     for short in (False, True):
@@ -478,4 +481,24 @@ def v3_setups(rows, day_of, i, ctx=None):
                                     "above_signal_candle": s["above_signal"], "above_sweep_candle": s["above_sweep"],
                                     "confirmed_on_candle": s["conf_offset"], "reclaimed": s["reclaimed"],
                                     "rr": round(r, 2)}})
+        # the FVG / OB retest after a sweep reversal (third PDF): stop below the zone, same liquidity target
+        try:
+            _, rts = V.retest_signals(rows, day_of, short=short)
+        except Exception:
+            rts = []
+        for s in rts:
+            if s["i"] != i or s["swing_target"] is None:
+                continue
+            stop, tgt = s["stop"], s["swing_target"]
+            r = V.rr(s, stop, tgt)
+            if r < 1.0 or (tgt <= s["entry"] if not short else tgt >= s["entry"]):
+                continue
+            risk = abs(s["entry"] - stop)
+            out.append({"setup": "v3_retest_short" if short else "v3_retest_long", "side": s["side"],
+                        "price": _r(s["entry"]), "stop": _r(stop), "target": _r(tgt),
+                        "target_2r": _r(s["entry"] - 2 * risk if short else s["entry"] + 2 * risk),
+                        "details": {"zone": s["zone"], "zone_top": _r(s["zone_top"]), "zone_bottom": _r(s["zone_bottom"]),
+                                    "reversal_at": rows[s["reversal_at"]][0].isoformat(),
+                                    "first_entry_was_extended": s["reversal_extended"],
+                                    "confirmed_on_candle": s["conf_offset"], "rr": round(r, 2)}})
     return out
