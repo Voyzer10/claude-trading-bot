@@ -86,6 +86,8 @@ export type Position = {
   breakeven?: boolean;
   risk_stop?: number;
   note?: string;
+  /** when the last price was quoted (paper.py check_once); old = the data feed is stale */
+  quote_time?: string;
   /** why it was taken (paper.py cmd_buy, from 5 Nov 2026): setup, scanner version or "rules", liquidity, reason */
   setup?: string;
   setup_name?: string;

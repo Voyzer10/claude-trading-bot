@@ -74,6 +74,30 @@ if __name__ == "__main__":
         P.session = lambda m, now: "closed"
         price, _ = P.fetch_price("US", "TSLA")
         check("4. market closed: the last quote stands (no fallback)", price == 343.47, price)
+
+        # Yahoo AND its 5-minute chart frozen (what the VPS saw: 87 min old): Nasdaq / Stooq backups decide
+        SN.yahoo_chart = lambda sym, rng, iv, suffix="": {"t": [int(now - 87 * 60)], "c": [343.47], "o": [], "h": [],
+                                                          "l": [], "v": [], "meta": {}}
+        et_now = datetime.now(timezone.utc) + P.us_offset(datetime.now(timezone.utc))
+        nas_ts = (et_now - timedelta(minutes=1)).strftime("%b %d, %Y %I:%M %p").replace(" 0", " ") + " ET"
+        nasdaq_doc = {"data": {"symbol": "TSLA", "primaryData": {"lastSalePrice": "$351.12", "lastTradeTimestamp": nas_ts}}}
+        q = P._nasdaq_quote("TSLA", opener=lambda req, timeout=0: Resp(json.dumps(nasdaq_doc).encode()))
+        check("5. Nasdaq quote parsed: price and an ET trade time turned into UTC (about 1 min ago)",
+              q and q[0] == 351.12 and abs((datetime.now(timezone.utc) - q[1]).total_seconds() - 60) < 120, (q, nas_ts))
+        from zoneinfo import ZoneInfo
+        pl = datetime.now(ZoneInfo("Europe/Warsaw")) - timedelta(minutes=3)
+        csv_txt = "Symbol,Date,Time,Close\nTSLA.US,%s,%s,350.80\n" % (pl.strftime("%Y-%m-%d"), pl.strftime("%H:%M:%S"))
+        sq = P._stooq_quote("TSLA", opener=lambda req, timeout=0: Resp(csv_txt.encode()))
+        check("6. Stooq quote parsed (Polish time -> UTC, about 3 min ago)",
+              sq and sq[0] == 350.8 and abs((datetime.now(timezone.utc) - sq[1]).total_seconds() - 180) < 120, sq)
+        P._nasdaq_quote = lambda t, opener=None: q
+        P._stooq_quote = lambda t, opener=None: sq
+        P.session = lambda m, now: "open"
+        answer["doc"] = chart(343.47, 87, [(87, 343.47)])
+        price, qt = P.fetch_price("US", "TSLA")
+        check("7. Yahoo frozen 87 min, US open -> the newest backup (Nasdaq 351.12)", price == 351.12, (price, qt))
+        P.urllib.request.urlopen = lambda req, timeout=0: (_ for _ in ()).throw(OSError("yahoo down"))
+        check("8. Yahoo down -> backup quote", P.fetch_price("US", "TSLA")[0] == 351.12)
     finally:
         os.chdir(old)
         shutil.rmtree(tmp, ignore_errors=True)
