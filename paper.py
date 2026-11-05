@@ -326,14 +326,16 @@ def fetch_price(m, t):
     raise PaperError("could not fetch %s: %s" % (yahoo_symbol(m, t), last))
 
 
-def fetch_minutes(m, t):
-    """Today's 1-minute candles [(utc, o, h, l, c)], oldest first, or [] (F&O, or no data). Used by check_once to see
-    what happened BETWEEN two checks: a stop or target touched and left again in the minutes in between."""
+def fetch_minutes(m, t, days=1):
+    """1-minute candles [(utc, o, h, l, c)] of the last `days` days (1..7), oldest first, or [] (F&O, or no data).
+    Used by check_once to see what happened BETWEEN two checks: a stop or target touched and left again in the
+    minutes in between."""
     if m == "NFO":
         return []
     ysym = urllib.parse.quote(yahoo_symbol(m, t), safe="")
+    rng = "%dd" % max(1, min(7, int(days)))
     for host in ("query2", "query1"):
-        url = "https://%s.finance.yahoo.com/v8/finance/chart/%s?range=1d&interval=1m" % (host, ysym)
+        url = "https://%s.finance.yahoo.com/v8/finance/chart/%s?range=%s&interval=1m" % (host, ysym, rng)
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
             with urllib.request.urlopen(req, timeout=15) as r:
@@ -364,28 +366,39 @@ def fetch_minutes(m, t):
     return []
 
 
-def path_since(pos, bars, now, price):
-    """The price path to check for this position: the 1-minute candles since the last check, then the live price.
-    The candle that was still forming at the last check is included again (its later part was not seen); before the
-    first check, only candles that started after the entry (the entry's own minute may hold prices from before it)."""
-    seen, entry = pos.get("last_seen"), pos.get("entry_time")
+def _iso(x):
     try:
-        if seen:
-            since = datetime.fromisoformat(seen) - timedelta(seconds=60)
-        elif entry:
-            since = datetime.fromisoformat(entry)
-        else:
-            since = None
-    except ValueError:
-        since = None
+        return datetime.fromisoformat(x) if x else None
+    except (TypeError, ValueError):
+        return None
+
+
+def covered_since(pos):
+    """Where the next check must start reading 1-minute candles: one candle before the end of the last candle already
+    walked (that candle may have been still forming), or the entry. pos["covered_until"] only moves as far as the
+    candles that actually came back, so a late data feed or a failed fetch never skips minutes (5 Nov 2026, second
+    report). Positions opened before that field existed fall back to last_seen."""
+    cov, entry = _iso(pos.get("covered_until")), _iso(pos.get("entry_time"))
+    if cov and entry and cov <= entry:
+        return entry              # nothing walked yet: start strictly after the entry
+    if cov:
+        return cov - timedelta(seconds=60)
+    seen = _iso(pos.get("last_seen"))
+    if seen:
+        return seen - timedelta(seconds=60)
+    return _iso(pos.get("entry_time"))
+
+
+def path_since(pos, bars, now, price):
+    """The price path to check for this position: the 1-minute candles not yet walked, then the live price. Before
+    the first check, only candles that started after the entry (the entry's own minute may hold prices from before
+    it)."""
+    since = covered_since(pos)
     path = [b for b in bars if since is not None and since <= b[0] < now]
     # the live price last. It only counts as a gap past the stop when there were no candles to look at and the
     # position was not checked in the last 15 minutes (the old rule); otherwise a resting stop fills at the stop.
-    watched = False
-    try:
-        watched = bool(seen) and (now - datetime.fromisoformat(seen)) <= timedelta(minutes=15)
-    except ValueError:
-        pass
+    seen = _iso(pos.get("last_seen"))
+    watched = bool(seen) and (now - seen) <= timedelta(minutes=15)
     path.append((now, price, price, price, price, not bars and not watched))
     return path
 
@@ -782,12 +795,26 @@ def check_once(cfg, led):
         intraday = bool(acc.get("flat_by")) and MARKETS[m]["open"] is not None
         # Walk every 1-minute candle since the last check, then the live price: a stop or target touched between two
         # checks (5 min apart) counts even if price came back by the time we look (owner's report, 5 Nov 2026).
+        since = covered_since(pos)
+        days = 1 if since is None else 1 + max(0, (now.date() - since.astimezone(timezone.utc).date()).days)
         try:
-            bars = fetch_minutes(m, pos["symbol"])
+            bars = fetch_minutes(m, pos["symbol"], days)
         except Exception:
             bars = []
         path = path_since(pos, bars, now, price)
+        walked = [b for b in path if len(b) == 5]
         pos["last_seen"] = now.isoformat()
+        if walked:   # covered up to the end of the last candle that came back, never past it
+            end = min(now, walked[-1][0] + timedelta(seconds=60))
+            prev = _iso(pos.get("covered_until"))
+            pos["covered_until"] = max(end, prev).isoformat() if prev else end.isoformat()
+        elif not pos.get("covered_until") and since is not None:
+            # first check with no candles: pin the start so a later last_seen cannot skip the window
+            entry = _iso(pos.get("entry_time"))
+            pos["covered_until"] = (since if since == entry else since + timedelta(seconds=60)).isoformat()
+        if not walked:
+            print("%-16s no new 1-minute candles (late feed or fetch failed): checked the live price only; the "
+                  "missing minutes are read on the next check" % pos["key"])
         closed = False
         for b in path:
             if step_bar(led, cfg, pos, acc, b, now, sh):
