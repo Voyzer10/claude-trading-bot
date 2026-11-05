@@ -280,7 +280,7 @@ def orb_ready(cutoff, or_minutes):
     return cutoff.weekday() < 5 and cutoff >= at(cutoff, OPEN) + timedelta(minutes=or_minutes + 5)
 
 
-_EARLIER = {}   # (suffix, symbol) -> (date, [rows of earlier days]): Scanner v2's history, fetched once a day
+_EARLIER = {}   # (suffix, symbol) -> (date, [rows of earlier days]): the Scanner's history, fetched once a day
 
 
 def chart_rows(d, tz):
@@ -328,7 +328,7 @@ def setups_scan(data, market, suffix, cutoff, tz, workers=8, keep=None):
 
 def orb_scan(symbols, market, now, cutoff, or_minutes=15, min_price=20.0, workers=8, quiet=False, side="long",
              setups=False):
-    """Fetch and scan. Returns a dict (never prints). setups=True: also Scanner v2's owner setups (res["setups"])."""
+    """Fetch and scan. Returns a dict (never prints). setups=True: also the Scanner's owner setups, v3 or v2 per Settings (res["setups"])."""
     data, failed = fetch_many(symbols, "1d", "5m", workers, SUFFIX[market], quiet)
     hits, usable = [], 0
     for s, d in data.items():

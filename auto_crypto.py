@@ -314,7 +314,9 @@ def run_smc(h, cfg, log):
     st = rec["steps"]
     st["1_scanner"] = {"bar_end": h["bar_end"], "close": h["price"], "range_high": h["range_high"],
                        "range_low": h["range_low"], "variant": s.get("variant"), "level": s.get("level"),
-                       "extreme": s.get("extreme"), "vol_ratio": round(s.get("vol_x", 0), 2)}
+                       "extreme": s.get("extreme"), "vol_ratio": round(s.get("vol_x", 0), 2),
+                       "setup_name": "SMC sweep %s" % ("short" if short else "long"), "scanner": "rules",
+                       "liquidity": "swept 4h %s %s (%s)" % ("high" if short else "low", s.get("level"), s.get("variant"))}
 
     def done(result, why):
         rec["result"], rec["why"] = result, why
@@ -392,7 +394,10 @@ def run_smc(h, cfg, log):
     led = P.load_ledger(pcfg)
     args = type("A", (), {"symbol": "CRYPTO:" + sym, "stop": str(stop), "target": str(target), "qty": None,
                           "price": str(price), "note": "auto: %s %s" % (h["setup"], s.get("variant")), "force": False,
-                          "side": "short" if short else "long"})()
+                          "side": "short" if short else "long", "setup": h["setup"], "scanner": "rules",
+                          "setup_name": "SMC sweep %s" % ("short" if short else "long"),
+                          "liquidity": "swept 4h %s %s (%s)" % ("high" if short else "low", s.get("level"), s.get("variant")),
+                          "entry_reason": "SMC sweep: wick past the 4h %s and a close back inside" % ("high" if short else "low")})()
     buf = io.StringIO()
     try:
         with contextlib.redirect_stdout(buf):
@@ -466,6 +471,8 @@ def run_smcp(h, cfg, log):
     if not s:
         return done("skipped", "scanner sent no playbook details")
     st["1_scanner"] = {"bar_end": h["bar_end"], "close": h["price"], "liquidity_swept": s.get("level_name"),
+                       "setup_name": "Playbook %s" % str(s.get("setup", "")).replace("_", " "), "scanner": "rules",
+                       "liquidity": "swept %s %s" % (s.get("level_name"), s.get("level")),
                        "level": s.get("level"), "sweep_extreme": s.get("extreme"),
                        "sweep_candles_ago": s.get("trigger", 0) - s.get("sweep_at", 0) + s.get("confirm_at", 0),
                        "bos_choch_before_sweep": s.get("struct_before"), "bos_choch_any": s.get("struct_any")}
@@ -554,7 +561,11 @@ def run_smcp(h, cfg, log):
     args = type("A", (), {"symbol": "CRYPTO:" + sym, "stop": str(stop), "target": str(target), "qty": None,
                           "price": str(price), "note": "auto: playbook %s after %s sweep" % (
                               s["setup"], s.get("level_name")), "force": False,
-                          "side": "short" if short else "long"})()
+                          "side": "short" if short else "long", "setup": "smcp_" + s["setup"], "scanner": "rules",
+                          "setup_name": "Playbook %s" % s["setup"].replace("_", " "),
+                          "liquidity": "swept %s %s" % (s.get("level_name"), s.get("level")),
+                          "entry_reason": "Playbook %s after a sweep of %s, confirmed on candle %s" % (
+                              s["setup"].replace("_", " "), s.get("level_name"), s.get("confirm_at"))})()
     buf = io.StringIO()
     try:
         with contextlib.redirect_stdout(buf):
@@ -589,8 +600,12 @@ def run_one(h, cfg, log):
     rec = {"time": datetime.now(S.IST).isoformat(), "symbol": "CRYPTO:" + sym, "setup": h["setup"],
            "steps": {}, "result": None}
     st = rec["steps"]
+    brk_short = h["setup"] == "range_breakdown_4h"
     st["1_scanner"] = {"bar_end": h["bar_end"], "close": h["price"], "range_high": h["range_high"],
-                       "range_low": h["range_low"], "pct_vs_high": h["pct_vs_high"], "vol_ratio": h["vol_ratio"]}
+                       "range_low": h["range_low"], "pct_vs_high": h["pct_vs_high"], "vol_ratio": h["vol_ratio"],
+                       "setup_name": "4h breakdown" if brk_short else "4h breakout", "scanner": "rules",
+                       "liquidity": "4h range %s %s" % ("low" if brk_short else "high",
+                                                        h["range_low"] if brk_short else h["range_high"])}
 
     def done(result, why):
         rec["result"], rec["why"] = result, why
@@ -729,7 +744,11 @@ def run_one(h, cfg, log):
     led = P.load_ledger(pcfg)
     args = type("A", (), {"symbol": "CRYPTO:" + sym, "stop": str(stop), "target": str(target), "qty": None,
                           "price": str(price), "note": "auto: %s" % h["setup"], "force": False,
-                          "side": "short" if short else "long"})()
+                          "side": "short" if short else "long", "setup": h["setup"], "scanner": "rules",
+                          "setup_name": "4h breakdown" if short else "4h breakout",
+                          "liquidity": "4h range %s %s" % ("low" if short else "high", trigger),
+                          "entry_reason": "close %s the 4h range %s %s (volume %sx)" % (
+                              "below" if short else "above", "low" if short else "high", trigger, h.get("vol_ratio"))})()
     buf = io.StringIO()
     try:
         with contextlib.redirect_stdout(buf):
@@ -796,7 +815,7 @@ def process(state, res, log):
                 out.append(run_one(h, cfg, log))
             except Exception as e:
                 log("AUTO %s failed: %s" % (h["symbol"], e))
-    # Scanner v2: the owner's setups on this candle. One ticked in enabled_setups went through run_smcp above (it can
+    # The Scanner (v3 or v2, per Settings): the owner's setups on this candle. One ticked in enabled_setups went through run_smcp above (it can
     # trade); every other one goes through the agents and is recorded only (P.setup_decision: LOG ONLY, no broker).
     for x in res.get("setups", []):
         if x["setup"] in cfg["enabled_setups"]:

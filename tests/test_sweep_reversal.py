@@ -133,6 +133,13 @@ if __name__ == "__main__":
             check("v3: the sweep long is paper traded with its liquidity target",
                   rec["result"] == "PAPER BUY" and rec["steps"]["4_exit"]["target"] == v3[0]["target"]
                   and rec["steps"]["1_scanner"]["scanner"] == "v3", rec)
+            pos = next((x for x in P.load_ledger(P.load_config())["open"] if x["key"] == "CRYPTO:TST"), {})
+            check("   the position records why: setup, scanner, liquidity, entry reason",
+                  pos.get("setup") == "v3_sweep_long" and pos.get("scanner") == "v3"
+                  and "swept" in (pos.get("liquidity") or "") and "Scanner v3" in (pos.get("entry_reason") or "") and "R:R" in pos["entry_reason"], pos)
+            v2rec = P.setup_decision("CRYPTO", "ABC", {"setup": "abcd_long", "name": "A-B-C-D long", "side": "long",
+                                                       "price": 100.4, "stop": 99.0, "target_2r": 103.2}, news=[])
+            check("a v3 account never trades a v2 setup", v2rec["result"] == "skipped" and "v2 setups are off" in v2rec["why"], v2rec)
         cfg = P.load_config()
         cfg["accounts"]["INDIA"]["scanner_version"] = "v2"
         P.save_json(P.CONFIG, cfg)

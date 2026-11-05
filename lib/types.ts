@@ -50,6 +50,9 @@ export type Decision = {
   symbol: string | null;
   market: string;
   setup: string | null;
+  setup_name?: string | null;
+  scanner?: string | null;
+  liquidity?: string | null;
   result: string | null;
   why: string | null;
   category: string;
@@ -82,6 +85,13 @@ export type Position = {
   trailing?: boolean;
   breakeven?: boolean;
   risk_stop?: number;
+  note?: string;
+  /** why it was taken (paper.py cmd_buy, from 5 Nov 2026): setup, scanner version or "rules", liquidity, reason */
+  setup?: string;
+  setup_name?: string;
+  scanner?: string;
+  liquidity?: string;
+  entry_reason?: string;
 };
 
 export type Snapshot = {

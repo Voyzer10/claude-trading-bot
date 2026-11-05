@@ -133,6 +133,9 @@ def run_one(h, cfg, reg, now, log):
     st = rec["steps"]
     st["1_scanner"] = {k: h.get(k) for k in ("time", "price", "range_high", "range_low", "pct_over", "last",
                                              "vol_x", "vol_x_recent", "gap_pct", "side")}
+    st["1_scanner"].update({"setup_name": "ORB short" if short else "ORB", "scanner": "rules",
+                            "liquidity": "opening range %s %s" % ("low" if short else "high",
+                                                                  h.get("range_low") if short else h.get("range_high"))})
 
     def done(result, why):
         rec["result"], rec["why"] = result, why
@@ -221,7 +224,11 @@ def run_one(h, cfg, reg, now, log):
     led = P.load_ledger(pcfg)
     args = type("A", (), {"symbol": "NSE:" + sym, "stop": str(stop), "target": str(target), "qty": None, "lots": None,
                           "price": str(price), "note": "auto_nse: orb short" if short else "auto_nse: orb",
-                          "force": False, "side": "short" if short else "long"})()
+                          "force": False, "side": "short" if short else "long", "setup": "orb_short" if short else "orb",
+                          "scanner": "rules", "setup_name": "ORB short" if short else "ORB",
+                          "liquidity": "opening range %s %s" % ("low" if short else "high", trigger),
+                          "entry_reason": "close %s the opening range %s %s" % ("below" if short else "above",
+                                                                          "low" if short else "high", trigger)})()
     buf = io.StringIO()
     try:
         with contextlib.redirect_stdout(buf):
@@ -240,7 +247,8 @@ def run_one(h, cfg, reg, now, log):
 
 
 def record_setups(setups, log):
-    """Scanner v2: the owner's setups on this candle go through the agents and are recorded only (no broker)."""
+    """The Scanner (v3 or v2, per Settings): the owner's setups on this candle go through the agents; the broker
+    paper trades them while trade_setups is on."""
     if not setups:
         return
     by = {}
@@ -253,8 +261,9 @@ def record_setups(setups, log):
                 continue
             fh.write(json.dumps(rec) + "\n")
             by[rec["result"]] = by.get(rec["result"], 0) + 1
-    log("AUTO NSE: Scanner v2 found %d of your setups (%s): %s" % (
-        len(setups), ", ".join("%s %s" % (x["symbol"], x.get("name")) for x in setups[:8]) + (" ..." if len(setups) > 8 else ""),
+    ver = (setups[0].get("scanner") if setups else None) or __import__("smc_playbook").scanner_version("NSE")
+    log("AUTO NSE: Scanner %s found %d of your setups (%s): %s" % (
+        ver, len(setups), ", ".join("%s %s" % (x["symbol"], x.get("name")) for x in setups[:8]) + (" ..." if len(setups) > 8 else ""),
         ", ".join("%d %s" % (v, k) for k, v in sorted(by.items()))))
 
 

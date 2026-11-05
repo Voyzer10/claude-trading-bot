@@ -145,6 +145,14 @@ th { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color
 td.why { min-width: 260px; }
 .scroll { max-height: 460px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
 .subtitle { font-size: 14px; font-weight: 600; margin: 0; }
+/* why a trade was taken: setup name, scanner version, the liquidity it used, the entry reason */
+.setup-cell { min-width: 190px; }
+.setup-cell > span { display: block; overflow-wrap: anywhere; }
+.setup-cell .setup-name { font-weight: 600; display: inline; }
+.setup-cell .setup-ver { display: inline-flex; margin-left: 6px; padding: 0 7px; font-size: 11px; vertical-align: 1px; }
+.setup-cell .setup-why { margin-top: 2px; }
+.decision-setup { margin: 1px 0; font-weight: 500; overflow-wrap: anywhere; }
+.decision-setup .setup-ver { display: inline-flex; margin-left: 6px; padding: 0 7px; font-size: 11px; }
 .list-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 4px 0 8px; }
 .pos { color: var(--good); } .neg { color: var(--bad); }
 
@@ -321,6 +329,8 @@ textarea { resize: vertical; }
   .scroll:has(> .rtable) { max-height: min(70vh, 560px); }
   .rtable td:has(> .sym), .rtable td[data-label="Opened"], .rtable td[data-label="Closed"] { grid-column: span 2; }
   .rtable td:first-child:has(> .sym) { grid-column: 1 / -1; }
+  .rtable td.setup-cell { grid-column: 1 / -1; min-width: 0; display: block; }
+  .rtable td.setup-cell::before { display: block; }
 }
 @media (min-width: 820px) {
   /* table mode: times and tickers stay on one line; long text wraps in its own column */
