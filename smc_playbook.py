@@ -476,5 +476,6 @@ def v3_setups(rows, day_of, i, ctx=None):
                         "details": {"swept": s["level_name"], "swept_px": _r(s["level"]), "BOS_at": rows[s["bos"]][0].isoformat(),
                                     "signal": s["signal_pattern"], "trigger_px": _r(s["trigger_px"]),
                                     "above_signal_candle": s["above_signal"], "above_sweep_candle": s["above_sweep"],
-                                    "confirmed_on_candle": s["conf_offset"], "rr": round(r, 2)}})
+                                    "confirmed_on_candle": s["conf_offset"], "reclaimed": s["reclaimed"],
+                                    "rr": round(r, 2)}})
     return out

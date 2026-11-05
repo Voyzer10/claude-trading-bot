@@ -10,7 +10,7 @@ research_v3.py - backtest of Scanner v3's sweep reversal (sweep_reversal.py, the
 
 Grid (small on purpose, so a lucky combination is less likely): side (long, short, both) x swept low (any, the BOS
 move's start, a swing low after the BOS) x trigger (signal candle high, sweep candle high, either) x extended filter
-(on, off) x target (1R, 2R, liquidity with R:R >= 1, liquidity with R:R >= 2) x hours (crypto). One trade per symbol
+(on, off) x reclaim (the second PDF's gate 3: a close back above the swept level by the entry; off, required) x target (1R, 2R, liquidity with R:R >= 1, liquidity with R:R >= 2) x hours (crypto). One trade per symbol
 at a time. "Live" = what Scanner v3 trades: both sides, any low, either trigger, extended skipped, liquidity R:R >= 1.
 """
 import itertools
@@ -24,7 +24,8 @@ UTC = timezone.utc
 TARGETS = ("1R", "2R", "liq_rr1", "liq_rr2")
 LEVELS = ("any", "origin", "post")
 TRIGGERS = ("signal", "sweep", "either")
-LIVE = {"side": "both", "level": "any", "trigger": "either", "ext": True, "target": "liq_rr1", "session": "all"}
+LIVE = {"side": "both", "level": "any", "trigger": "either", "ext": True, "reclaim": False, "target": "liq_rr1",
+        "session": "all"}
 
 
 def events_v3(data, day_of, hold, cost_fn, entry_ok=None, path_end=None):
@@ -53,7 +54,8 @@ def events_v3(data, day_of, hold, cost_fn, entry_ok=None, path_end=None):
                         if risk <= 0:
                             continue
                         ev = {"sym": sym, "day": rows[i][0].date().isoformat(), "i": i, "hour": rows[i][0].hour,
-                              "side": s["side"], "level": lv, "trigger": tr, "extended": s["extended"], "out": {}}
+                              "side": s["side"], "level": lv, "trigger": tr, "extended": s["extended"],
+                              "reclaimed": s["reclaimed"], "out": {}}
                         for tg in TARGETS:
                             tp = V.target_for(s, "swing" if tg.startswith("liq") else tg, stop)
                             if tp is None:
@@ -77,6 +79,8 @@ def keep(ev, f):
     if ev["level"] != f["level"] or ev["trigger"] != f["trigger"] or f["target"] not in ev["out"]:
         return False
     if f["ext"] and ev["extended"]:
+        return False
+    if f.get("reclaim") and not ev["reclaimed"]:
         return False
     if f.get("session") == "active" and ev["hour"] < 6:
         return False
@@ -106,7 +110,8 @@ def row(r, label=""):
             x["trades"], x["trades"] / max(1, x["days_traded"]), 100 * x["win_rate"], x["avg_r"], x["total_r"],
             x["worst_day_r"], x["max_drawdown_r"])
     parts = ["side=%s" % f["side"], "low=%s" % f["level"], "trigger=%s" % f["trigger"],
-             "extended=%s" % ("skip" if f["ext"] else "keep"), "target=%s" % f["target"]]
+             "extended=%s" % ("skip" if f["ext"] else "keep"),
+             "reclaim=%s" % ("required" if f.get("reclaim") else "no"), "target=%s" % f["target"]]
     if "session" in f:
         parts.append("hours=%s" % f["session"])
     return "%s%s\n     in-sample   %s\n     OUT-sample  %s" % (label, " ".join(parts), s(i), s(o))
@@ -181,7 +186,7 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
         print("No v3 sweep-reversal entries found: no data came back (check the internet / Yahoo).")
         return 1
     grid = {"side": ["long", "short", "both"], "level": list(LEVELS), "trigger": list(TRIGGERS), "ext": [True, False],
-            "target": list(TARGETS), **grid_extra}
+            "reclaim": [False, True], "target": list(TARGETS), **grid_extra}
     live = dict(LIVE) if market == "crypto" else {k: v for k, v in LIVE.items() if k != "session"}
     days = sorted({e["day"] for e in events})
     split = days[int(len(days) * 0.7)]
@@ -225,7 +230,7 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
              row(score(events, dict(live, side="short"), split, stats, spacing), "LIVE, shorts only:  "), "",
              "WHICH INGREDIENT HELPS (average OUT-sample R of the combinations with it vs the alternative):",
              effect("level", "origin", "any"), effect("level", "post", "any"), effect("trigger", "signal", "either"),
-             effect("trigger", "sweep", "either"), effect("ext", True, False), effect("target", "liq_rr2", "liq_rr1"),
+             effect("trigger", "sweep", "either"), effect("ext", True, False), effect("reclaim", True, False), effect("target", "liq_rr2", "liq_rr1"),
              effect("target", "2R", "liq_rr1"), effect("target", "1R", "liq_rr1"), effect("side", "short", "long")]
     if market == "crypto":
         lines.append(effect("session", "active", "all"))

@@ -15,6 +15,8 @@ BUY (low sweep):
      said both cases count). A close below the swept extreme first cancels it.
   6. Skip if extended: the confirmation candle's range is over ext_range_atr (2) x ATR, or the entry is more than
      ext_dist_atr (3) x ATR above the swept extreme.
+  Each entry records "reclaimed": a close back above the swept level by the entry (the second PDF, "Trading Setups
+  Workflow", gate 3: "sweep with a reclaim / rejection"). Not required live until the backtest says it helps.
   7. Stop: the swept extreme minus 0.1 ATR. Target: the nearest of the BOS move's high and the untaken swing highs
      above the entry (the opposing liquidity), with a minimum R:R (1 live; the backtest also tries 2, 1R and 2R).
 
@@ -85,6 +87,9 @@ def signals(rows, day_of, trigger="either", level="any", ext=True, bos_max=48, s
                 if ext and (ext_range or ext_dist):
                     break
                 taken.add(i)
+                # the second PDF's gate 3 ("sweep with a reclaim / rejection"): some close after the sweep got back
+                # above the swept level by the entry. Recorded, not required live; the backtest scores both.
+                reclaimed = any(bars[k][4] > lvl for k in range(j + 1, i + 1))
                 move_hi = max(bars[k][2] for k in range(bos["i"], j + 1))
                 # swing highs price has not traded through since they formed (a broken high is no liquidity)
                 tgts = [move_hi] + [p for idx, p in ctx.sh_known[i]
@@ -97,7 +102,7 @@ def signals(rows, day_of, trigger="either", level="any", ext=True, bos_max=48, s
                             "sweep_high": sg * t_sw, "above_signal": ci > t_sig, "above_sweep": ci > t_sw,
                             "conf_offset": i - s_i, "signal_pattern": "doji" if "doji" in PB.patterns(bars[s_i], doji_pct)
                             else ("hammer" if short else "inverted hammer"),
-                            "extended": ext_range or ext_dist, "ext_range": ext_range, "ext_dist": ext_dist,
+                            "reclaimed": reclaimed, "extended": ext_range or ext_dist, "ext_range": ext_range, "ext_dist": ext_dist,
                             "swing_target": sg * min(tgts) if tgts else None})
                 break
             if ci < extreme:

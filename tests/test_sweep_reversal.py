@@ -67,6 +67,7 @@ if __name__ == "__main__":
         check("   stop below the swept low 99.6", stop < 99.6, stop)
         check("   target = the BOS move's high 101.6 (broken swing highs are not targets)",
               abs(g["swing_target"] - 101.6) < 1e-9, g["swing_target"])
+        check("   reclaimed: the entry closed back above the swept 99.8", g["reclaimed"] is True, g)
         check("   R:R of that target is over 1", V.rr(g, stop, V.target_for(g, "swing", stop)) > 1)
     check("3. wick above the trigger, close below: no order", not sigs(build([SWEEP, STAR, CONF_WICK])))
     check("4. sweep by a wick only (close back above the low): no order", not sigs(build([WICK_SWEEP, STAR, CONF])))
