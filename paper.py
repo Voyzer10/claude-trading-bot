@@ -320,6 +320,70 @@ def fetch_price(m, t):
     raise PaperError("could not fetch %s: %s" % (yahoo_symbol(m, t), last))
 
 
+def fetch_minutes(m, t):
+    """Today's 1-minute candles [(utc, o, h, l, c)], oldest first, or [] (F&O, or no data). Used by check_once to see
+    what happened BETWEEN two checks: a stop or target touched and left again in the minutes in between."""
+    if m == "NFO":
+        return []
+    ysym = urllib.parse.quote(yahoo_symbol(m, t), safe="")
+    for host in ("query2", "query1"):
+        url = "https://%s.finance.yahoo.com/v8/finance/chart/%s?range=1d&interval=1m" % (host, ysym)
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                doc = json.loads(r.read())
+            res = ((doc.get("chart") or {}).get("result") or [None])[0]
+            if not res:
+                return []
+            q = ((res.get("indicators") or {}).get("quote") or [{}])[0]
+            out = []
+            for ts, o, h, l, c in zip(res.get("timestamp") or [], q.get("open") or [], q.get("high") or [],
+                                      q.get("low") or [], q.get("close") or []):
+                if None not in (ts, o, h, l, c):
+                    out.append((datetime.fromtimestamp(ts, timezone.utc), float(o), float(h), float(l), float(c)))
+            if out:
+                return out
+        except Exception:
+            continue
+    if m == "CRYPTO":  # Coinbase public 1-minute candles: [time, low, high, open, close, volume], newest first
+        try:
+            req = urllib.request.Request("https://api.exchange.coinbase.com/products/%s-USD/candles?granularity=60" % t,
+                                         headers={"User-Agent": "trader-bot", "Accept": "application/json"})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                rows = json.loads(r.read())
+            return sorted((datetime.fromtimestamp(x[0], timezone.utc), float(x[3]), float(x[2]), float(x[1]), float(x[4]))
+                          for x in rows)
+        except Exception:
+            return []
+    return []
+
+
+def path_since(pos, bars, now, price):
+    """The price path to check for this position: the 1-minute candles since the last check, then the live price.
+    The candle that was still forming at the last check is included again (its later part was not seen); before the
+    first check, only candles that started after the entry (the entry's own minute may hold prices from before it)."""
+    seen, entry = pos.get("last_seen"), pos.get("entry_time")
+    try:
+        if seen:
+            since = datetime.fromisoformat(seen) - timedelta(seconds=60)
+        elif entry:
+            since = datetime.fromisoformat(entry)
+        else:
+            since = None
+    except ValueError:
+        since = None
+    path = [b for b in bars if since is not None and since <= b[0] < now]
+    # the live price last. It only counts as a gap past the stop when there were no candles to look at and the
+    # position was not checked in the last 15 minutes (the old rule); otherwise a resting stop fills at the stop.
+    watched = False
+    try:
+        watched = bool(seen) and (now - datetime.fromisoformat(seen)) <= timedelta(minutes=15)
+    except ValueError:
+        pass
+    path.append((now, price, price, price, price, not bars and not watched))
+    return path
+
+
 # ------------------------------------------------------------------ money
 
 def money(m, x):
@@ -628,6 +692,67 @@ def cmd_sell(a, cfg, led):
     close_position(led, cfg, pos, price, "manual", now)
 
 
+def step_bar(led, cfg, pos, acc, b, now, sh):
+    """One candle (utc, o, h, l, c) of the path for an open position: the stop first (when a candle touches both,
+    assume the stop: we cannot know the order inside a minute, so the worse case), then the target, then move the
+    break-even / trailing stop with the candle's best price for the next candle. Returns True if it closed."""
+    m = pos["market"]
+    t, o, h, l, c = b[:5]
+    live = len(b) > 5                 # the live-price step (b[5]: may it count as a gap?)
+    when = t if t < now else now
+    stop_hit = (h >= pos["stop"]) if sh else (l <= pos["stop"])
+    if stop_hit:
+        gapped = b[5] if live else ((o > pos["stop"]) if sh else (o < pos["stop"]))   # opened past it: the open, worse
+        fill = o if gapped else pos["stop"]
+        why = "trailing stop" if pos.get("trailing") else "breakeven stop" if pos.get("breakeven") else "stop"
+        close_position(led, cfg, pos, fill, why if not gapped else why + " (gapped past it)", when)
+        return True
+    if (l <= pos["target"]) if sh else (h >= pos["target"]):
+        # a take-profit is a limit order: it fills at the target, not at a later, better price
+        close_position(led, cfg, pos, pos["target"], "target", when)
+        return True
+    best = l if sh else h
+    be = acc.get("breakeven_at_r")
+    rs = pos.get("risk_stop", pos["stop"])
+    be_hit = (best <= pos["entry"] - be * (rs - pos["entry"])) if (be and sh) else \
+             (be and best >= pos["entry"] + be * (pos["entry"] - rs))
+    if be and not pos.get("breakeven") and be_hit:
+        pos["stop"], pos["breakeven"] = pos["entry"], True
+        print("BREAKEVEN %-16s %s reached %gR: stop moved to the entry %s"
+              % (pos["key"], money(m, best), be, money(m, pos["entry"])))
+    if pos.get("trail_k") and sh:
+        # trailing exit for a short (auto_crypto short_exit = trail): break-even once price has fallen
+        # trail_arm_r R, then the stop follows trail_k x ATR above the lowest price seen; it never moves up
+        pos["peak"] = min(pos.get("peak", pos["entry"]), best)   # for a short, "peak" is the low
+        risk = rs - pos["entry"]
+        if not pos.get("breakeven") and risk > 0 and pos["peak"] <= pos["entry"] - pos.get("trail_arm_r", 1.0) * risk:
+            pos["stop"], pos["breakeven"] = min(pos["stop"], pos["entry"]), True
+            print("BREAKEVEN %-16s low %s: stop moved to the entry %s" % (pos["key"], money(m, pos["peak"]),
+                                                                        money(m, pos["entry"])))
+        if pos.get("breakeven"):
+            trail_to = round_px(m, pos["peak"] + pos["trail_k"] * pos["trail_atr"], down=False)
+            if trail_to < pos["stop"]:
+                pos["stop"], pos["trailing"] = trail_to, True
+                print("TRAIL %-16s stop lowered to %s (low %s)" % (pos["key"], money(m, trail_to),
+                                                                 money(m, pos["peak"])))
+    elif pos.get("trail_k") and not sh:
+        # trailing exit (auto_crypto rules v4): break-even once +trail_arm_r is reached, then the stop
+        # follows trail_k x ATR under the highest price seen; it never moves down
+        pos["peak"] = max(pos.get("peak", pos["entry"]), best)
+        risk = pos["entry"] - rs
+        if not pos.get("breakeven") and risk > 0 and pos["peak"] >= pos["entry"] + pos.get("trail_arm_r", 1.0) * risk:
+            pos["stop"], pos["breakeven"] = max(pos["stop"], pos["entry"]), True
+            print("BREAKEVEN %-16s peak %s: stop moved to the entry %s" % (pos["key"], money(m, pos["peak"]),
+                                                                         money(m, pos["entry"])))
+        if pos.get("breakeven"):
+            trail_to = round_px(m, pos["peak"] - pos["trail_k"] * pos["trail_atr"])
+            if trail_to > pos["stop"]:
+                pos["stop"], pos["trailing"] = trail_to, True
+                print("TRAIL %-16s stop raised to %s (peak %s)" % (pos["key"], money(m, trail_to),
+                                                                  money(m, pos["peak"])))
+    return False
+
+
 def check_once(cfg, led):
     now = datetime.now(timezone.utc)
     if not led["open"]:
@@ -649,58 +774,22 @@ def check_once(cfg, led):
                   % (pos["key"], m, money(m, price), money(m, upnl)))
             continue
         intraday = bool(acc.get("flat_by")) and MARKETS[m]["open"] is not None
-        last_seen = pos.get("last_seen")
-        watched = last_seen and (now - datetime.fromisoformat(last_seen)) <= timedelta(minutes=15)
+        # Walk every 1-minute candle since the last check, then the live price: a stop or target touched between two
+        # checks (5 min apart) counts even if price came back by the time we look (owner's report, 5 Nov 2026).
+        try:
+            bars = fetch_minutes(m, pos["symbol"])
+        except Exception:
+            bars = []
+        path = path_since(pos, bars, now, price)
         pos["last_seen"] = now.isoformat()
-        be = acc.get("breakeven_at_r")
-        rs = pos.get("risk_stop", pos["stop"])
-        be_hit = (price <= pos["entry"] - be * (rs - pos["entry"]) and price > pos["target"]) if (be and sh) else \
-                 (be and price >= pos["entry"] + be * (pos["entry"] - rs) and price < pos["target"])
-        if be and not pos.get("breakeven") and be_hit:
-            pos["stop"], pos["breakeven"] = pos["entry"], True
-            print("BREAKEVEN %-16s price %s is %gR up: stop moved to the entry %s"
-                  % (pos["key"], money(m, price), be, money(m, pos["entry"])))
-        if pos.get("trail_k") and sh:
-            # trailing exit for a short (auto_crypto short_exit = trail): break-even once price has fallen
-            # trail_arm_r R, then the stop follows trail_k x ATR above the lowest price seen; it never moves up
-            pos["peak"] = min(pos.get("peak", pos["entry"]), price)   # for a short, "peak" is the low
-            risk = rs - pos["entry"]
-            if not pos.get("breakeven") and risk > 0 and pos["peak"] <= pos["entry"] - pos.get("trail_arm_r", 1.0) * risk:
-                pos["stop"], pos["breakeven"] = min(pos["stop"], pos["entry"]), True
-                print("BREAKEVEN %-16s low %s: stop moved to the entry %s" % (pos["key"], money(m, pos["peak"]),
-                                                                            money(m, pos["entry"])))
-            if pos.get("breakeven"):
-                trail_to = round_px(m, pos["peak"] + pos["trail_k"] * pos["trail_atr"], down=False)
-                if trail_to < pos["stop"]:
-                    pos["stop"], pos["trailing"] = trail_to, True
-                    print("TRAIL %-16s stop lowered to %s (low %s)" % (pos["key"], money(m, trail_to),
-                                                                     money(m, pos["peak"])))
-        elif pos.get("trail_k") and not sh:
-            # trailing exit (auto_crypto rules v4): break-even once +trail_arm_r is reached, then the stop
-            # follows trail_k x ATR under the highest price seen; it never moves down
-            pos["peak"] = max(pos.get("peak", pos["entry"]), price)
-            risk = pos["entry"] - rs
-            if not pos.get("breakeven") and risk > 0 and pos["peak"] >= pos["entry"] + pos.get("trail_arm_r", 1.0) * risk:
-                pos["stop"], pos["breakeven"] = max(pos["stop"], pos["entry"]), True
-                print("BREAKEVEN %-16s peak %s: stop moved to the entry %s" % (pos["key"], money(m, pos["peak"]),
-                                                                             money(m, pos["entry"])))
-            if pos.get("breakeven"):
-                trail_to = round_px(m, pos["peak"] - pos["trail_k"] * pos["trail_atr"])
-                if trail_to > pos["stop"]:
-                    pos["stop"], pos["trailing"] = trail_to, True
-                    print("TRAIL %-16s stop raised to %s (peak %s)" % (pos["key"], money(m, trail_to),
-                                                                      money(m, pos["peak"])))
-        if (price >= pos["stop"]) if sh else (price <= pos["stop"]):
-            # A resting stop order triggers at the stop while we watch; between checks we only see the last
-            # price, so fill at the stop if we were watching, at the (worse) price after a gap or a pause.
-            fill = pos["stop"] if watched else price
-            why = "trailing stop" if pos.get("trailing") else "breakeven stop" if pos.get("breakeven") else "stop"
-            close_position(led, cfg, pos, fill,
-                           why if fill == pos["stop"] else why + " (gapped past it: no check for a while)", now)
-        elif (price <= pos["target"]) if sh else (price >= pos["target"]):
-            # a take-profit is a limit order: it fills at the target, not at a later, higher price
-            close_position(led, cfg, pos, pos["target"], "target", now)
-        elif intraday and pos["entry_date"] != local_now(m, now).date().isoformat():
+        closed = False
+        for b in path:
+            if step_bar(led, cfg, pos, acc, b, now, sh):
+                closed = True
+                break
+        if closed:
+            continue
+        if intraday and pos["entry_date"] != local_now(m, now).date().isoformat():
             close_position(led, cfg, pos, price, "carried overnight: missed the flat-by", now)
         elif intraday and past_flat_by(m, acc, now):
             close_position(led, cfg, pos, price, "flat by %s" % acc["flat_by"], now)
