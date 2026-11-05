@@ -10,7 +10,7 @@ type SettingsDoc = {
   rule_defaults: Record<string, unknown>;
   rule_fields: Record<string, Field>;
   rules_version: number | null;
-  risk: Record<string, Record<string, number | boolean>>;
+  risk: Record<string, Record<string, number | boolean | string>>;
   risk_fields: Record<string, Field>;
   coins: string[];
   prefs: { usd_inr: number; daily_goal_inr: number };
@@ -59,6 +59,7 @@ const RISK_LABELS: Record<string, string> = {
   capital: "Paper capital (changing it adds / removes the difference as cash; P&L kept)",
   risk_limits: "Risk limits ON (daily loss, trades/day, cooldown, weekly, max per side). Off while paper testing; turn on before real money",
   trade_setups: "Paper trade Scanner setups (v3 sweep reversal, A-B-C-D, playbook, FVG / OB)",
+  scanner_version: "Scanner version (v2 = rollback: v3 sweep reversal off)",
   cooldown_losses: "Cooldown after N losses in a row (0 = off)",
   cooldown_minutes: "Cooldown length (minutes)",
   weekly_loss_x: "Weekly loss limit (x daily limit, 0 = off)",
@@ -245,6 +246,10 @@ function RiskForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) {
             {f.type === "bool" ? (
               <input id={`risk-${k}`} type="checkbox" checked={v[k] === true || v[k] === "true"}
                      onChange={(e) => setV({ ...v, [k]: e.target.checked })} />
+            ) : f.type === "choice" ? (
+              <select id={`risk-${k}`} value={String(v[k] ?? "")} onChange={(e) => setV({ ...v, [k]: e.target.value })}>
+                {f.choices!.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
             ) : (
               <input id={`risk-${k}`} type="number" inputMode="decimal" step={f.type === "int" ? 1 : "any"} min={f.min} max={f.max}
                      value={String(v[k] ?? "")} onChange={(e) => setV({ ...v, [k]: e.target.value })} />

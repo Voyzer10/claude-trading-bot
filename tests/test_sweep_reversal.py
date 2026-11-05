@@ -4,7 +4,9 @@
     python tests/test_sweep_reversal.py
 """
 import os
+import shutil
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -82,5 +84,32 @@ if __name__ == "__main__":
     check("Scanner v3: owner_setups names it on the confirmation candle", len(v3) == 1 and v3[0]["name"] == "v3 sweep long", own)
     if v3:
         check("   it carries the liquidity target", abs(v3[0]["target"] - 101.6) < 1e-9, v3[0])
+    # rollback to Scanner v2: one switch per account, scanners and the broker both obey it
+    check("rollback: owner_setups(version='v2') has no v3 setup",
+          not [o for o in PB.owner_setups(build([SWEEP, STAR, CONF]), lambda x: x.date(), version="v2")
+               if o["setup"].startswith("v3_")])
+    tmp, old = tempfile.mkdtemp(), os.getcwd()
+    os.chdir(tmp)
+    try:
+        import paper as P
+        P.fetch_price = lambda m, t: (100.4, None)
+        check("scanner_version defaults to v3", PB.scanner_version("CRYPTO") == "v3" and PB.scanner_version("NSE") == "v3")
+        if v3:
+            rec = P.setup_decision("CRYPTO", "TST", v3[0], news=[])
+            check("v3: the sweep long is paper traded with its liquidity target",
+                  rec["result"] == "PAPER BUY" and rec["steps"]["4_exit"]["target"] == v3[0]["target"]
+                  and rec["steps"]["1_scanner"]["scanner"] == "v3", rec)
+        cfg = P.load_config()
+        cfg["accounts"]["INDIA"]["scanner_version"] = "v2"
+        P.save_json(P.CONFIG, cfg)
+        check("rollback is per account: INDIA v2, CRYPTO still v3",
+              PB.scanner_version("NSE") == "v2" and PB.scanner_version("CRYPTO") == "v3")
+        if v3:
+            rec = P.setup_decision("NSE", "TST", dict(v3[0]), news=[])
+            check("rolled back: a v3 setup reaching the broker is skipped, not traded",
+                  rec["result"] == "skipped" and "v2" in rec["why"], rec)
+    finally:
+        os.chdir(old)
+        shutil.rmtree(tmp, ignore_errors=True)
     print("\n%s" % ("all checks passed" if not FAILS else "%d FAILED: %s" % (len(FAILS), ", ".join(FAILS))))
     sys.exit(1 if FAILS else 0)

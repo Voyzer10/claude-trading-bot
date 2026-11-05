@@ -91,6 +91,7 @@ RISK_FIELDS = {
     "capital": {"type": "float", "min": 100},
     "risk_limits": {"type": "bool"},
     "trade_setups": {"type": "bool"},
+    "scanner_version": {"type": "choice", "choices": ["v3", "v2"]},
     "cooldown_losses": {"type": "int", "min": 0, "max": 20},
     "cooldown_minutes": {"type": "float", "min": 0, "max": 1440},
     "weekly_loss_x": {"type": "float", "min": 0, "max": 10},
@@ -1036,7 +1037,16 @@ def agents():
     }
 
     out = []
+    try:
+        _accs = _paper_cfg().get("accounts", {})
+    except Exception:
+        _accs = {}
+    vers = {acc: (_accs.get(acc, {}).get("scanner_version") or "v3") for acc in ("CRYPTO", "INDIA", "US")}
     for n, key, name, skill in AGENTS:
+        if n == 1:   # the Scanner's version per account (Settings > Risk limits; v2 = the rollback)
+            u = sorted(set(vers.values()))
+            name = "Scanner %s" % u[0] if len(u) == 1 else "Scanner (%s)" % ", ".join(
+                "%s %s" % (k, v) for k, v in vers.items())
         a = {"n": n, "key": key, "name": name, "skill": skill, "job": jobs[n]}
         if n >= 10:
             a.update(status="n/a", now="Not part of the crypto pipeline" +

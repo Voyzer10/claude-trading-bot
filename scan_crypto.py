@@ -169,12 +169,13 @@ def intraday_one(d, cutoff):
             fresh["smcp_" + x["setup"]] = True
     except Exception:
         pb = []
-    # Scanner v2: the owner's setups (A-B-C-D, playbook with structure, FVG / order block) on this candle. The agents
+    # The Scanner (v3, or v2 after a rollback in Settings): the owner's setups (v3 sweep reversal, A-B-C-D, playbook
+    # with structure, FVG / order block) on this candle. The agents
     # record them (auto_crypto.process); a playbook setup ticked in enabled_setups is also traded via the hits above.
     try:
         import smc_playbook as PB2
         rows2 = [(b[0], b[5] if b[5] is not None else b[3], b[1], b[2], b[3], b[4] or 0) for b in bars]
-        own = PB2.owner_setups(rows2, lambda t: t.date())
+        own = PB2.owner_setups(rows2, lambda t: t.date(), version=PB2.scanner_version("CRYPTO"))
     except Exception:
         own = []
     return {"price": last[3], "bar_end": (last[0] + timedelta(minutes=BAR_MIN)).isoformat(),

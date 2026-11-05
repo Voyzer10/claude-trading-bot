@@ -62,19 +62,25 @@ DEFAULT_CONFIG = {
                    "max_position_pct": 25, "max_position_pct_fno": 40, "daily_loss_limit": 2500,
                    "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
                    "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": True,
-                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True},
+                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
+                   "scanner_version": "v3"},
         "US":     {"capital": 50000, "max_loss_per_trade": 50, "max_position_pct": 25,
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
                    "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
-                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True},
+                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
+                   "scanner_version": "v3"},
         "CRYPTO": {"capital": 1000, "max_loss_per_trade": 10, "max_position_pct": 25,
                    "daily_loss_limit": 30, "max_trades_per_day": 10, "min_reward_risk": 1.0,
                    "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True,
-                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "max_same_side": 3, "risk_limits": False, "trade_setups": True},
+                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "max_same_side": 3, "risk_limits": False, "trade_setups": True,
+                   "scanner_version": "v3"},
         # risk_limits (False while paper testing, the owner's decision of 4 Nov 2026): when True, the daily loss limit,
         # max trades per day and the rulebook guards below block new entries. Turn it on before real money.
         # trade_setups: Scanner v2's setups (the owner's A-B-C-D / playbook / FVG / OB) are paper traded (True) or
         # only recorded (False).
+        # scanner_version: "v3" (Scanner v2's setups + the v3 sweep reversal, 5 Nov 2026) or "v2" (rollback: the v3
+        # setups are neither scanned nor traded). Switch it per account from Settings > Risk limits; nothing else
+        # changes, and the next candle uses it.
         # Rulebook risk guards (all accounts): after cooldown_losses losing trades in a row, no new entries for
         # cooldown_minutes; a week's net realised loss of weekly_loss_x x daily_loss_limit stops new entries until
         # Monday; CRYPTO: at most max_same_side open positions on one side (alts move with BTC). 0 = off.
@@ -861,14 +867,18 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
         return rec
 
     # Scanner v3's sweep reversal carries its own target (the opposing liquidity); the older setups use 2R
+    cfg = load_config()
+    acc = cfg["accounts"][MARKETS[market]["account"]] if market in MARKETS else cfg["accounts"]["US"]
+    version = acc.get("scanner_version", "v3")
+    st["1_scanner"]["scanner"] = version
+    if version == "v2" and s["setup"].startswith("v3_"):   # rolled back after it was scanned: never trade it
+        return done("skipped", "Scanner rolled back to v2 for this account: v3 setups are off")
     entry, stop, short = s["price"], s.get("stop"), s["side"] == "short"
     target = s.get("target") or s.get("target_2r")
     st["3_entry"] = {"side": s["side"], "price_now": entry, "note": "entry = the close of the candle that completed it"}
     risk = ((stop - entry) if short else (entry - stop)) if stop is not None else 0
     if risk <= 0:
         return done("skipped", "price %s is already past the stop %s" % (entry, stop))
-    cfg = load_config()
-    acc = cfg["accounts"][MARKETS[market]["account"]] if market in MARKETS else cfg["accounts"]["US"]
     units = min(acc["max_loss_per_trade"] / risk, acc["capital"] * acc["max_position_pct"] / 100 / entry)
     qty = units if market == "CRYPTO" else int(units)
     cost = None
@@ -898,7 +908,7 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     import io
     led = load_ledger(cfg)
     args = type("A", (), {"symbol": "%s:%s" % (market, symbol), "stop": str(stop), "target": str(target), "qty": None,
-                          "price": None, "note": "scanner v3: %s" % name, "force": False,
+                          "price": None, "note": "scanner %s: %s" % (version, name), "force": False,
                           "side": "short" if short else "long"})()
     buf = io.StringIO()
     try:
@@ -914,5 +924,5 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
                                     "max_loss": round(abs(pos["entry"] - pos["stop"]) * pos["qty"] + pos.get("entry_fee", 0), 2),
                                     "report": buf.getvalue().strip().splitlines()}
     st["9_alerts"] = "live.py checks stop %s / target %s every cycle" % (pos["stop"], pos["target"])
-    return done("PAPER SHORT" if short else "PAPER BUY", "%s @ %s, stop %s, target %s (Scanner v3: %s)" % (
-        fmt_qty(market, pos["qty"]), pos["entry"], pos["stop"], pos["target"], name))
+    return done("PAPER SHORT" if short else "PAPER BUY", "%s @ %s, stop %s, target %s (Scanner %s: %s)" % (
+        fmt_qty(market, pos["qty"]), pos["entry"], pos["stop"], pos["target"], version, name))

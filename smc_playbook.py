@@ -385,11 +385,28 @@ def _r(x):
     return round(x, 2) if ax >= 100 else round(x, 4) if ax >= 1 else float("%.6g" % x)
 
 
-def owner_setups(rows, day_of, ctx=None):
+SCANNER_VERSIONS = ("v3", "v2")
+
+
+def scanner_version(market):
+    """Which Scanner a market runs: "v3" (v2's setups + the sweep reversal) or "v2" (the rollback: v3's setups off).
+    One switch per paper account (paper_config.json accounts.<X>.scanner_version, Settings > Risk limits). Defaults
+    to v3 if the config cannot be read."""
+    try:
+        import paper as P
+        acc = P.MARKETS.get(market, {}).get("account", market)
+        v = P.load_config()["accounts"].get(acc, {}).get("scanner_version", "v3")
+        return v if v in SCANNER_VERSIONS else "v3"
+    except Exception:
+        return "v3"
+
+
+def owner_setups(rows, day_of, ctx=None, version="v3"):
     """The owner's setups that complete on the LAST row (closed candles, oldest first): the playbook's doji / star /
     hammer (structure before the sweep, as the playbook orders it), FVG / order-block first retests, and his A-B-C-D
     (abcd.py), and Scanner v3's sweep reversal (sweep_reversal.py). Each: {setup, name, side, price, stop, target_2r,
-    details}; a v3 setup also has "target" (the opposing liquidity, R:R >= 1)."""
+    details}; a v3 setup also has "target" (the opposing liquidity, R:R >= 1). version="v2" = the rollback: exactly
+    Scanner v2's setups, no sweep reversal."""
     import abcd as A   # abcd imports this module, so import here
     if len(rows) < 35:
         return []
@@ -426,7 +443,8 @@ def owner_setups(rows, day_of, ctx=None):
                                     "C_high": _r(s["c_low"] if short else s["c_high"]),
                                     "C_low": _r(s["c_high"] if short else s["c_low"]),
                                     "D_candles_after_C": s["d_offset"], "reclaimed": s["reclaimed"]}})
-    out += v3_setups(rows, day_of, i, ctx)
+    if version == "v3":
+        out += v3_setups(rows, day_of, i, ctx)
     for o in out:
         o["name"] = SETUP_NAMES.get(o["setup"], o["setup"])
     return out
