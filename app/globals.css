@@ -162,7 +162,7 @@ td.why { min-width: 260px; }
 .logs .ln { display: grid; grid-template-columns: 128px 74px 1fr; gap: 10px; padding: 4px 10px; border-bottom: 1px solid var(--line); }
 .logs .ln:last-child { border-bottom: 0; }
 .logs .k { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
-.k-trade { color: var(--good); } .k-decision { color: var(--warn); } .k-error { color: var(--bad); } .k-runner { color: var(--accent); } .k-scan { color: var(--muted); } .k-dashboard { color: var(--accent); }
+.k-trade { color: var(--good); } .k-decision { color: var(--warn); } .k-error { color: var(--bad); } .k-runner { color: var(--accent); } .k-scan { color: var(--muted); } .k-dashboard { color: var(--accent); } .k-tm { color: var(--good); font-weight: 600; }
 
 .notice { border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); background: var(--warn-bg); border-radius: 8px; padding: 12px 14px; font-size: 13.5px; }
 .notice.bad { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); background: var(--bad-bg); }
@@ -394,3 +394,13 @@ textarea { resize: vertical; }
 
 ::selection { background: var(--accent-soft); color: var(--ink); }
 * { scrollbar-color: var(--line) transparent; }
+
+/* Trade Manager strip above the open positions */
+.tm-strip { border: 1px solid var(--line, rgba(127,127,127,.25)); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
+.tm-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tm-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted, #888); flex: none; }
+.tm-dot.on { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
+.tm-watch { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tm-profit-locked { color: var(--good); }
+.tm-acts { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 3px; }
+.tm-acts li { overflow-wrap: anywhere; }
