@@ -10,8 +10,9 @@ OB / FVG secondary, then reset - exactly what the live scanner does.
     python research.py nse-sv4          # NSE stocks, 5m, intraday
 
 Grid (small on purpose): side (long, short, both) x trades (primary only, primary + secondary, secondary only) x
-min R:R (1, 2) x reclaim window (1, 3 candles) [x hours for crypto]. "Live" = what Scanner v4 paper trades: both
-sides, primary + secondary, R:R >= 1, reclaim within 3 candles.
+min R:R (1, 2) x the PDF's skip rules (all on = live, all off, or one of them off: higher-timeframe trend, chop,
+BOS body + volume, nearby opposing zone) [x hours for crypto]. "Live" = what Scanner v4 paper trades: both sides,
+primary + secondary, R:R >= 1, every skip rule on.
 """
 import itertools
 import os
@@ -21,8 +22,11 @@ import research_abcd as RA
 import scanner_v4 as V4
 
 UTC = timezone.utc
-VARIANTS = [(rr, rc) for rr in (1.0, 2.0) for rc in (1, 3)]
-LIVE = {"side": "both", "trades": "both", "min_rr": 1.0, "reclaim": 3, "session": "all"}
+FILTERS = {"all": {}, "none": {"htf": False, "chop_er": 0, "bos_body_atr": 0, "bos_vol_x": 0, "opp_zone": False},
+           "no_htf": {"htf": False}, "no_chop": {"chop_er": 0}, "no_bos_quality": {"bos_body_atr": 0, "bos_vol_x": 0},
+           "no_opp_zone": {"opp_zone": False}}
+VARIANTS = [(rr, f) for rr in (1.0, 2.0) for f in FILTERS]
+LIVE = {"side": "both", "trades": "both", "min_rr": 1.0, "filters": "all", "session": "all"}
 
 
 def events_v4(data, day_of, cost_fn, intraday=False, max_hold=48, entry_ok=None):
@@ -32,9 +36,9 @@ def events_v4(data, day_of, cost_fn, intraday=False, max_hold=48, entry_ok=None)
                 zip(d["t"], d["o"], d["h"], d["l"], d["c"], d["v"]) if None not in (o, h, l, c)]
         if len(rows) < 250:
             continue
-        for rr, rc in VARIANTS:
+        for rr, fname in VARIANTS:
             try:
-                seq = V4.sequence(rows, day_of, intraday=intraday, min_rr=rr, reclaim_max=rc, max_hold=max_hold)
+                seq = V4.sequence(rows, day_of, intraday=intraday, min_rr=rr, max_hold=max_hold, **FILTERS[fname])
             except Exception:
                 continue
             for t in seq:
@@ -51,7 +55,7 @@ def events_v4(data, day_of, cost_fn, intraday=False, max_hold=48, entry_ok=None)
                     continue
                 evs.append({"sym": sym, "day": rows[t["i"]][0].date().isoformat(), "i": t["i"],
                             "hour": rows[t["i"]][0].hour, "side": t["side"], "kind": t["kind"], "min_rr": rr,
-                            "reclaim": rc, "r": (t["exit"] - t["entry"]) * sg / risk - cost,
+                            "filters": fname, "r": (t["exit"] - t["entry"]) * sg / risk - cost,
                             "exit_reason": t["exit_reason"]})
     evs.sort(key=lambda e: (e["day"], e["sym"], e["i"]))
     return evs
@@ -62,7 +66,7 @@ def keep(ev, f):
         return False
     if f["trades"] != "both" and ev["kind"] != f["trades"]:
         return False
-    if ev["min_rr"] != f["min_rr"] or ev["reclaim"] != f["reclaim"]:
+    if ev["min_rr"] != f["min_rr"] or ev["filters"] != f["filters"]:
         return False
     if f.get("session") == "active" and ev["hour"] < 6:
         return False
@@ -87,7 +91,7 @@ def row(r, label=""):
         return "%4d tr (%.1f/day)  win %3.0f%%  avg %+.2fR  total %+6.1fR  worst day %+.1fR  dd %+.1fR" % (
             x["trades"], x["trades"] / max(1, x["days_traded"]), 100 * x["win_rate"], x["avg_r"], x["total_r"],
             x["worst_day_r"], x["max_drawdown_r"])
-    parts = ["side=%s" % f["side"], "trades=%s" % f["trades"], "min_rr=%g" % f["min_rr"], "reclaim<=%d" % f["reclaim"]]
+    parts = ["side=%s" % f["side"], "trades=%s" % f["trades"], "min_rr=%g" % f["min_rr"], "skip_rules=%s" % f["filters"]]
     if "session" in f:
         parts.append("hours=%s" % f["session"])
     return "%s%s\n     in-sample   %s\n     OUT-sample  %s" % (label, " ".join(parts), s(i), s(o))
@@ -152,7 +156,7 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
         print("No Scanner v4 trades found: no data came back (check the internet / Yahoo).")
         return 1
     grid = {"side": ["long", "short", "both"], "trades": ["primary", "secondary", "both"], "min_rr": [1.0, 2.0],
-            "reclaim": [1, 3], **grid_extra}
+            "filters": list(FILTERS), **grid_extra}
     live = dict(LIVE) if market == "crypto" else {k: v for k, v in LIVE.items() if k != "session"}
     days = sorted({e["day"] for e in events})
     split = days[int(len(days) * 0.7)]
@@ -168,7 +172,7 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
     ok.sort(key=lambda r: -r["in_sample"]["avg_r"])
     stable = sorted([r for r in ok if r["in_sample"]["avg_r"] > 0 and r["out_of_sample"]["avg_r"] > 0],
                     key=lambda r: -min(r["in_sample"]["avg_r"], r["out_of_sample"]["avg_r"]))
-    base = [e for e in events if e["min_rr"] == 1.0 and e["reclaim"] == 3]
+    base = [e for e in events if e["min_rr"] == 1.0 and e["filters"] == "all"]
     n_p = sum(1 for e in base if e["kind"] == "primary")
     exits = {}
     for e in base:
@@ -185,6 +189,11 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
              row(score(events, dict(live, trades="secondary"), split, stats), "LIVE, secondary (OB/FVG) only:  "),
              row(score(events, dict(live, side="long"), split, stats), "LIVE, longs only:  "),
              row(score(events, dict(live, side="short"), split, stats), "LIVE, shorts only:  "), "",
+             "THE PDF'S SKIP RULES (live setting, one rule switched off at a time; trades/day shows how much each cuts):"]
+    for fname in FILTERS:
+        if fname != "all":
+            lines.append(row(score(events, dict(live, filters=fname), split, stats), "  skip_rules=%s -> " % fname))
+    lines += ["",
              "TOP 10 BY IN-SAMPLE (the OUT-sample line is the honest one):"]
     for n, r in enumerate(ok[:10], 1):
         lines.append(row(r, "%2d. " % n))

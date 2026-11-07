@@ -23,28 +23,29 @@ def check(name, ok, extra=""):
         FAILS.append(name)
 
 
-def build(tail):
-    """Zigzag base (swing highs 100.6, lows 99.8), a BOS candle closing 101.3 above 100.6, a pullback, a run to
-    103 (the liquidity above), a drop, then `tail` (o, h, l, c). The BOS move started from the 99.8 low."""
+def build(tail, bos_vol=300, drop_low=100.0):
+    """Zigzag base (swing highs 100.6, lows 99.8), a decisive BOS candle closing 101.3 above 100.6 on 3x volume, a
+    pullback, a run to 103 (the liquidity above), a drop, then `tail` (o, h, l, c). The BOS move started from the
+    99.8 low. drop_low=100.5 leaves a bearish FVG right above the entry (an opposing zone)."""
     t, rows = [datetime(2026, 11, 3, tzinfo=timezone.utc)], []
 
-    def add(o, h, l, c):
-        rows.append((t[0], o, h, l, c, 100))
+    def add(o, h, l, c, v=100):
+        rows.append((t[0], o, h, l, c, v))
         t[0] += timedelta(minutes=5)
     for k in range(40):
         b = 100 + (0.4 if (k // 3) % 2 else 0.0)
         add(b, b + 0.2, b - 0.2, b + 0.05)
-    for c in [(100.4, 101.4, 100.3, 101.3),          # BOS: closes above the 100.6 swing high
-              (101.3, 101.6, 101.0, 101.5), (101.5, 101.6, 100.9, 101.0),
+    add(100.4, 101.4, 100.3, 101.3, bos_vol)        # BOS: closes above the 100.6 swing high
+    for c in [(101.3, 101.6, 101.0, 101.5), (101.5, 101.6, 100.9, 101.0),
               (101.0, 103.0, 100.95, 102.9),         # the move's high 103 = liquidity for the target
-              (102.9, 102.95, 100.5, 100.6)]:        # a drop (does not trade below 99.8)
+              (102.9, 102.95, drop_low, 100.6)]:     # a drop (does not trade below 99.8)
         add(*c)
     for c in tail:
         add(*c)
     return rows
 
 
-SWEEP = (100.6, 100.7, 99.6, 99.9)       # trades below 99.8 and closes back above it (sweep + reclaim, one candle)
+SWEEP = (100.6, 101.0, 99.6, 99.9)       # trades below 99.8 and closes back above it (sweep + reclaim, one candle)
 HAMMER = (99.9, 100.05, 99.62, 100.0)    # hammer at the low
 TRIG = (100.0, 100.4, 99.95, 100.3)      # breaks and CLOSES above the hammer high 100.05 -> primary BUY
 TRIG_WICK = (100.0, 100.4, 99.95, 100.04)
@@ -102,6 +103,34 @@ if __name__ == "__main__":
     sh = V4.sequence(V4.mirror(full), DAY)
     check("10. mirror: the same picture upside down is a primary SELL then a secondary SELL",
           [(t["kind"], t["side"]) for t in sh] == [("primary", "short"), ("secondary", "short")], sh)
+
+    # the PDF's skip rules (pages 1, 2, 4)
+    base_tail = [SWEEP, HAMMER, TRIG]
+    check("13. weak break: BOS on ordinary volume (1.0x < 1.2x) -> no trade",
+          not [t for t in seq(build(base_tail, bos_vol=100)) if t["side"] == "long"])
+    check("14. nearby opposing zone: an unfilled bearish FVG inside the first 1R -> no trade",
+          not [t for t in seq(build([(100.6, 100.7, 99.6, 99.9), HAMMER, TRIG], drop_low=100.5)) if t["side"] == "long"])
+    check("    ... the same picture with that rule off trades (the rule is what skipped it)",
+          [t for t in V4.sequence(build([(100.6, 100.7, 99.6, 99.9), HAMMER, TRIG], drop_low=100.5), DAY, opp_zone=False)
+           if t["side"] == "long"])
+    weak = build(base_tail)
+    weak[40] = (weak[40][0], 100.4, 101.4, 100.3, 100.65, 300)          # BOS closes just above: tiny body
+    check("15. weak BOS candle body (under 0.8 ATR) -> no trade", not [t for t in seq(weak) if t["side"] == "long"])
+    zig = [(datetime(2026, 11, 3, tzinfo=timezone.utc) + timedelta(minutes=5 * k), 100, 101, 99, 100 + (0.5 if k % 2 else -0.5), 1)
+           for k in range(30)]
+    check("16. choppy market: efficiency ratio of a zigzag is under 0.30", V4.efficiency(zig, 29, 20) < 0.30)
+    h0 = datetime(2026, 11, 3, tzinfo=timezone.utc)
+    down = []
+    legs = []
+    for w in range(8):                       # an hourly downtrend: 3 hours down, 2 hours up, lower each time
+        top = 200 - 3 * w
+        legs += [top, top - 2, top - 4, top - 2, top - 1]
+    for hr, base in enumerate(legs):         # 12 x 5m candles per hour
+        for q in range(12):
+            down.append((h0 + timedelta(minutes=60 * hr + 5 * q), base, base + 0.6, base - 0.6, base, 1))
+    dirs = V4.htf_dirs(down, DAY)
+    check("17. higher timeframe: an hourly downtrend reads 'down' (longs skipped there)", dirs[-1] == "down", dirs[-12:])
+    check("    and the mirror of it reads 'up' for shorts' (src) terms", V4.htf_dirs(V4.mirror(down), DAY)[-1] == "up")
 
     # the scanner: only v4 setups for a v4 account, named; v2 / v3 never return them
     i_prim = prim[0]["i"] if prim else -1

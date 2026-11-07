@@ -96,7 +96,9 @@ up there, open it on your phone and send back the code) -> `start`. `screen` sho
 - **Scanner version**: Settings > Risk limits > "Scanner version", per account (CRYPTO, INDIA, US). Versions never
   mix. `v4` = only the owner's 7 Nov final workflow (`scanner_v4.py`): a primary trade (BOS, a reclaimed sweep,
   doji / hammer / inverted hammer, break-and-close), then - only after it closed - one sequential OB / FVG secondary
-  (zone exists, tapped, break-and-close). `v3` = only the 5 Nov workflow (`sweep_reversal.py`): sweep reversal and
+  (zone exists, tapped, break-and-close). The PDF's skip rules are on: no trade against the 1-hour trend, no BOS
+  out of chop (efficiency < 0.30) or on a weak candle (body < 0.8 ATR, volume < 1.2x), no nearby opposing FVG
+  within 1R. `v3` = only the 5 Nov workflow (`sweep_reversal.py`): sweep reversal and
   FVG / OB retest. `v2` = A-B-C-D, the playbook's doji / star / hammer and FVG / OB retests. The broker skips a
   setup of another version. Nothing is redeployed; the next candle uses it. Backtest first: Backtest > "Scanner
   v4 ..." / "Scanner v3 ...".
