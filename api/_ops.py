@@ -92,6 +92,14 @@ RISK_FIELDS = {
     "risk_limits": {"type": "bool"},
     "trade_setups": {"type": "bool"},
     "scanner_version": {"type": "choice", "choices": ["v4", "v3", "v2"]},
+    "trade_manager": {"type": "bool"},
+    "tm_be_r": {"type": "float", "min": 0.3, "max": 5},
+    "tm_lock_at": {"type": "float", "min": 0.3, "max": 0.99},
+    "tm_lock_keep": {"type": "float", "min": 0.1, "max": 0.95},
+    "tm_reversal": {"type": "bool"},
+    "tm_rev_min_r": {"type": "float", "min": 0.3, "max": 5},
+    "tm_stale_min": {"type": "float", "min": 0, "max": 1440},
+    "tm_candle_min": {"type": "int", "min": 1, "max": 60},
     "cooldown_losses": {"type": "int", "min": 0, "max": 20},
     "cooldown_minutes": {"type": "float", "min": 0, "max": 1440},
     "weekly_loss_x": {"type": "float", "min": 0, "max": 10},
@@ -106,7 +114,7 @@ RISK_FIELDS = {
 PREF_FIELDS = {"usd_inr": {"type": "float", "min": 50, "max": 200},
                "daily_goal_inr": {"type": "float", "min": 0, "max": 1e7}}
 PREF_DEFAULT = {"usd_inr": 88.0, "daily_goal_inr": 500.0}
-BACKTEST_MODES = ["crypto-sv4", "crypto-sv4-5m", "us-sv4", "nse-sv4", "crypto-v3", "crypto-v3-5m", "us-v3", "nse-v3", "us-orb", "crypto-abcd", "crypto-abcd-5m", "us-abcd", "nse-abcd", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-v4", "crypto-v4-short", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
+BACKTEST_MODES = ["us-tm", "nse-tm", "crypto-tm", "crypto-tm-5m", "crypto-sv4", "crypto-sv4-5m", "us-sv4", "nse-sv4", "crypto-v3", "crypto-v3-5m", "us-v3", "nse-v3", "us-orb", "crypto-abcd", "crypto-abcd-5m", "us-abcd", "nse-abcd", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-v4", "crypto-v4-short", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
 
 
 # ------------------------------------------------------------------ small helpers
@@ -706,10 +714,11 @@ def _trade_row(c, closed=True):
 
 TRADE_COLS = ["exit_date", "account", "market", "symbol", "side", "setup_name", "scanner", "liquidity", "entry_reason",
               "qty", "entry", "stop", "risk_stop", "target", "planned_rr", "exit", "exit_reason", "result", "pnl", "r",
-              "risk_money", "fees", "entry_time", "exit_time", "held_minutes", "breakeven", "trailing", "setup", "note"]
+              "mfe_r", "mae_r", "risk_money", "fees", "entry_time", "exit_time", "held_minutes", "breakeven", "locked",
+              "trailing", "setup", "note"]
 OPEN_COLS = ["account", "market", "symbol", "side", "setup_name", "scanner", "liquidity", "entry_reason", "qty", "entry",
-             "stop", "risk_stop", "target", "planned_rr", "risk_money", "entry_time", "breakeven", "trailing",
-             "covered_until", "setup", "note"]
+             "stop", "risk_stop", "target", "planned_rr", "mfe_r", "mae_r", "risk_money", "entry_time", "breakeven",
+             "locked", "trailing", "covered_until", "setup", "note"]
 DECISION_COLS = ["time", "market", "symbol", "setup", "setup_name", "scanner", "liquidity", "result", "stopped_at_agent",
                  "category", "why", "price", "stop", "target", "stop_pct", "r_multiple", "fee_r", "vol", "own_setup"]
 
@@ -767,6 +776,11 @@ def _agg(trades):
     return x
 
 
+def _avg(xs):
+    xs = [x for x in xs if x is not None]
+    return round(sum(xs) / len(xs), 3) if xs else None
+
+
 def _group(trades, key):
     g = {}
     for c in trades:
@@ -802,6 +816,14 @@ def _summary(led, decisions=None):
             "closed_by_market_setup_side": _group(closed, lambda c: "%s | %s | %s" % (
                 c.get("market"), _setup_of(c), c.get("side") or "long")),
             "closed_by_exit_reason": _group(closed, lambda c: c.get("reason") or "?"),
+            # the owner's goal 2 (minimize losses): losers that had been at least +1R in profit first, and how far
+            # the winners / losers went on average (mfe / mae, recorded from 7 Nov 2026)
+            "losers_that_were_winning": {
+                "count": sum(1 for c in closed if (c.get("pnl") or 0) < 0 and (c.get("mfe_r") or 0) >= 1),
+                "of_losers_with_mfe": sum(1 for c in closed if (c.get("pnl") or 0) < 0 and c.get("mfe_r") is not None)},
+            "avg_mfe_r_winners": _avg([c.get("mfe_r") for c in closed if (c.get("pnl") or 0) > 0]),
+            "avg_mae_r_winners": _avg([c.get("mae_r") for c in closed if (c.get("pnl") or 0) > 0]),
+            "avg_mfe_r_losers": _avg([c.get("mfe_r") for c in closed if (c.get("pnl") or 0) <= 0]),
             "closed_by_day": _group(closed, lambda c: c.get("exit_date") or "?"),
             "open_positions": len(led.get("open") or []), "accounts": led.get("accounts"), "decisions": dec}
 
@@ -879,7 +901,8 @@ def _download_all():
                 "%s %s" % (k, (v or {}).get("scanner_version", "v3")) for k, v in
                 (_paper_cfg().get("accounts") or {}).items()),
             "",
-            "trades.csv          every closed paper trade, one row each:",
+            "trades.csv          every closed paper trade, one row each (mfe_r / mae_r: how far it went for /",
+            "                    against it in R, recorded by the Trade Manager from 7 Nov 2026):",
             "                    setup_name / scanner (v3, v2, rules = the 4h breakout / ORB / SMC rules, manual),",
             "                    liquidity (the level swept or the zone retested), entry_reason, planned_rr,",
             "                    exit_reason, result, pnl, r, risk_money, fees, held_minutes",
@@ -1148,7 +1171,10 @@ def agents():
                              if cfg.get("skip_hours_utc") else "none", cfg.get("min_vol_x", 0),
                              ", BTC below its 4h midpoint" if cfg.get("btc_regime") else "",
                              ", a chase past %sR" % cfg["max_chase_r"] if cfg.get("max_chase_r") else ""),
-        4: "Sets the stop (%s) and the exit (%s); skips if fees would eat more than %sR."
+        4: "Sets the stop (%s) and the exit (%s); skips if fees would eat more than %sR. Then the Trade Manager "
+           "watches every open trade with a fixed target: stop to the entry at +1R, profit locked once 80%% of the "
+           "way to the target is covered, out on a reversal candle near the high, out when a trade goes nowhere "
+           "(Settings: Trade Manager)."
            % ("%s x ATR under the entry" % stop_k if cfg.get("stop") == "atr" else cfg.get("stop"),
               "trailing" if cfg.get("exit") == "trail" else "%sR target" % cfg.get("target_r"), cfg.get("max_fee_r")),
         5: "Replays the trade %s times on the coin's last %s days and counts past fires of the rule. Recorded only: "

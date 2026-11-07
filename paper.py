@@ -63,17 +63,29 @@ DEFAULT_CONFIG = {
                    "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
                    "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3"},
+                   "scanner_version": "v3", "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
+                   "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 60,
+                   "tm_candle_min": 5},
         "US":     {"capital": 50000, "max_loss_per_trade": 50, "max_position_pct": 25,
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
                    "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3"},
+                   "scanner_version": "v3", "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
+                   "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 60,
+                   "tm_candle_min": 5},
         "CRYPTO": {"capital": 1000, "max_loss_per_trade": 10, "max_position_pct": 25,
                    "daily_loss_limit": 30, "max_trades_per_day": 10, "min_reward_risk": 1.0,
                    "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "max_same_side": 3, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3"},
+                   "scanner_version": "v3", "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
+                   "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 240,
+                   "tm_candle_min": 15},
+        # trade_manager (owner, 7 Nov 2026: "agents should think and react"): manages every open paper trade that has
+        # a fixed target (not the crypto trailing exits): stop to the entry at +tm_be_r R; once price has covered
+        # tm_lock_at of the way to the target, the stop locks tm_lock_keep of that way; after +tm_rev_min_r R a
+        # reversal candle near the high (bearish engulfing / long upper-wick rejection on tm_candle_min candles)
+        # takes the profit; a trade that has gone nowhere after tm_stale_min minutes (best < 0.5R, now within
+        # 0.3R of the entry) is closed. Every trade records how far it went for and against (mfe_r / mae_r).
         # risk_limits (False while paper testing, the owner's decision of 4 Nov 2026): when True, the daily loss limit,
         # max trades per day and the rulebook guards below block new entries. Turn it on before real money.
         # trade_setups: the Scanner's setups (v4, v3 or v2, per scanner_version) are paper traded (True) or
@@ -832,6 +844,99 @@ def cmd_sell(a, cfg, led):
     close_position(led, cfg, pos, price, "manual", now)
 
 
+TM_KEYS = ("tm_be_r", "tm_lock_at", "tm_lock_keep", "tm_reversal", "tm_rev_min_r", "tm_stale_min", "tm_candle_min")
+
+
+def tm_cfg(acc):
+    """The account's Trade Manager settings, or None when it is off."""
+    if not acc.get("trade_manager"):
+        return None
+    d = DEFAULT_CONFIG["accounts"]["US"]
+    return {k: acc.get(k, d.get(k)) for k in TM_KEYS}
+
+
+def _risk(pos):
+    rs = pos.get("risk_stop", pos["stop"])
+    return abs(pos["entry"] - rs) if rs is not None else 0.0
+
+
+def r_of(pos, px):
+    """R of price px for this position (positive = in profit)."""
+    risk = _risk(pos)
+    if not risk:
+        return 0.0
+    return ((pos["entry"] - px) if is_short(pos) else (px - pos["entry"])) / risk
+
+
+def _track_excursion(pos, best, worst, sh):
+    """mfe_r / mae_r: the furthest the trade went for / against it, in R (kept on the closed record)."""
+    if not _risk(pos):
+        return
+    pos["mfe_r"] = round(max(pos.get("mfe_r", 0.0), r_of(pos, best)), 3)
+    pos["mae_r"] = round(min(pos.get("mae_r", 0.0), r_of(pos, worst)), 3)
+
+
+def _candles(bars, start, now, minutes):
+    """1-minute bars -> completed `minutes` candles [(end, o, h, l, c)] from `start`, oldest first."""
+    span, groups = minutes * 60, []
+    for b in bars:
+        t, o, h, l, c = b[:5]
+        if t < start:
+            continue
+        key = int(t.timestamp() // span)
+        if groups and groups[-1][0] == key:
+            k0, o0, h0, l0, _ = groups[-1]
+            groups[-1] = (k0, o0, max(h0, h), min(l0, l), c)
+        else:
+            groups.append((key, o, h, l, c))
+    out = []
+    for key, o, h, l, c in groups:
+        end = datetime.fromtimestamp((key + 1) * span, timezone.utc)
+        if end <= now:
+            out.append((end, o, h, l, c))
+    return out
+
+
+def tm_react(pos, bars, now, price, tm):
+    """The Trade Manager's decision after the stop / target walk: a reason to close now, or None.
+      reversal: after +tm_rev_min_r R, a completed candle near the trade's best price that is a bearish engulfing
+                or a long upper-wick rejection (mirrored for shorts) -> take the profit.
+      no follow-through: after tm_stale_min minutes the trade never reached +0.5R and is within 0.3R of the entry.
+    """
+    sh = is_short(pos)
+    risk = _risk(pos)
+    entry_t = _iso(pos.get("entry_time"))
+    if not risk or entry_t is None:
+        return None
+    if tm.get("tm_reversal") and pos.get("mfe_r", 0) >= tm["tm_rev_min_r"]:
+        cs = _candles(bars, entry_t, now, int(tm["tm_candle_min"]))
+        seen = _iso(pos.get("tm_seen"))
+        if cs:
+            pos["tm_seen"] = cs[-1][0].isoformat()
+        sg = -1 if sh else 1
+        peak = sg * pos["entry"] + pos["mfe_r"] * risk          # the best price so far, in long terms
+        for k in range(1, len(cs)):
+            if seen and cs[k][0] <= seen:
+                continue
+            _, po, ph, pl, pc = cs[k - 1]
+            _, o, h, l, c = cs[k]
+            if sh:   # mirror to long terms
+                po, ph, pl, pc = -po, -pl, -ph, -pc
+                o, h, l, c = -o, -l, -h, -c
+            rng = h - l
+            engulf = pc > po and c < o and o >= pc and c <= po
+            reject = rng > 0 and (h - max(o, c)) / rng >= 0.6 and (c - l) / rng <= 0.4
+            if (engulf or reject) and h >= peak - 0.25 * risk:
+                kind = ("bullish engulfing" if sh else "bearish engulfing") if engulf else \
+                       ("lower-wick rejection" if sh else "upper-wick rejection")
+                return "reversal (%s) near the best price after +%.1fR" % (kind, pos["mfe_r"])
+    mins = (now - entry_t).total_seconds() / 60
+    if tm.get("tm_stale_min") and mins >= tm["tm_stale_min"] and pos.get("mfe_r", 0) < 0.5 \
+            and abs(r_of(pos, price)) < 0.3:
+        return "no follow-through after %d min (best +%.2fR)" % (mins, pos.get("mfe_r", 0))
+    return None
+
+
 def step_bar(led, cfg, pos, acc, b, now, sh):
     """One candle (utc, o, h, l, c) of the path for an open position: the stop first (when a candle touches both,
     assume the stop: we cannot know the order inside a minute, so the worse case), then the target, then move the
@@ -844,7 +949,8 @@ def step_bar(led, cfg, pos, acc, b, now, sh):
     if stop_hit:
         gapped = b[5] if live else ((o > pos["stop"]) if sh else (o < pos["stop"]))   # opened past it: the open, worse
         fill = o if gapped else pos["stop"]
-        why = "trailing stop" if pos.get("trailing") else "breakeven stop" if pos.get("breakeven") else "stop"
+        why = ("trailing stop" if pos.get("trailing") else "profit lock stop" if pos.get("locked")
+               else "breakeven stop" if pos.get("breakeven") else "stop")
         close_position(led, cfg, pos, fill, why if not gapped else why + " (gapped past it)", when)
         return True
     if (l <= pos["target"]) if sh else (h >= pos["target"]):
@@ -852,7 +958,9 @@ def step_bar(led, cfg, pos, acc, b, now, sh):
         close_position(led, cfg, pos, pos["target"], "target", when)
         return True
     best = l if sh else h
-    be = acc.get("breakeven_at_r")
+    _track_excursion(pos, best, h if sh else l, sh)
+    tm = tm_cfg(acc) if not pos.get("trail_k") else None
+    be = acc.get("breakeven_at_r") or (tm["tm_be_r"] if tm else None)
     rs = pos.get("risk_stop", pos["stop"])
     be_hit = (best <= pos["entry"] - be * (rs - pos["entry"])) if (be and sh) else \
              (be and best >= pos["entry"] + be * (pos["entry"] - rs))
@@ -860,6 +968,15 @@ def step_bar(led, cfg, pos, acc, b, now, sh):
         pos["stop"], pos["breakeven"] = pos["entry"], True
         print("BREAKEVEN %-16s %s reached %gR: stop moved to the entry %s"
               % (pos["key"], money(m, best), be, money(m, pos["entry"])))
+    if tm and pos.get("target") and not pos.get("locked"):
+        way = pos["target"] - pos["entry"]
+        if way and (best - pos["entry"]) / way >= tm["tm_lock_at"]:
+            lock = round_px(m, pos["entry"] + tm["tm_lock_keep"] * way, down=not sh)
+            if (lock < pos["stop"]) if sh else (lock > pos["stop"]):
+                pos["stop"] = lock
+            pos["locked"], pos["breakeven"] = True, True
+            print("PROFIT LOCK %-16s %s covered %.0f%% of the way to the target: stop locked at %s"
+                  % (pos["key"], money(m, best), tm["tm_lock_at"] * 100, money(m, pos["stop"])))
     if pos.get("trail_k") and sh:
         # trailing exit for a short (auto_crypto short_exit = trail): break-even once price has fallen
         # trail_arm_r R, then the stop follows trail_k x ATR above the lowest price seen; it never moves up
@@ -973,6 +1090,12 @@ def check_position(cfg, led, pos, price, bars, now):
               "missing minutes are read on the next check" % pos["key"])
     for b in path:
         if step_bar(led, cfg, pos, acc, b, now, sh):
+            return
+    tm = tm_cfg(acc) if not pos.get("trail_k") else None
+    if tm:   # the Trade Manager thinks about the trade after every check (7 Nov 2026)
+        why = tm_react(pos, bars, now, price, tm)
+        if why:
+            close_position(led, cfg, pos, price, "trade manager: " + why, now)
             return
     entry_day = pos.get("entry_date") or (_iso(pos.get("entry_time")) or now).date().isoformat()
     if intraday and entry_day != local_now(m, now).date().isoformat():
