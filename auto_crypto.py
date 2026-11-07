@@ -815,8 +815,8 @@ def process(state, res, log):
                 out.append(run_one(h, cfg, log))
             except Exception as e:
                 log("AUTO %s failed: %s" % (h["symbol"], e))
-    # The Scanner (v3 or v2, per Settings): the owner's setups on this candle. One ticked in enabled_setups went through run_smcp above (it can
-    # trade); every other one goes through the agents and is recorded only (P.setup_decision: LOG ONLY, no broker).
+    # The Scanner (v4, v3 or v2, per Settings): the owner's setups on this candle. One ticked in enabled_setups went
+    # through run_smcp above; every other one goes through the agents (P.setup_decision: paper trade or LOG ONLY).
     for x in res.get("setups", []):
         if x["setup"] in cfg["enabled_setups"]:
             continue
@@ -827,7 +827,8 @@ def process(state, res, log):
             continue
         rec["rules"] = dict(_RULES)
         record(rec)
-        log("AUTO %s: %s %s (%s)" % (x["symbol"], x.get("name"), rec["result"], rec["why"]))
+        log("AUTO CRYPTO: Scanner %s found %s on %s: %s (%s)" % (
+            x.get("scanner") or "?", x.get("name"), x["symbol"], rec["result"], rec["why"]))
     auto = state.setdefault("auto", {"recent": []})
     auto["recent"] = (auto.get("recent", []) + [{"time": r["time"], "symbol": r["symbol"], "result": r["result"],
                                                  "why": r["why"]} for r in out])[-20:]

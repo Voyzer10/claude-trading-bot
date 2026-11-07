@@ -76,10 +76,11 @@ DEFAULT_CONFIG = {
                    "scanner_version": "v3"},
         # risk_limits (False while paper testing, the owner's decision of 4 Nov 2026): when True, the daily loss limit,
         # max trades per day and the rulebook guards below block new entries. Turn it on before real money.
-        # trade_setups: the Scanner's setups (v3 or v2, per scanner_version) are paper traded (True) or
+        # trade_setups: the Scanner's setups (v4, v3 or v2, per scanner_version) are paper traded (True) or
         # only recorded (False).
-        # scanner_version: "v3" (only the owner's 5 Nov workflow: sweep reversal + FVG/OB retest) or "v2" (A-B-C-D,
-        # playbook, FVG/OB). Never mixed: the scanner looks for one version's setups and the broker skips the other's.
+        # scanner_version: "v4" (the owner's 7 Nov final workflow: primary, then a sequential OB/FVG secondary), "v3"
+        # (the 5 Nov workflow: sweep reversal + FVG/OB retest) or "v2" (A-B-C-D, playbook, FVG/OB). Never mixed: the
+        # scanner looks for one version's setups and the broker skips the others'.
         # Switch it per account from Settings > Risk limits; the next candle uses it.
         # Rulebook risk guards (all accounts): after cooldown_losses losing trades in a row, no new entries for
         # cooldown_minutes; a week's net realised loss of weekly_loss_x x daily_loss_limit stops new entries until
@@ -1142,11 +1143,12 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     acc = cfg["accounts"][MARKETS[market]["account"]] if market in MARKETS else cfg["accounts"]["US"]
     version = acc.get("scanner_version", "v3")
     st["1_scanner"]["scanner"] = version
-    # v3 and v2 never mix (owner, 5 Nov 2026): a setup of the other version (switched after it was scanned) is skipped
-    if version == "v2" and s["setup"].startswith("v3_"):
-        return done("skipped", "this account runs Scanner v2: v3 setups are off")
-    if version == "v3" and not s["setup"].startswith("v3_"):
-        return done("skipped", "this account runs Scanner v3 (your 5 Nov workflow only): v2 setups are off")
+    # versions never mix (owner, 5 and 7 Nov 2026): a setup of another version (switched after it was scanned) is
+    # skipped
+    import smc_playbook as _PB
+    sv = _PB.setup_version(s["setup"])
+    if sv != version:
+        return done("skipped", "this account runs Scanner %s: %s setups are off" % (version, sv))
     entry, stop, short = s["price"], s.get("stop"), s["side"] == "short"
     target = s.get("target") or s.get("target_2r")
     st["3_entry"] = {"side": s["side"], "price_now": entry, "note": "entry = the close of the candle that completed it"}

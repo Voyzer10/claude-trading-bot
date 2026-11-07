@@ -25,6 +25,7 @@ type Resp = { generated_at: string; today: Record<string, number>; latest: Row[]
 const MARKETS = ["ALL", "CRYPTO", "NSE", "US"];
 // every setup the scanner looks for (smc_playbook.SETUP_NAMES), listed even before one has been seen
 const ALL_SETUPS = [
+  "v4 primary long", "v4 primary short", "v4 OB/FVG secondary long", "v4 OB/FVG secondary short",
   "v3 sweep long", "v3 sweep short", "v3 FVG/OB retest long", "v3 FVG/OB retest short", "A-B-C-D long", "A-B-C-D short", "Playbook doji long", "Playbook doji short", "Playbook bottom star",
   "Playbook top hammer", "FVG retest long", "FVG retest short", "Order block long", "Order block short",
 ];

@@ -284,7 +284,7 @@ def cycle(state, a, markets):
                     side = "both" if auto_nse.load_cfg().get("allow_short") else "long"
                 except Exception:
                     pass
-            # setups=True: the Scanner (v3 or v2, per Settings) also looks for the owner's setups (auto_nse runs them)
+            # setups=True: the Scanner (v4, v3 or v2, per Settings) also looks for the owner's setups (auto_nse runs them)
             res = S.orb_scan(syms, m, now, cutoff, a.or_minutes, a.min_price, a.workers, quiet=True, side=side,
                              setups=True)
         except Exception as e:

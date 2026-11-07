@@ -91,7 +91,7 @@ RISK_FIELDS = {
     "capital": {"type": "float", "min": 100},
     "risk_limits": {"type": "bool"},
     "trade_setups": {"type": "bool"},
-    "scanner_version": {"type": "choice", "choices": ["v3", "v2"]},
+    "scanner_version": {"type": "choice", "choices": ["v4", "v3", "v2"]},
     "cooldown_losses": {"type": "int", "min": 0, "max": 20},
     "cooldown_minutes": {"type": "float", "min": 0, "max": 1440},
     "weekly_loss_x": {"type": "float", "min": 0, "max": 10},
@@ -106,7 +106,7 @@ RISK_FIELDS = {
 PREF_FIELDS = {"usd_inr": {"type": "float", "min": 50, "max": 200},
                "daily_goal_inr": {"type": "float", "min": 0, "max": 1e7}}
 PREF_DEFAULT = {"usd_inr": 88.0, "daily_goal_inr": 500.0}
-BACKTEST_MODES = ["crypto-v3", "crypto-v3-5m", "us-v3", "nse-v3", "us-orb", "crypto-abcd", "crypto-abcd-5m", "us-abcd", "nse-abcd", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-v4", "crypto-v4-short", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
+BACKTEST_MODES = ["crypto-sv4", "crypto-sv4-5m", "us-sv4", "nse-sv4", "crypto-v3", "crypto-v3-5m", "us-v3", "nse-v3", "us-orb", "crypto-abcd", "crypto-abcd-5m", "us-abcd", "nse-abcd", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-v4", "crypto-v4-short", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
 
 
 # ------------------------------------------------------------------ small helpers
@@ -1026,13 +1026,13 @@ _SETUP_NAMES = {"range_breakout_4h": "4h breakout", "range_breakdown_4h": "4h br
 
 
 def _setup_label(rec):
-    """The setup name shown with a candidate: the Scanner's own name (v2 / v3), else a short name of the rule."""
+    """The setup name shown with a candidate: the Scanner's own name (v2 / v3 / v4), else a short name of the rule."""
     s1 = (rec.get("steps") or {}).get("1_scanner")
     if isinstance(s1, dict) and s1.get("setup_name"):
         return s1["setup_name"]
     setup = rec.get("setup") or ""
-    if setup.startswith("v3_"):
-        return "v3 %s" % setup[3:].replace("_", " ")
+    if setup.startswith("v3_") or setup.startswith("v4_"):
+        return "%s %s" % (setup[:2], setup[3:].replace("_", " "))
     if setup.startswith("smcp_"):
         return "Playbook %s" % setup[5:].replace("_", " ")
     return _SETUP_NAMES.get(setup, setup.replace("_", " "))
@@ -1134,7 +1134,10 @@ def agents():
     jobs = {
         1: "Every market, on each candle that closes. The rules that trade: a crypto coin's fresh close above its "
            "4-hour high (below its low for shorts), NSE / US opening-range breaks. Your setups, one scanner version per account "
-           "(Settings: Scanner version), never mixed. v3 = your 5 Nov workflow only: sweep reversal (BOS, a close "
+           "(Settings: Scanner version), never mixed. v4 = your 7 Nov final workflow only: a primary trade (BOS, a "
+           "sweep of an old low / high that is reclaimed, doji / hammer / inverted hammer, a break-and-close of the "
+           "signal candle), then - only after it closed - one OB / FVG secondary (the zone tapped, then a "
+           "break-and-close). v3 = your 5 Nov workflow only: sweep reversal (BOS, a close "
            "below / above the swept swing, doji or (inverted) hammer, a close past the trigger within 2 candles) and its "
            "FVG / order-block retest. v2 = A-B-C-D, the SMC playbook's doji / bottom star / top hammer and FVG / "
            "order-block retests. They go through the same agents and, while paper testing, the broker paper trades "

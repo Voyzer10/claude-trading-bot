@@ -59,7 +59,7 @@ const RISK_LABELS: Record<string, string> = {
   capital: "Paper capital (changing it adds / removes the difference as cash; P&L kept)",
   risk_limits: "Risk limits ON (daily loss, trades/day, cooldown, weekly, max per side). Off while paper testing; turn on before real money",
   trade_setups: "Paper trade the Scanner's setups (v3 or v2, as chosen in Scanner version)",
-  scanner_version: "Scanner version (v3 = your 5 Nov workflow only: sweep reversal + FVG/OB retest; v2 = A-B-C-D, playbook, FVG / OB)",
+  scanner_version: "Scanner version (v4 = 7 Nov final workflow: primary, then sequential OB/FVG; v3 = 5 Nov sweep reversal + FVG/OB retest; v2 = A-B-C-D, playbook, FVG / OB)",
   cooldown_losses: "Cooldown after N losses in a row (0 = off)",
   cooldown_minutes: "Cooldown length (minutes)",
   weekly_loss_x: "Weekly loss limit (x daily limit, 0 = off)",
