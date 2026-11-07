@@ -11,6 +11,10 @@ const MODE_NAMES: Record<string, string> = {
   "crypto-v4-short": "Crypto v4 grid for SHORTS (4h breakdowns): ATR stop, trailing, BTC filter, fee cap",
   "crypto-v4-5m": "Crypto v4 on 5-minute candles (compare with Crypto v4)",
   "us-orb": "US ORB (the live US rule) vs earlier entries: opening drive, squeeze, pullback; range width, in-play, RS filters",
+  "us-tm": "Trade Manager on the US playbook entries (also the US playbook backtest)",
+  "nse-tm": "Trade Manager on the NSE playbook entries",
+  "crypto-tm": "Trade Manager on the crypto playbook entries (15m)",
+  "crypto-tm-5m": "Trade Manager on the crypto playbook entries (5m)",
   "crypto-sv4": "Scanner v4 (crypto 15m): primary sweep reversal with reclaim, then sequential OB/FVG secondary",
   "crypto-sv4-5m": "Scanner v4 (crypto 5m)",
   "us-sv4": "Scanner v4 (US stocks 5m, ~100 liquid names)",
@@ -139,6 +143,10 @@ export default function Backtest() {
       </div>
       <div className="actions">
         <span className="small muted" style={{ alignSelf: "center" }}>Quick:</span>
+        <button className="btn" onClick={() => start("us-tm")} disabled={running}>Trade Manager US</button>
+        <button className="btn" onClick={() => start("nse-tm")} disabled={running}>Trade Manager NSE</button>
+        <button className="btn" onClick={() => start("crypto-tm")} disabled={running}>Trade Manager crypto 15m</button>
+        <button className="btn" onClick={() => start("crypto-tm-5m")} disabled={running}>Trade Manager crypto 5m</button>
         <button className="btn" onClick={() => start("crypto-sv4")} disabled={running}>Scanner v4 crypto 15m</button>
         <button className="btn" onClick={() => start("crypto-sv4-5m")} disabled={running}>Scanner v4 crypto 5m</button>
         <button className="btn" onClick={() => start("us-sv4")} disabled={running}>Scanner v4 US</button>

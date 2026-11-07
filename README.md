@@ -100,6 +100,11 @@ up there, open it on your phone and send back the code) -> `start`. `screen` sho
   FVG / OB retest. `v2` = A-B-C-D, the playbook's doji / star / hammer and FVG / OB retests. The broker skips a
   setup of another version. Nothing is redeployed; the next candle uses it. Backtest first: Backtest > "Scanner
   v4 ..." / "Scanner v3 ...".
+- **Trade Manager** (Settings > Risk limits, per account; on by default): every open paper trade with a fixed
+  target is managed: stop to the entry at +1R, half the move locked once 80% of the way to the target is covered,
+  out on a reversal candle near the high (5-minute candles; 15 for crypto) after +1R, out when a trade goes nowhere
+  (60 min; crypto 4h). The crypto trailing exits are left alone. Each trade records mfe_r / mae_r. Backtest:
+  Backtest > "Trade Manager US / NSE / crypto" (also the US playbook backtest).
 - **Why a trade was taken**: every paper position records its setup, the scanner that found it, the liquidity it
   swept (or the zone it retested) and the entry reason; Positions shows them and the downloads include them.
 - **Operations**: scan now, restart the runner, CPU / memory / disk, market-data check, downloads

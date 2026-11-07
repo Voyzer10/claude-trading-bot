@@ -722,7 +722,8 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
                     </td>
                     <td data-label="Stop" className="num">
                       {price(p.stop)}
-                      {p.trailing ? <span className="small muted"> (trailing)</span> : p.breakeven ? <span className="small muted"> (break-even)</span> : null}
+                      {p.trailing ? <span className="small muted"> (trailing)</span> : p.locked ? <span className="small pos"> (profit locked)</span> : p.breakeven ? <span className="small muted"> (break-even)</span> : null}
+                      {p.mfe_r !== undefined && <span className="small muted" title="Trade Manager: best / worst so far"> best +{p.mfe_r.toFixed(1)}R</span>}
                     </td>
                     <td data-label="Target" className="num">
                       {p.trail_k ? <span className="muted">trailing exit, no fixed target</span> : price(p.target)}
@@ -762,7 +763,10 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
                 <SetupCell p={c} />
                 <td data-label="Entry → exit" className="num">{price(c.entry)} → {price(c.exit)}</td>
                 <td data-label="P&L" className={`num ${(c.pnl ?? 0) > 0 ? "pos" : "neg"}`}>{money(c.pnl, currencyOf(acctOf(c.market)))}</td>
-                <td data-label="R" className={`num ${(c.r ?? 0) > 0 ? "pos" : "neg"}`}>{c.r !== undefined ? `${c.r > 0 ? "+" : ""}${c.r}` : "—"}</td>
+                <td data-label="R" className={`num ${(c.r ?? 0) > 0 ? "pos" : "neg"}`}>
+                  {c.r !== undefined ? `${c.r > 0 ? "+" : ""}${c.r}` : "—"}
+                  {c.mfe_r !== undefined && <span className="small muted" title="How far the trade went in its favour (best) and against it (worst)"> best +{c.mfe_r.toFixed(1)} / worst {(c.mae_r ?? 0).toFixed(1)}</span>}
+                </td>
                 <td data-label="Exit">{c.reason}</td>
               </tr>
             ))}
