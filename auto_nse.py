@@ -247,7 +247,7 @@ def run_one(h, cfg, reg, now, log):
 
 
 def record_setups(setups, log):
-    """The Scanner (v3 or v2, per Settings): the owner's setups on this candle go through the agents; the broker
+    """The Scanner (v4, v3 or v2, per Settings): the owner's setups on this candle go through the agents; the broker
     paper trades them while trade_setups is on."""
     if not setups:
         return

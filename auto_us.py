@@ -337,7 +337,7 @@ def run_one(tk, hit, cfg, log, auto):
         ("%s fires %+.2fR" % (hist.get("triggered"), hist.get("avg_R"))) if hist.get("triggered") else "n/a"))
 
 
-# The Scanner (v3 or v2, per Settings) on US stocks: the owner's setups on a fixed list of liquid names, each new 5m candle while the session
+# The Scanner (v4, v3 or v2, per Settings) on US stocks: the owner's setups on a fixed list of liquid names, each new 5m candle while the session
 # is open. They go through the agents and are recorded only (paper.setup_decision: LOG ONLY, no broker).
 US_WATCH = ("AAPL MSFT NVDA AMZN GOOGL META TSLA AVGO JPM V MA UNH HD PG COST JNJ XOM CVX ABBV MRK PEP KO WMT BAC "
             "WFC CSCO ORCL CRM ADBE AMD INTC QCOM TXN AMAT MU NFLX DIS NKE MCD SBUX MAR HLT BKNG ABNB UBER LYFT "

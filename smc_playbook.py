@@ -376,7 +376,9 @@ SETUP_NAMES = {"abcd_long": "A-B-C-D long", "abcd_short": "A-B-C-D short",
                "smcp_fvg_long": "FVG retest long", "smcp_fvg_short": "FVG retest short",
                "smcp_ob_long": "Order block long", "smcp_ob_short": "Order block short",
                "v3_sweep_long": "v3 sweep long", "v3_sweep_short": "v3 sweep short",
-               "v3_retest_long": "v3 FVG/OB retest long", "v3_retest_short": "v3 FVG/OB retest short"}
+               "v3_retest_long": "v3 FVG/OB retest long", "v3_retest_short": "v3 FVG/OB retest short",
+               "v4_primary_long": "v4 primary long", "v4_primary_short": "v4 primary short",
+               "v4_secondary_long": "v4 OB/FVG secondary long", "v4_secondary_short": "v4 OB/FVG secondary short"}
 
 
 def _r(x):
@@ -386,12 +388,19 @@ def _r(x):
     return round(x, 2) if ax >= 100 else round(x, 4) if ax >= 1 else float("%.6g" % x)
 
 
-SCANNER_VERSIONS = ("v3", "v2")
+SCANNER_VERSIONS = ("v4", "v3", "v2")
+
+
+def setup_version(setup):
+    """Which scanner version a setup belongs to: v4_ / v3_ prefixes, everything else is v2."""
+    s = str(setup or "")
+    return "v4" if s.startswith("v4_") else "v3" if s.startswith("v3_") else "v2"
 
 
 def scanner_version(market):
-    """Which Scanner a market runs: "v3" (only the owner's 5 Nov workflow: sweep reversal + FVG/OB retest) or "v2"
-    (A-B-C-D, playbook doji / star / hammer, FVG / order-block retests). The two never mix (owner, 5 Nov 2026).
+    """Which Scanner a market runs: "v4" (the 7 Nov final workflow: primary sweep reversal, then a sequential OB/FVG
+    secondary), "v3" (the 5 Nov workflow: sweep reversal + FVG/OB retest) or "v2" (A-B-C-D, playbook doji / star /
+    hammer, FVG / order-block retests). Versions never mix (owner, 5 and 7 Nov 2026).
     One switch per paper account (paper_config.json accounts.<X>.scanner_version, Settings > Risk limits). Defaults
     to v3 if the config cannot be read."""
     try:
@@ -403,8 +412,9 @@ def scanner_version(market):
         return "v3"
 
 
-def owner_setups(rows, day_of, ctx=None, version="v3"):
+def owner_setups(rows, day_of, ctx=None, version="v3", intraday=False):
     """The owner's setups that complete on the LAST row (closed candles, oldest first), for one scanner version:
+      v4: only the 7 Nov final workflow (scanner_v4.py): primary, then a sequential OB / FVG secondary.
       v3: only the 5 Nov workflow PDFs (sweep_reversal.py): v3 sweep reversal and v3 FVG / OB retest.
       v2: the playbook's doji / star / hammer (structure before the sweep), FVG / order-block first retests and his
           A-B-C-D (abcd.py).
@@ -413,7 +423,9 @@ def owner_setups(rows, day_of, ctx=None, version="v3"):
     if len(rows) < 35:
         return []
     i = len(rows) - 1
-    if version == "v3":
+    if version == "v4":
+        out = v4_setups(rows, day_of, i, intraday)
+    elif version == "v3":
         out = v3_setups(rows, day_of, i, ctx)
     else:
         out = v2_setups(rows, day_of, i, ctx)
@@ -523,4 +535,39 @@ def v3_setups(rows, day_of, i, ctx=None):
                                     "reversal_at": rows[s["reversal_at"]][0].isoformat(),
                                     "first_entry_was_extended": s["reversal_extended"],
                                     "confirmed_on_candle": s["conf_offset"], "rr": round(r, 2)}})
+    return out
+
+
+def v4_setups(rows, day_of, i, intraday=False):
+    """Scanner v4 (scanner_v4.py): the primary or the sequential OB / FVG secondary whose entry is candle i. The
+    sequence is rebuilt from the candles every time, so a secondary only appears after the primary closed."""
+    import scanner_v4 as V4
+    try:
+        seq = V4.sequence(rows, day_of, intraday=intraday)
+    except Exception:
+        return []
+    out = []
+    for t in seq:
+        if t["i"] != i:
+            continue
+        short, prim = t["side"] == "short", t["kind"] == "primary"
+        risk = abs(t["entry"] - t["stop"])
+        if prim:
+            liq = "swept %s %s %s, reclaimed" % ("swing high" if short else "swing low",
+                                                 "(BOS start)" if t["level_name"] == "bos_origin" else "(after BOS)",
+                                                 _r(t["level"]))
+            det = {"swept": t["level_name"], "swept_px": _r(t["level"]), "BOS_at": rows[t["bos"]][0].isoformat(),
+                   "reclaimed_on_candle": t["reclaim"] - t["sweep"], "signal": t["signal_pattern"],
+                   "trigger_px": _r(t["trigger_px"]), "rr": round(V4.rr(t), 2)}
+        else:
+            lo, hi = sorted((t["zone_top"], t["zone_bottom"]))
+            liq = "%s tap %s-%s after the primary closed" % (t["zone"], _r(lo), _r(hi))
+            det = {"zone": t["zone"], "zone_low": _r(lo), "zone_high": _r(hi),
+                   "primary_at": rows[t["primary_at"]][0].isoformat(),
+                   "primary_closed_at": rows[t["primary_closed_at"]][0].isoformat(),
+                   "tapped_at": rows[t["tap"]][0].isoformat(), "rr": round(V4.rr(t), 2)}
+        out.append({"setup": "v4_%s_%s" % (t["kind"], t["side"]), "side": t["side"], "price": _r(t["entry"]),
+                    "stop": _r(t["stop"]), "target": _r(t["target"]),
+                    "target_2r": _r(t["entry"] - 2 * risk if short else t["entry"] + 2 * risk),
+                    "liquidity": liq, "details": det})
     return out

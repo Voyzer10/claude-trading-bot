@@ -93,10 +93,13 @@ up there, open it on your phone and send back the code) -> `start`. `screen` sho
 - **Positions**: close one position or all, at the market price (the runner does it within ~5 s).
 - **Settings**: crypto strategy rules (with the backtested defaults and a reset), risk limits per account,
   coins watched, goal and US$ rate. Every change is written to the runner log as "Dashboard: ...".
-- **Scanner version**: Settings > Risk limits > "Scanner version", per account (CRYPTO, INDIA, US). The two never
-  mix. `v3` = only the owner's 5 Nov workflow (`sweep_reversal.py`): sweep reversal and FVG / OB retest. `v2` =
-  A-B-C-D, the playbook's doji / star / hammer and FVG / OB retests. The broker skips a setup of the other version.
-  Nothing is redeployed; the next candle uses it. Backtest first: Backtest > "Scanner v3 ...".
+- **Scanner version**: Settings > Risk limits > "Scanner version", per account (CRYPTO, INDIA, US). Versions never
+  mix. `v4` = only the owner's 7 Nov final workflow (`scanner_v4.py`): a primary trade (BOS, a reclaimed sweep,
+  doji / hammer / inverted hammer, break-and-close), then - only after it closed - one sequential OB / FVG secondary
+  (zone exists, tapped, break-and-close). `v3` = only the 5 Nov workflow (`sweep_reversal.py`): sweep reversal and
+  FVG / OB retest. `v2` = A-B-C-D, the playbook's doji / star / hammer and FVG / OB retests. The broker skips a
+  setup of another version. Nothing is redeployed; the next candle uses it. Backtest first: Backtest > "Scanner
+  v4 ..." / "Scanner v3 ...".
 - **Why a trade was taken**: every paper position records its setup, the scanner that found it, the liquidity it
   swept (or the zone it retested) and the entry reason; Positions shows them and the downloads include them.
 - **Operations**: scan now, restart the runner, CPU / memory / disk, market-data check, downloads

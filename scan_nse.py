@@ -309,7 +309,7 @@ def earlier_days(symbols, suffix, today, tz, workers=8, keep=None):
 
 
 def setups_scan(data, market, suffix, cutoff, tz, workers=8, keep=None):
-    """The Scanner (v3 or v2, per Settings): the owner's setups (smc_playbook.owner_setups) completing on the last candle closed by `cutoff`,
+    """The Scanner (v4, v3 or v2, per Settings): the owner's setups (smc_playbook.owner_setups) completing on the last candle closed by `cutoff`,
     on today's charts `data` joined to earlier days. Returns [setup dicts with symbol / market / bar_end]."""
     import smc_playbook as PB
     version = PB.scanner_version(market)
@@ -321,7 +321,8 @@ def setups_scan(data, market, suffix, cutoff, tz, workers=8, keep=None):
                 and (keep is None or keep(r))]
         if not rows:
             continue
-        for x in PB.owner_setups(hist.get(sym, []) + rows, lambda t: t.astimezone(tz).date(), version=version):
+        for x in PB.owner_setups(hist.get(sym, []) + rows, lambda t: t.astimezone(tz).date(), version=version,
+                                intraday=True):
             out.append(dict(x, symbol=sym, market=market, bar_end=(rows[-1][0] + timedelta(minutes=5)).isoformat()))
     return out
 
