@@ -123,6 +123,8 @@ def uptime(lines, gap_minutes=20):
 
 
 def kind_of(msg):
+    if msg.startswith("TRADE MANAGER:"):
+        return "tm"
     if msg.startswith("Dashboard:") or msg.startswith("Automation:"):
         return "dashboard"
     if msg.startswith("AUTO "):

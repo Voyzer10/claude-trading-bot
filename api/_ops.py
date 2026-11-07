@@ -943,7 +943,7 @@ AGENTS = [
     (6, "budget", "Budget", "trader-budget"),
     (7, "risk", "Risk", "trader-risk"),
     (8, "broker", "Broker (paper)", "trader-broker"),
-    (9, "alerts", "Alerts", "trader-alerts"),
+    (9, "trade_manager", "Trade Manager", "trader-alerts"),
     (10, "analyst", "Analyst", "trader-analyst"),
     (11, "pelosi", "Pelosi tracker", "trader-pelosi"),
 ]
@@ -1098,6 +1098,45 @@ def setups(limit: int = 300):
     return {"generated_at": _now().isoformat(), "today": counts, "latest": rows[:max(1, min(limit, 1000))]}
 
 
+def _tm_state(p):
+    if p.get("trail_k"):
+        return "trailing" if p.get("trailing") else "trailing exit"
+    return "profit locked" if p.get("locked") else "breakeven" if p.get("breakeven") else "watching"
+
+
+def _tm_status(led, openpos, now):
+    """The Trade Manager agent's card: what it is watching now and what it did today."""
+    today = now.astimezone(IST).date()
+
+    def day_of(x):
+        try:
+            return datetime.fromisoformat(x.get("t") or "").astimezone(IST).date()
+        except ValueError:
+            return None
+    acts = [dict(x, symbol=p.get("symbol")) for p in (led.get("open") or []) + (led.get("closed") or [])
+            for x in (p.get("tm_log") or []) if day_of(x) == today]
+    acts.sort(key=lambda x: x["t"])
+    count = {"breakeven": 0, "profit lock": 0, "exit": 0}
+    for x in acts:
+        for k in count:
+            if x["text"].startswith(k) or (k == "exit" and "hit at" in x["text"]):
+                count[k] += 1
+                break
+    watch = [{"symbol": p.get("symbol"), "market": p.get("market"), "side": p.get("side") or "long",
+              "state": _tm_state(p), "best_r": p.get("mfe_r"), "stop": p.get("stop")} for p in openpos]
+    out = {"tm": {"watching": watch, "today": count, "last": acts[-5:][::-1]}}
+    if openpos:
+        bits = ", ".join("%s %s%s" % (w["symbol"], w["state"], " (best +%.1fR)" % w["best_r"] if w["best_r"] else "")
+                         for w in watch[:5])
+        out.update(status="active", now="Watching %d open trade%s: %s%s. Today: %d breakeven, %d profit locks, %d exits." % (
+            len(openpos), "" if len(openpos) == 1 else "s", bits, " ..." if len(watch) > 5 else "",
+            count["breakeven"], count["profit lock"], count["exit"]))
+    else:
+        out.update(status="standby", now="No open trade to manage. Today: %d breakeven, %d profit locks, %d exits." % (
+            count["breakeven"], count["profit lock"], count["exit"]))
+    return out
+
+
 @router.get("/agents")
 def agents():
     now = _now()
@@ -1183,7 +1222,10 @@ def agents():
         6: "Sizes the position so the loss at the stop fits your max loss per trade.",
         7: "Checks the daily loss limit, trades per day and the position cap before anything is bought.",
         8: "Fills the order on paper at the live price. No real broker is connected yet.",
-        9: "Watches open positions every cycle: stop, trailing stop (break-even at +%sR) and the %sh time stop."
+        9: "Thinks about every open trade each check and reacts: stop to the entry at +1R, half the move locked once "
+           "80%% of the way to the target is covered, out on a reversal candle near the high, out when a trade goes "
+           "nowhere (60 min; crypto 4h). Crypto trailing exits keep their own break-even at +%sR and the %sh time "
+           "stop. Every action is in the runner log (TRADE MANAGER: ...). Settings: Trade Manager."
            % (cfg.get("trail_arm_r", 1), cfg.get("max_hold_hours")),
         10: "Reads SEC filings for US stocks. Not used for crypto.",
         11: "Tracks US Congress stock trades. Not used for crypto.",
@@ -1237,13 +1279,7 @@ def agents():
             a["scans"] = scans
             a["v2_today"] = len(v2)
         elif n == 9:
-            if openpos:
-                a.update(status="active", now="Watching %d open position%s: %s" % (
-                    len(openpos), "" if len(openpos) == 1 else "s",
-                    ", ".join("%s stop %s%s" % (p.get("symbol"), _fmt(p.get("stop")),
-                                                " (trailing)" if p.get("trail_k") else "") for p in openpos[:4])))
-            else:
-                a.update(status="standby", now="No open position to watch.")
+            a.update(_tm_status(led, openpos, now))
         elif busy:
             a.update(status="working", now="Just checked %s." % mine[-1].get("symbol", "").split(":")[-1])
         elif n == 3 and thin and "CRYPTO" in markets:

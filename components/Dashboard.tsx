@@ -684,6 +684,7 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
           );
         })}
       </div>
+      <TradeManagerStrip open={open} closed={closed} />
       {open.length > 0 && (
         <>
           <div className="list-head">
@@ -777,6 +778,50 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
   );
 }
 
+// ------------------------------------------------------------------ trade manager
+
+/** The Trade Manager agent above the open positions: what it is watching and what it last did. */
+function TradeManagerStrip({ open, closed }: { open: Position[]; closed: Position[] }) {
+  const stateOf = (p: Position) =>
+    p.trail_k ? (p.trailing ? "trailing" : "trailing exit") : p.locked ? "profit locked" : p.breakeven ? "breakeven" : "watching";
+  const acts = [...open, ...closed]
+    .flatMap((p) => (p.tm_log ?? []).map((x) => ({ ...x, key: p.key })))
+    .sort((a, b) => (a.t < b.t ? 1 : -1))
+    .slice(0, 4);
+  const time = (t: string) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return (
+    <div className="tm-strip" role="status" aria-label="Trade Manager">
+      <div className="tm-head">
+        <span className={`tm-dot ${open.length ? "on" : ""}`} aria-hidden="true" />
+        <strong>Trade Manager</strong>
+        <span className="muted small">
+          {open.length
+            ? `watching ${open.length} open trade${open.length === 1 ? "" : "s"} every check`
+            : "no open trade to watch"}
+        </span>
+      </div>
+      {open.length > 0 && (
+        <div className="tm-watch">
+          {open.map((p) => (
+            <span key={p.key} className={`chip tm-${stateOf(p).replace(/ /g, "-")}`}>
+              {p.symbol} · {stateOf(p)}
+              {p.mfe_r ? ` · best +${p.mfe_r.toFixed(1)}R` : ""}
+            </span>
+          ))}
+        </div>
+      )}
+      <ul className="tm-acts">
+        {acts.length === 0 && <li className="muted small">No action yet: it moves the stop at +1R, locks profit near the target, exits on a reversal or a dead trade.</li>}
+        {acts.map((a, i) => (
+          <li key={i} className="small">
+            <span className="muted">{time(a.t)}</span> <span className="num">{a.key}</span> {a.text}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------ logs
 
 function LogsSection({ snap }: { snap: Snapshot }) {
@@ -787,7 +832,7 @@ function LogsSection({ snap }: { snap: Snapshot }) {
     .filter((l) => !q || l.text.toLowerCase().includes(q.toLowerCase()))
     .slice()
     .reverse();
-  const kinds = ["all", "trade", "decision", "scan", "runner", "dashboard", "error"];
+  const kinds = ["all", "trade", "tm", "decision", "scan", "runner", "dashboard", "error"];
   return (
     <section id="logs" className="panel" aria-labelledby="logs-h">
       <div className="panel-head">
@@ -799,7 +844,7 @@ function LogsSection({ snap }: { snap: Snapshot }) {
           <div className="seg-ctl" role="group" aria-label="Log type">
             {kinds.map((k) => (
               <button key={k} aria-pressed={kind === k} onClick={() => setKind(k)}>
-                {k}
+                {k === "tm" ? "trade manager" : k}
               </button>
             ))}
           </div>
@@ -811,7 +856,7 @@ function LogsSection({ snap }: { snap: Snapshot }) {
         {rows.map((l, i) => (
           <div className="ln" key={i}>
             <span className="muted">{l.t.slice(5)}</span>
-            <span className={`k k-${l.kind}`}>{l.kind}</span>
+            <span className={`k k-${l.kind}`}>{l.kind === "tm" ? "manager" : l.kind}</span>
             <span>{l.text}</span>
           </div>
         ))}

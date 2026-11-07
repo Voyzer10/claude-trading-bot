@@ -69,6 +69,12 @@ if __name__ == "__main__":
         if closed:
             check("   the closed trade records how far it went: mfe ~ +1.95R, mae", closed[0].get("mfe_r", 0) >= 1.9
                   and "mae_r" in closed[0], closed[0])
+            texts = [x["text"] for x in closed[0].get("tm_log") or []]
+            check("   the trade keeps what the manager did: breakeven, profit lock, then the lock stop hit",
+                  any(t.startswith("breakeven") for t in texts) and any(t.startswith("profit lock") for t in texts)
+                  and any("hit at" in t for t in texts), texts)
+            check("   ... and the same actions go to the runner log (TRADE MANAGER: CRYPTO:TST ...)",
+                  any(e.startswith("CRYPTO:TST profit lock") for e in P.TM_EVENTS), P.TM_EVENTS)
 
         pos, closed = run(P, "long", 103.0, lambda n: minutes(n, 30, [100.3, 100.7, 101.1, 101.3, 100.8, 100.2, 99.7]),
                           99.7)
@@ -118,6 +124,24 @@ if __name__ == "__main__":
         P.fetch_price = lambda m, t: (100.05, datetime.now(timezone.utc))
         P.check_once(cfg, led)
         check("6. the backtested crypto trailing exit is left alone (no stale exit at 90 min)", led["open"], led["closed"])
+
+        import dashboard_push as D
+        check("7. dashboard: 'TRADE MANAGER: ...' log lines are their own kind (the Logs filter 'trade manager')",
+              D.kind_of("TRADE MANAGER: CRYPTO:TST breakeven: ...") == "tm")
+        from api import _ops as O
+        now = datetime.now(timezone.utc)
+        led = {"open": [{"symbol": "AAA", "market": "US", "stop": 10, "breakeven": True, "mfe_r": 1.2,
+                         "tm_log": [{"t": now.isoformat(), "text": "breakeven: price reached +1R"}]},
+                        {"symbol": "BBB", "market": "US", "stop": 20, "locked": True, "mfe_r": 1.8}],
+               "closed": [{"symbol": "CCC", "tm_log": [{"t": now.isoformat(), "text": "exit at 5 (+1.2R): reversal"},
+                                                        {"t": "2020-01-01T00:00:00+00:00", "text": "profit lock: old"}]}]}
+        card = O._tm_status(led, led["open"], now)
+        check("8. the Trade Manager agent card: watching 2, AAA breakeven, BBB profit locked, today's counts only",
+              card["status"] == "active" and "AAA breakeven" in card["now"] and "BBB profit locked" in card["now"]
+              and card["tm"]["today"] == {"breakeven": 1, "profit lock": 0, "exit": 1}
+              and card["tm"]["last"][0]["symbol"] in ("AAA", "CCC"), card)
+        check("   and standby with no open trade", O._tm_status({"open": [], "closed": []}, [], now)["status"] == "standby")
+        check("   the agents list calls agent 9 'Trade Manager'", any(a[2] == "Trade Manager" for a in O.AGENTS))
     finally:
         os.chdir(old)
         shutil.rmtree(tmp, ignore_errors=True)

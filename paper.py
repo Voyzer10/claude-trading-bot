@@ -844,6 +844,17 @@ def cmd_sell(a, cfg, led):
     close_position(led, cfg, pos, price, "manual", now)
 
 
+TM_EVENTS = []   # what the Trade Manager did this check; live.py writes them to the runner log ("TRADE MANAGER: ...")
+
+
+def tm_event(pos, text, now=None):
+    """Record a Trade Manager action: for the runner log, and on the position (its last 8 actions)."""
+    now = now or datetime.now(timezone.utc)
+    TM_EVENTS.append("%s %s" % (pos.get("key"), text))
+    pos.setdefault("tm_log", []).append({"t": now.isoformat(), "text": text})
+    pos["tm_log"] = pos["tm_log"][-8:]
+
+
 TM_KEYS = ("tm_be_r", "tm_lock_at", "tm_lock_keep", "tm_reversal", "tm_rev_min_r", "tm_stale_min", "tm_candle_min")
 
 
@@ -951,6 +962,9 @@ def step_bar(led, cfg, pos, acc, b, now, sh):
         fill = o if gapped else pos["stop"]
         why = ("trailing stop" if pos.get("trailing") else "profit lock stop" if pos.get("locked")
                else "breakeven stop" if pos.get("breakeven") else "stop")
+        if why in ("profit lock stop", "breakeven stop") and tm_cfg(acc):
+            tm_event(pos, "%s hit at %s (%+.2fR) instead of the original stop" % (why, money(m, fill), r_of(pos, fill)),
+                     when)
         close_position(led, cfg, pos, fill, why if not gapped else why + " (gapped past it)", when)
         return True
     if (l <= pos["target"]) if sh else (h >= pos["target"]):
@@ -968,6 +982,8 @@ def step_bar(led, cfg, pos, acc, b, now, sh):
         pos["stop"], pos["breakeven"] = pos["entry"], True
         print("BREAKEVEN %-16s %s reached %gR: stop moved to the entry %s"
               % (pos["key"], money(m, best), be, money(m, pos["entry"])))
+        tm_event(pos, "breakeven: price reached +%gR (%s), stop moved to the entry %s"
+                 % (be, money(m, best), money(m, pos["entry"])), when)
     if tm and pos.get("target") and not pos.get("locked"):
         way = pos["target"] - pos["entry"]
         if way and (best - pos["entry"]) / way >= tm["tm_lock_at"]:
@@ -977,6 +993,8 @@ def step_bar(led, cfg, pos, acc, b, now, sh):
             pos["locked"], pos["breakeven"] = True, True
             print("PROFIT LOCK %-16s %s covered %.0f%% of the way to the target: stop locked at %s"
                   % (pos["key"], money(m, best), tm["tm_lock_at"] * 100, money(m, pos["stop"])))
+            tm_event(pos, "profit lock: %.0f%% of the way to the target (%s), stop locked at %s (+%.1fR)"
+                     % (tm["tm_lock_at"] * 100, money(m, best), money(m, pos["stop"]), r_of(pos, pos["stop"])), when)
     if pos.get("trail_k") and sh:
         # trailing exit for a short (auto_crypto short_exit = trail): break-even once price has fallen
         # trail_arm_r R, then the stop follows trail_k x ATR above the lowest price seen; it never moves up
@@ -1095,6 +1113,7 @@ def check_position(cfg, led, pos, price, bars, now):
     if tm:   # the Trade Manager thinks about the trade after every check (7 Nov 2026)
         why = tm_react(pos, bars, now, price, tm)
         if why:
+            tm_event(pos, "exit at %s (%+.2fR): %s" % (money(m, price), r_of(pos, price), why), now)
             close_position(led, cfg, pos, price, "trade manager: " + why, now)
             return
     entry_day = pos.get("entry_date") or (_iso(pos.get("entry_time")) or now).date().isoformat()
@@ -1110,7 +1129,7 @@ def check_position(cfg, led, pos, price, bars, now):
         print("%-16s %s%s  open P&L %s   %.2f%% from the stop%s, %.2f%% from the target%s"
               % (pos["key"], "SHORT " if sh else "", money(m, price), money(m, upnl), to_stop,
                  " (breakeven)" if pos.get("breakeven") else "", to_tgt,
-                 "" if age is None else "   quote %.0f min old%s" % (age, "  STALE" if age > 10 else "")))
+                 "" if age is None else "   quote %.0f min old%s" % (max(0.0, age), "  STALE" if age > 10 else "")))
 
 
 def cmd_check(a, cfg, led):

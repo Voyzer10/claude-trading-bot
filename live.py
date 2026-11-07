@@ -112,10 +112,13 @@ def paper_snapshot():
     cfg = P.load_config()
     led = P.load_ledger(cfg)
     if led["open"]:
+        del P.TM_EVENTS[:]
         try:
             P.check_once(cfg, led)
         except Exception as e:   # never leave the dashboard without prices because the check failed
             log("paper check failed: %s" % e)
+        for ev in P.TM_EVENTS:   # what the Trade Manager did: in the runner log and the dashboard's Logs
+            log("TRADE MANAGER: %s" % ev)
         P.save_json(P.LEDGER, led)
     today = now_ist().date().isoformat()
     opens = []
