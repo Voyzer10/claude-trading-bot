@@ -27,6 +27,16 @@ SECONDARY (OB / FVG), strictly in sequence - the PDF's bot hard gate:
      secondary entry, stop beyond the zone, target the next liquidity, R:R >= min_rr.
  10. After the secondary (or when there is no zone / no tap / a fresh primary appears) the sequence resets.
 
+SKIP RULES (the PDF's pages 1, 2 and 4; on by default, each can be switched off for the backtest):
+  - htf:       no trade against the higher-timeframe trend: the last BOS on 1-hour candles (built from these
+               candles, completed hours only) must not point the other way (page 4).
+  - chop_er:   no BOS out of a sideways / choppy market: the efficiency ratio of the 20 closes up to the BOS
+               candle (net move / sum of moves) must be at least 0.30 (page 1).
+  - bos_body_atr / bos_vol_x: the break must be decisive: the BOS candle's body >= 0.8 ATR and its volume >= 1.2x
+               the 20-candle average (page 1: displacement and volume; skipped when the feed has no volume).
+  - opp_zone:  no nearby opposing zone: no unfilled bearish FVG (bullish for shorts) overlapping the space from the
+               entry to 1R beyond it (page 2).
+
 One sequence per chart: while a primary or a secondary is open, or a secondary is being looked for, no new
 primary is taken. The trades are walked candle by candle (stop first when a candle touches both) to know when they
 close; intraday markets close at the day's last candle.
@@ -40,7 +50,73 @@ def mirror(rows):
 
 DEFAULTS = {"bos_max": 48, "reclaim_max": 3, "sig_max": 3, "conf_max": 2, "near_atr": 0.5, "ext_range_atr": 2.0,
             "ext_dist_atr": 3.0, "buffer_atr": 0.1, "min_rr": 1.0, "zone_window": 48, "leg_max": 24,
-            "max_hold": 48, "doji_pct": 0.15}
+            "max_hold": 48, "doji_pct": 0.15,
+            # the PDF's skip rules (fixed numbers, 7 Nov 2026; 0 / False switches one off)
+            "htf": True, "chop_er": 0.30, "er_n": 20, "bos_body_atr": 0.8, "bos_vol_x": 1.2, "vol_n": 20,
+            "opp_zone": True, "opp_lookback": 48}
+
+
+def efficiency(bars, j, n):
+    """Kaufman efficiency ratio of the n closes up to candle j: |net move| / sum of |moves| (1 = straight line)."""
+    if j - n < 0:
+        return None
+    path = sum(abs(bars[k][4] - bars[k - 1][4]) for k in range(j - n + 1, j + 1))
+    return abs(bars[j][4] - bars[j - n][4]) / path if path > 0 else 0.0
+
+
+def htf_dirs(bars, day_of, minutes=60):
+    """For every candle: the higher-timeframe trend known when it closed, from completed `minutes` candles built out
+    of these ones: "up" (last HTF BOS bullish), "down" (bearish) or None. In src terms (mirrored for shorts)."""
+    n = len(bars)
+    if n < 2:
+        return [None] * n
+    step = min(bars[k + 1][0] - bars[k][0] for k in range(min(n - 1, 50)))
+    hb, idx_end = [], []          # hour candles and the index of their last small candle
+    for k, b in enumerate(bars):
+        ts = b[0].timestamp()
+        key = int(ts // (minutes * 60))
+        if hb and hb[-1][6] == key:
+            t, o, h, l, c, v, _ = hb[-1]
+            hb[-1] = (t, o, max(h, b[2]), min(l, b[3]), b[4], v + (b[5] or 0), key)
+            idx_end[-1] = k
+        else:
+            hb.append((b[0], b[1], b[2], b[3], b[4], b[5] or 0, key))
+            idx_end.append(k)
+    hbars = [x[:6] for x in hb]
+    if len(hbars) < 8:
+        return [None] * n
+    hctx = PB.Context(hbars, day_of)
+    hdir, cur = [], None
+    for m in range(len(hbars)):
+        if hctx.bull[m]:
+            cur = "up"
+        elif hctx.bear[m]:
+            cur = "down"
+        hdir.append(cur)
+    out, m, known = [None] * n, -1, None
+    span = minutes * 60
+    for k in range(n):
+        close_t = bars[k][0] + step
+        # hour candles completed by the close of candle k
+        while m + 1 < len(hb) and (hb[m + 1][6] + 1) * span <= close_t.timestamp():
+            m += 1
+            known = hdir[m]
+        out[k] = known
+    return out
+
+
+def opposing_zone(bars, i, entry, risk, lookback):
+    """An unfilled bearish FVG (src terms: candle k's high below candle k-2's low) overlapping (entry, entry + 1R)."""
+    lo, hi = entry, entry + risk
+    for k in range(max(2, i - lookback), i + 1):
+        top, bot = bars[k - 2][3], bars[k][2]
+        if bot >= top:
+            continue
+        if any(bars[q][4] > top for q in range(k + 1, i + 1)):
+            continue                                          # filled: price closed back above it
+        if bot < hi and top > lo:
+            return (bot, top)
+    return None
 
 
 def _targets(ctx, bars, i, entry, extra=()):
@@ -52,13 +128,36 @@ def _targets(ctx, bars, i, entry, extra=()):
     return min(out) if out else None
 
 
-def primaries(src, ctx, p):
+def bos_quality(bars, ctx, j, p):
+    """The PDF's page-1 checks on a BOS candle j: not out of chop, decisive body, volume. (ok, why-not)."""
+    if p.get("chop_er"):
+        er = efficiency(bars, j, p["er_n"])
+        if er is not None and er < p["chop_er"]:
+            return False, "choppy before the BOS (efficiency %.2f < %.2f)" % (er, p["chop_er"])
+    a = ctx.atr[j]
+    if p.get("bos_body_atr") and a:
+        body = abs(bars[j][4] - bars[j][1])
+        if body < p["bos_body_atr"] * a:
+            return False, "weak BOS candle (body %.2f ATR)" % (body / a)
+    if p.get("bos_vol_x") and j >= p["vol_n"]:
+        vols = [bars[k][5] or 0 for k in range(j - p["vol_n"], j)]
+        avg = sum(vols) / len(vols)
+        if avg > 0 and (bars[j][5] or 0) > 0 and bars[j][5] < p["bos_vol_x"] * avg:
+            return False, "BOS volume %.2fx (< %.1fx)" % (bars[j][5] / avg, p["bos_vol_x"])
+    return True, None
+
+
+def primaries(src, ctx, p, htf=None):
     """Every primary entry on src (normal prices for longs, mirrored for shorts). Stateless: the sequence decides
-    which ones are taken."""
+    which ones are taken. htf: per-candle higher-timeframe trend in src terms (htf_dirs), used when p["htf"]."""
     bars, n, out, taken = src, len(src), [], set()
     bos, used = None, set()
     for j in range(30, n):
         if ctx.bull[j]:
+            ok, _ = bos_quality(bars, ctx, j, p)
+            if not ok:
+                bos = None                          # a weak / choppy break is not a BOS to trade from
+                continue
             sh_i, sh_px = ctx.sh_known[j - 1][-1]
             bos = {"i": j, "level": sh_px, "origin": min(bars[k][3] for k in range(sh_i, j + 1))}
             continue
@@ -105,6 +204,10 @@ def primaries(src, ctx, p):
                 tgt = _targets(ctx, bars, i, c, (move_hi,))
                 if tgt is None or (tgt - c) < p["min_rr"] * (c - stop):
                     break                                                    # poor R:R
+                if p.get("htf") and htf is not None and htf[i] == "down":
+                    break                                                    # against the higher timeframe
+                if p.get("opp_zone") and opposing_zone(bars, i, c, c - stop, p["opp_lookback"]):
+                    break                                                    # supply right above the entry
                 taken.add(i)
                 pats = PB.patterns(bars[s_i], p["doji_pct"])
                 out.append({"i": i, "kind": "primary", "bos": bos["i"], "sweep": j, "reclaim": rec, "signal": s_i,
@@ -202,7 +305,8 @@ def sequence(rows, day_of, intraday=False, **kw):
     for short in (False, True):
         src = mrows if short else rows
         ctx = PB.Context(src, day_of)
-        sides[short] = (src, ctx, primaries(src, ctx, p))
+        htf = htf_dirs(src, day_of) if p.get("htf") else None
+        sides[short] = (src, ctx, primaries(src, ctx, p, htf))
     day = [day_of(r[0]) for r in rows]
     cands = sorted([(c["i"], short, c) for short in (False, True) for c in sides[short][2]], key=lambda x: (x[0], x[1]))
     out, free = [], 0
