@@ -391,11 +391,12 @@ def process(state, log, auto=True):
     except Exception as e:
         log("US Scanner failed: %s" % e)
     import smc_playbook as PB
-    if PB.v4_only("US"):           # Scanner v4 only: the opening-range breakout scan and trades are off
-        ms["status"] = "Scanner v4 only: the opening-range breakout rules are off"
+    own = PB.v4_only("US")
+    if own:                        # Scanner v4 / v5 only: the opening-range breakout scan and trades are off
+        ms["status"] = "Scanner %s only: the opening-range breakout rules are off" % own
         if ms.get("v4_note") != utc.date().isoformat():
             ms["v4_note"] = utc.date().isoformat()
-            log("AUTO US: Scanner v4 only: opening-range breakouts are not scanned or traded today")
+            log("AUTO US: Scanner %s only: opening-range breakouts are not scanned or traded today" % own)
         return
     start = et.replace(hour=9, minute=50, second=0, microsecond=0)
     stop = et.replace(hour=15, minute=30, second=0, microsecond=0)

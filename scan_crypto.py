@@ -175,7 +175,8 @@ def intraday_one(d, cutoff):
     try:
         import smc_playbook as PB2
         rows2 = [(b[0], b[5] if b[5] is not None else b[3], b[1], b[2], b[3], b[4] or 0) for b in bars]
-        own = PB2.owner_setups(rows2, lambda t: t.date(), version=PB2.scanner_version("CRYPTO"))
+        own = PB2.owner_setups(rows2, lambda t: t.date(), version=PB2.scanner_version("CRYPTO"),
+                                 market="CRYPTO")
     except Exception:
         own = []
     return {"price": last[3], "bar_end": (last[0] + timedelta(minutes=BAR_MIN)).isoformat(),

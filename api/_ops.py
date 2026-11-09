@@ -124,7 +124,11 @@ RISK_FIELDS = {
     "capital": {"type": "float", "min": 100},
     "risk_limits": {"type": "bool"},
     "trade_setups": {"type": "bool"},
-    "scanner_version": {"type": "choice", "choices": ["v4", "v3", "v2"]},
+    "scanner_version": {"type": "choice", "choices": ["v5", "v4", "v3", "v2"]},
+    "v5_setups": {"type": "setups", "allow_empty": True, "choices": ["v5_level_long", "v5_level_short"]},
+    "v5_constant": {"type": "float", "min": 0.01, "max": 0.5},
+    "v5_move": {"type": "choice", "choices": ["swing", "day"]},
+    "v5_target": {"type": "choice", "choices": ["leg", "2R"]},
     "v4_setups": {"type": "setups", "allow_empty": True,
                   "choices": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"]},
     "trade_manager": {"type": "bool"},
@@ -150,7 +154,7 @@ RISK_FIELDS = {
 PREF_FIELDS = {"usd_inr": {"type": "float", "min": 50, "max": 200},
                "daily_goal_inr": {"type": "float", "min": 0, "max": 1e7}}
 PREF_DEFAULT = {"usd_inr": 88.0, "daily_goal_inr": 500.0}
-BACKTEST_MODES = ["fno-sv4", "us-tm", "nse-tm", "crypto-tm", "crypto-tm-5m", "crypto-sv4", "crypto-sv4-5m", "us-sv4", "nse-sv4", "crypto-v3", "crypto-v3-5m", "us-v3", "nse-v3", "us-orb", "crypto-abcd", "crypto-abcd-5m", "us-abcd", "nse-abcd", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-v4", "crypto-v4-short", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
+BACKTEST_MODES = ["crypto-sv5", "crypto-sv5-5m", "us-sv5", "nse-sv5", "gold-sv5", "fno-sv4", "us-tm", "nse-tm", "crypto-tm", "crypto-tm-5m", "crypto-sv4", "crypto-sv4-5m", "us-sv4", "nse-sv4", "crypto-v3", "crypto-v3-5m", "us-v3", "nse-v3", "us-orb", "crypto-abcd", "crypto-abcd-5m", "us-abcd", "nse-abcd", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-v4", "crypto-v4-short", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
 
 
 # ------------------------------------------------------------------ small helpers
@@ -1158,7 +1162,7 @@ def _setup_label(rec):
     if isinstance(s1, dict) and s1.get("setup_name"):
         return s1["setup_name"]
     setup = rec.get("setup") or ""
-    if setup.startswith("v3_") or setup.startswith("v4_"):
+    if setup.startswith(("v3_", "v4_", "v5_")):
         return "%s %s" % (setup[:2], setup[3:].replace("_", " "))
     if setup.startswith("smcp_"):
         return "Playbook %s" % setup[5:].replace("_", " ")
@@ -1299,8 +1303,10 @@ def agents():
     stop_k = cfg.get("stop_atr_k", 1.5)
     jobs = {
         1: "Every market, on each candle that closes. The rules that trade: a crypto coin's fresh close above its "
-           "4-hour high (below its low for shorts), NSE / US opening-range breaks. Your setups, one scanner version per account "
-           "(Settings: Scanner version), never mixed. v4 = your 7 Nov final workflow only: a primary trade (BOS, a "
+           "4-hour high (below its low for shorts), NSE / US opening-range breaks (both off for an account on v4 or v5). "
+           "Your setups, one scanner version per account (Settings: Scanner version), never mixed. v5 = the 0.146 "
+           "level: after a move, the level C x range short of its extreme (C = 0.146), touched and closed back on the "
+           "right side, stop beyond the extreme, target the other end of the move. v4 = your 7 Nov final workflow only: a primary trade (BOS, a "
            "sweep of an old low / high that is reclaimed, doji / hammer / inverted hammer, a break-and-close of the "
            "signal candle), then - only after it closed - one OB / FVG secondary (the zone tapped, then a "
            "break-and-close). v4 skips trades against the 1-hour trend, BOS out of chop or on a weak candle, and "

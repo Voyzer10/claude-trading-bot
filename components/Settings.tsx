@@ -99,7 +99,10 @@ const RISK_LABELS: Record<string, string> = {
   tm_rev_min_r: "Trade Manager: reversal exit only after this many R in profit",
   tm_stale_min: "Trade Manager: close a trade that went nowhere after (minutes, 0 = off)",
   tm_candle_min: "Trade Manager: candle size for the reversal check (minutes)",
-  scanner_version: "Scanner version (v4 = 7 Nov final workflow: primary, then sequential OB/FVG; v3 = 5 Nov sweep reversal + FVG/OB retest; v2 = A-B-C-D, playbook, FVG / OB)",
+  scanner_version: "Scanner version (v5 = the 0.146 level; v4 = 7 Nov final workflow: primary, then sequential OB/FVG; v3 = 5 Nov sweep reversal + FVG/OB retest; v2 = A-B-C-D, playbook, FVG / OB)",
+  v5_constant: "Scanner v5: the constant C (level = move's extreme -/+ C x range; reel: 0.146)",
+  v5_move: "Scanner v5: the move (swing = last swing low -> high; day = today's low -> high)",
+  v5_target: "Scanner v5: target (leg = the other end of the move; 2R)",
   cooldown_losses: "Cooldown after N losses in a row (0 = off)",
   cooldown_minutes: "Cooldown length (minutes)",
   weekly_loss_x: "Weekly loss limit (x daily limit, 0 = off)",
@@ -164,6 +167,10 @@ const V4_NAMES: Record<string, string> = {
   v4_secondary_long: "v4 OB / FVG secondary long (only after the primary closed)",
   v4_secondary_short: "v4 OB / FVG secondary short (only after the primary closed)",
 };
+const V5_NAMES: Record<string, string> = {
+  v5_level_long: "v5 support long (after an up-move: low + C x range touched, closed back above)",
+  v5_level_short: "v5 resistance short (after a down-move: high - C x range touched, closed back below)",
+};
 const RULES_NAME: Record<MarketKey, string> = {
   CRYPTO: "4h breakout / SMC / playbook / rulebook",
   NSE: "opening-range breakouts",
@@ -180,8 +187,10 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
     : { rules: doc.markets[mkt]?.rules ?? {}, defaults: doc.markets[mkt]?.defaults ?? {}, fields: doc.markets[mkt]?.fields ?? {} };
   const acct = ACCOUNT_OF[mkt];
   const version = String(doc.risk[acct]?.scanner_version ?? "v3");
-  const v4 = version === "v4";
-  const savedV4 = (doc.risk[acct]?.v4_setups as unknown as string[] | undefined) ?? Object.keys(V4_NAMES);
+  const v4 = version === "v4" || version === "v5";
+  const ownKey = version === "v5" ? "v5_setups" : "v4_setups";
+  const ownNames = version === "v5" ? V5_NAMES : V4_NAMES;
+  const savedV4 = (doc.risk[acct]?.[ownKey] as unknown as string[] | undefined) ?? Object.keys(ownNames);
   const [v, setV] = useState<Record<string, unknown>>(src.rules);
   const [v4set, setV4set] = useState<string[]>(savedV4);
   const [busy, setBusy] = useState(false);
@@ -209,7 +218,7 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
         done.push(...r.changed);
       }
       if (v4changed) {
-        const r = await postJSON<{ changed: string[] }>(`${OPS}/settings/risk`, { account: acct, changes: { v4_setups: v4set } });
+        const r = await postJSON<{ changed: string[] }>(`${OPS}/settings/risk`, { account: acct, changes: { [ownKey]: v4set } });
         done.push(...r.changed);
       }
       onSaved(done.length ? `${tabName} saved: ${done.join("; ")}` : "Nothing changed.");
@@ -238,8 +247,9 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
       </div>
       {v4 ? (
         <div className="notice" style={{ marginBottom: 12 }}>
-          <b>Scanner v4 is on for {acct}:</b> only the v4 setups ticked below are watched and traded. The {RULES_NAME[mkt]} rules
-          are off for this account{mkt === "FNO" ? " (v4 does not trade the indices)" : ""}; their values below are kept for when you switch back.
+          <b>Scanner {version} is on for {acct}:</b> only the {version} setups ticked below are watched and traded. The {RULES_NAME[mkt]} rules
+          are off for this account{mkt === "FNO" ? ` (${version} does not trade the indices)` : ""}; their values below are kept for when you switch back.
+          {version === "v5" && <> The 0.146 level is <b>not backtested yet</b>: run the Scanner v5 backtests first.</>}
         </div>
       ) : (
         <p className="small muted" style={{ margin: "0 0 10px" }}>
@@ -249,9 +259,9 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
       {offDefault.length > 0 && <p className="small muted" style={{ margin: "0 0 10px" }}><b>Changed from the defaults:</b> {offDefault.join(", ")}.</p>}
       {mkt !== "FNO" && (
         <div className="field" style={{ marginBottom: 12 }}>
-          <span className="field-label">Setups traded: Scanner v4{v4 ? "" : " (used when Scanner version is v4)"}</span>
-          <div className="checks" role="group" aria-label="Scanner v4 setups traded">
-            {Object.entries(V4_NAMES).map(([c, name]) => (
+          <span className="field-label">Setups traded: Scanner {version === "v5" ? "v5" : "v4"}{v4 ? "" : " (used when Scanner version is v4)"}</span>
+          <div className="checks" role="group" aria-label={`Scanner ${version === "v5" ? "v5" : "v4"} setups traded`}>
+            {Object.entries(ownNames).map(([c, name]) => (
               <label key={c}>
                 <input type="checkbox" checked={v4set.includes(c)}
                        onChange={(e) => setV4set(e.target.checked ? [...v4set, c] : v4set.filter((x) => x !== c))} />
@@ -260,7 +270,9 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
             ))}
           </div>
           <span className="field-help">
-            Your 7 Nov final workflow. Secondaries only come after that chart&apos;s primary closed. Unticked: found and logged, not traded.
+            {version === "v5"
+              ? `The 0.146 level (C = ${doc.risk[acct]?.v5_constant ?? 0.146}, move ${doc.risk[acct]?.v5_move ?? "swing"}, target ${doc.risk[acct]?.v5_target ?? "leg"}; change them in Risk limits). Unticked: found and logged, not traded.`
+              : "Your 7 Nov final workflow. Secondaries only come after that chart's primary closed. Unticked: found and logged, not traded."}
             {mkt === "NSE" ? " Shared with the INDIA account (NSE + F&O)." : ""}
           </span>
         </div>

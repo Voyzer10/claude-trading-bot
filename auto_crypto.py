@@ -811,12 +811,12 @@ def process(state, res, log):
     out = []
     import smc_playbook as PB
     v4 = PB.v4_only("CRYPTO")
-    if v4:   # Scanner v4 only: the rules setups (4h breakout, SMC, playbook, rulebook) are not traded
+    if v4:   # Scanner v4 / v5 only: the rules setups (4h breakout, SMC, playbook, rulebook) are not traded
         n = sum(1 for h in res.get("hits", []) if h.get("new") and h["setup"] in cfg["enabled_setups"])
         if n:
-            log("AUTO CRYPTO: Scanner v4 only: %d rules-setup hit%s ignored (%s); only v4 setups are traded" % (
-                n, "" if n == 1 else "s", ", ".join(sorted({h["setup"] for h in res.get("hits", [])
-                                                            if h.get("new") and h["setup"] in cfg["enabled_setups"]}))))
+            log("AUTO CRYPTO: Scanner %s only: %d rules-setup hit%s ignored (%s); only %s setups are traded" % (
+                v4, n, "" if n == 1 else "s", ", ".join(sorted({h["setup"] for h in res.get("hits", [])
+                                                            if h.get("new") and h["setup"] in cfg["enabled_setups"]})), v4))
     for h in ([] if v4 else res.get("hits", [])):
         if h.get("new") and h["setup"] in cfg["enabled_setups"]:
             try:

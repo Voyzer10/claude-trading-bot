@@ -218,11 +218,12 @@ def process(state, log):
     now = datetime.now(IST)
     ms = state.setdefault("markets", {}).setdefault("FNO", {})
     import smc_playbook as PB
-    if PB.v4_only("NFO"):          # INDIA on Scanner v4: no index opening-range breakout trades
-        ms["status"] = "Scanner v4 only: the index opening-range breakout rules are off"
+    own = PB.v4_only("NFO")
+    if own:          # INDIA on Scanner v4: no index opening-range breakout trades
+        ms["status"] = "Scanner %s only: the index opening-range breakout rules are off" % own
         if ms.get("v4_note") != now.date().isoformat():
             ms["v4_note"] = now.date().isoformat()
-            log("AUTO FNO: Scanner v4 only: Nifty / Bank Nifty opening-range breakouts are off today")
+            log("AUTO FNO: Scanner %s only: Nifty / Bank Nifty opening-range breakouts are off today" % own)
         return []
     if now.weekday() >= 5 or not (at(now, cfg["entry_start"]) <= now < at(now, cfg["entry_end"])):
         ms["status"] = "outside the F&O entry window (%s-%s IST)" % (cfg["entry_start"], cfg["entry_end"])

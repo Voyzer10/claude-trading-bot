@@ -378,7 +378,8 @@ SETUP_NAMES = {"abcd_long": "A-B-C-D long", "abcd_short": "A-B-C-D short",
                "v3_sweep_long": "v3 sweep long", "v3_sweep_short": "v3 sweep short",
                "v3_retest_long": "v3 FVG/OB retest long", "v3_retest_short": "v3 FVG/OB retest short",
                "v4_primary_long": "v4 primary long", "v4_primary_short": "v4 primary short",
-               "v4_secondary_long": "v4 OB/FVG secondary long", "v4_secondary_short": "v4 OB/FVG secondary short"}
+               "v4_secondary_long": "v4 OB/FVG secondary long", "v4_secondary_short": "v4 OB/FVG secondary short",
+               "v5_level_long": "v5 0.146 support long", "v5_level_short": "v5 0.146 resistance short"}
 
 
 def _r(x):
@@ -388,23 +389,37 @@ def _r(x):
     return round(x, 2) if ax >= 100 else round(x, 4) if ax >= 1 else float("%.6g" % x)
 
 
-SCANNER_VERSIONS = ("v4", "v3", "v2")
+SCANNER_VERSIONS = ("v5", "v4", "v3", "v2")
 
 
 def setup_version(setup):
-    """Which scanner version a setup belongs to: v4_ / v3_ prefixes, everything else is v2."""
+    """Which scanner version a setup belongs to: v5_ / v4_ / v3_ prefixes, everything else is v2."""
     s = str(setup or "")
-    return "v4" if s.startswith("v4_") else "v3" if s.startswith("v3_") else "v2"
+    return "v5" if s.startswith("v5_") else "v4" if s.startswith("v4_") else "v3" if s.startswith("v3_") else "v2"
 
 
 V4_SETUPS = ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"]
+V5_SETUPS = ["v5_level_long", "v5_level_short"]
+OWN_ONLY = ("v4", "v5")   # versions that trade ONLY their own setups
 
 
 def v4_only(market):
-    """Scanner v4 on this market's account: ONLY v4 setups are watched and traded (owner, 10 Nov 2026). The older
-    "rules" paths (crypto 4h breakout / SMC / playbook / rulebook hits, NSE / US / index F&O opening-range
-    breakouts) are switched off for that account."""
-    return scanner_version(market) == "v4"
+    """Scanner v4 or v5 on this market's account: ONLY that version's setups are watched and traded (owner, 10 Nov
+    2026). The older "rules" paths (crypto 4h breakout / SMC / playbook / rulebook hits, NSE / US / index F&O
+    opening-range breakouts) are switched off for that account. Name kept from v4; returns the version or None."""
+    v = scanner_version(market)
+    return v if v in OWN_ONLY else None
+
+
+def v5_params(market):
+    """Scanner v5's settings for this market's account: constant, move, target (paper_config.json)."""
+    try:
+        import paper as P
+        acc = P.load_config()["accounts"].get(P.MARKETS.get(market, {}).get("account", market), {})
+    except Exception:
+        acc = {}
+    return {"c": float(acc.get("v5_constant", 0.146)), "move": acc.get("v5_move", "swing"),
+            "target": acc.get("v5_target", "leg")}
 
 
 def scanner_version(market):
@@ -422,7 +437,7 @@ def scanner_version(market):
         return "v3"
 
 
-def owner_setups(rows, day_of, ctx=None, version="v3", intraday=False):
+def owner_setups(rows, day_of, ctx=None, version="v3", intraday=False, market=None):
     """The owner's setups that complete on the LAST row (closed candles, oldest first), for one scanner version:
       v4: only the 7 Nov final workflow (scanner_v4.py): primary, then a sequential OB / FVG secondary.
       v3: only the 5 Nov workflow PDFs (sweep_reversal.py): v3 sweep reversal and v3 FVG / OB retest.
@@ -433,7 +448,9 @@ def owner_setups(rows, day_of, ctx=None, version="v3", intraday=False):
     if len(rows) < 35:
         return []
     i = len(rows) - 1
-    if version == "v4":
+    if version == "v5":
+        out = v5_setups(rows, day_of, i, intraday, v5_params(market) if market else {})
+    elif version == "v4":
         out = v4_setups(rows, day_of, i, intraday)
     elif version == "v3":
         out = v3_setups(rows, day_of, i, ctx)
@@ -545,6 +562,31 @@ def v3_setups(rows, day_of, i, ctx=None):
                                     "reversal_at": rows[s["reversal_at"]][0].isoformat(),
                                     "first_entry_was_extended": s["reversal_extended"],
                                     "confirmed_on_candle": s["conf_offset"], "rr": round(r, 2)}})
+    return out
+
+
+def v5_setups(rows, day_of, i, intraday=False, params=None):
+    """Scanner v5 (scanner_v5.py, the 0.146 level): the trade whose entry is candle i."""
+    import scanner_v5 as V5
+    try:
+        seq = V5.sequence(rows, day_of, intraday=intraday, **(params or {}))
+    except Exception:
+        return []
+    out = []
+    for t in seq:
+        if t["i"] != i:
+            continue
+        short = t["side"] == "short"
+        risk = abs(t["entry"] - t["stop"])
+        liq = "%s move %s -> %s (range %s): %s level %s = %s %s %s x range, rejected" % (
+            "down" if short else "up", _r(t["leg_high"] if short else t["leg_low"]),
+            _r(t["leg_low"] if short else t["leg_high"]), _r(t["range"]), "resistance" if short else "support",
+            _r(t["level"]), "high" if short else "low", "-" if short else "+", t["c"])
+        out.append({"setup": "v5_level_%s" % t["side"], "side": t["side"], "price": _r(t["entry"]),
+                    "stop": _r(t["stop"]), "target": _r(t["target"]),
+                    "target_2r": _r(t["entry"] - 2 * risk if short else t["entry"] + 2 * risk), "liquidity": liq,
+                    "details": {"move": t["move"], "constant": t["c"], "level": _r(t["level"]),
+                                "leg_low": _r(t["leg_low"]), "leg_high": _r(t["leg_high"]), "rr": round(V5.rr(t), 2)}})
     return out
 
 

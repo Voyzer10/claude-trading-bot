@@ -322,7 +322,7 @@ def setups_scan(data, market, suffix, cutoff, tz, workers=8, keep=None):
         if not rows:
             continue
         for x in PB.owner_setups(hist.get(sym, []) + rows, lambda t: t.astimezone(tz).date(), version=version,
-                                intraday=True):
+                                intraday=True, market=market):
             out.append(dict(x, symbol=sym, market=market, bar_end=(rows[-1][0] + timedelta(minutes=5)).isoformat()))
     return out
 
