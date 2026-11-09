@@ -63,7 +63,7 @@ DEFAULT_CONFIG = {
                    "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
                    "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "scanner_version": "v3", "v4_pdf_only": True, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
@@ -73,7 +73,7 @@ DEFAULT_CONFIG = {
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
                    "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "scanner_version": "v3", "v4_pdf_only": True, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
@@ -83,7 +83,7 @@ DEFAULT_CONFIG = {
                    "daily_loss_limit": 30, "max_trades_per_day": 10, "min_reward_risk": 1.0,
                    "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "max_same_side": 3, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "scanner_version": "v3", "v4_pdf_only": True, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
@@ -911,6 +911,13 @@ def tm_event(pos, text, now=None):
 TM_KEYS = ("tm_be_r", "tm_lock_at", "tm_lock_keep", "tm_reversal", "tm_rev_min_r", "tm_stale_min", "tm_candle_min")
 
 
+def pdf_only(pos, acc):
+    """A Scanner v4 trade with v4_pdf_only on (default; owner, 10 Nov 2026: "v4 pr sirf v4 k concept wali pdf ...
+    sirf vahi rules chlne chahiye"): it exits ONLY at its stop, its target or the session's flat-by. No Trade Manager,
+    no breakeven move, no crypto time stop - none of those are in the 7 Nov PDF ("close by TP, SL or defined exit")."""
+    return pos.get("scanner") == "v4" and acc.get("v4_pdf_only", True)
+
+
 def tm_cfg(acc):
     """The account's Trade Manager settings, or None when it is off."""
     if not acc.get("trade_manager"):
@@ -1026,8 +1033,11 @@ def step_bar(led, cfg, pos, acc, b, now, sh):
         return True
     best = l if sh else h
     _track_excursion(pos, best, h if sh else l, sh)
-    tm = tm_cfg(acc) if not pos.get("trail_k") else None
-    be = acc.get("breakeven_at_r") or (tm["tm_be_r"] if tm else None)
+    strict = pdf_only(pos, acc)
+    if strict or pos.get("pdf_only"):
+        pos["pdf_only"] = strict           # shown on the dashboard's Trade Manager strip
+    tm = tm_cfg(acc) if not pos.get("trail_k") and not strict else None
+    be = None if strict else acc.get("breakeven_at_r") or (tm["tm_be_r"] if tm else None)
     rs = pos.get("risk_stop", pos["stop"])
     be_hit = (best <= pos["entry"] - be * (rs - pos["entry"])) if (be and sh) else \
              (be and best >= pos["entry"] + be * (pos["entry"] - rs))
@@ -1162,7 +1172,7 @@ def check_position(cfg, led, pos, price, bars, now):
     for b in path:
         if step_bar(led, cfg, pos, acc, b, now, sh):
             return
-    tm = tm_cfg(acc) if not pos.get("trail_k") else None
+    tm = tm_cfg(acc) if not pos.get("trail_k") and not pdf_only(pos, acc) else None
     if tm:   # the Trade Manager thinks about the trade after every check (7 Nov 2026)
         why = tm_react(pos, bars, now, price, tm)
         if why:

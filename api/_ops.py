@@ -129,6 +129,7 @@ RISK_FIELDS = {
     "v5_constant": {"type": "float", "min": 0.01, "max": 0.95},
     "v5_move": {"type": "choice", "choices": ["swing", "day"]},
     "v5_target": {"type": "choice", "choices": ["leg", "2R"]},
+    "v4_pdf_only": {"type": "bool"},
     "v4_setups": {"type": "setups", "allow_empty": True,
                   "choices": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"]},
     "trade_manager": {"type": "bool"},
@@ -1207,6 +1208,8 @@ def setups(limit: int = 300):
 
 
 def _tm_state(p):
+    if p.get("pdf_only"):
+        return "v4: PDF exits only"
     if p.get("trail_k"):
         return "trailing" if p.get("trailing") else "trailing exit"
     return "profit locked" if p.get("locked") else "breakeven" if p.get("breakeven") else "watching"

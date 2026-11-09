@@ -31,7 +31,7 @@ def minutes(now, start_ago, closes, spread=0.05):
     return out
 
 
-def run(P, side, target, bars_fn, live, entry_ago=40, tm=True, extra=None, stop=99.0):
+def run(P, side, target, bars_fn, live, entry_ago=40, tm=True, extra=None, stop=99.0, pos_extra=None):
     cfg = P.load_config()
     acc = cfg["accounts"]["CRYPTO"]
     acc.update({"fee_pct": 0.0, "trade_manager": tm, "tm_candle_min": 5, "tm_stale_min": 60})
@@ -44,6 +44,7 @@ def run(P, side, target, bars_fn, live, entry_ago=40, tm=True, extra=None, stop=
                              "price": None, "note": "t", "force": True, "side": side})(), cfg, led)
     now = datetime.now(timezone.utc)
     pos = led["open"][0]
+    pos.update(pos_extra or {})
     pos["entry_time"] = (now - timedelta(minutes=entry_ago)).isoformat()
     pos.pop("last_seen", None)
     pos.pop("covered_until", None)
@@ -124,6 +125,40 @@ if __name__ == "__main__":
         P.fetch_price = lambda m, t: (100.05, datetime.now(timezone.utc))
         P.check_once(cfg, led)
         check("6. the backtested crypto trailing exit is left alone (no stale exit at 90 min)", led["open"], led["closed"])
+
+        # Scanner v4 trades: only the PDF's exits (owner, 10 Nov 2026): stop / target, no Trade Manager
+        v4 = {"scanner": "v4", "setup": "v4_primary_long"}
+        pos, closed = run(P, "long", 102.0, lambda n: minutes(n, 30, up_then_down), 98.8, pos_extra=v4)
+        check("10. a v4 trade ignores the Trade Manager: 95% to the target, then the full stop (-1R), as the PDF says",
+              closed and closed[0]["exit"] == 99.0 and closed[0]["reason"] == "stop" and not closed[0].get("tm_log"),
+              closed)
+        pos, closed = run(P, "long", 103.0, lambda n: minutes(n, 30, [100.3, 100.7, 101.1, 101.3, 101.2]), 101.2,
+                          pos_extra=v4)
+        check("   no breakeven move either: +1.3R and the stop stays at 99", pos and pos["stop"] == 99.0
+              and not pos.get("breakeven"), pos)
+        pos, closed = run(P, "long", 102.0, lambda n: minutes(n, 30, [100.1, 100.2, 100.0, 99.9, 100.1]), 100.1,
+                          entry_ago=75, pos_extra=v4)
+        check("   no 'went nowhere' exit at 75 min: still open", pos is not None and not closed, closed)
+        pos, closed = run(P, "long", 102.0, lambda n: minutes(n, 30, up_then_down), 98.8, pos_extra=v4,
+                          extra={"v4_pdf_only": False})
+        check("   with v4_pdf_only off, the Trade Manager manages it again (locked at +1R)",
+              closed and closed[0]["reason"] == "profit lock stop", closed)
+        import auto_crypto as AC
+        cfg = P.load_config()
+        cfg["accounts"]["CRYPTO"]["v4_pdf_only"] = True
+        P.save_json(P.CONFIG, cfg)
+        led = P.load_ledger(cfg)
+        led["open"], led["closed"] = [], []
+        P.fetch_price = lambda m, t: (100.0, datetime.now(timezone.utc))
+        for sym, extra_pos in (("V4X", v4), ("OLD", {})):
+            P.cmd_buy(type("A", (), {"symbol": "CRYPTO:" + sym, "stop": "99", "target": "102", "qty": None,
+                                     "price": None, "note": "t", "force": True, "side": "long"})(), cfg, led)
+            led["open"][-1].update(extra_pos, entry_time=(datetime.now(timezone.utc) - timedelta(hours=20)).isoformat())
+        P.save_json(P.LEDGER, led)
+        AC.time_stops({"max_hold_hours": 12}, lambda x: None)
+        left = [p["key"] for p in P.load_ledger(P.load_config())["open"]]
+        check("11. the crypto 12h time stop closes an old-rules trade but not a v4 trade (not in the PDF)",
+              left == ["CRYPTO:V4X"], left)
 
         import dashboard_push as D
         check("7. dashboard: 'TRADE MANAGER: ...' log lines are their own kind (the Logs filter 'trade manager')",
