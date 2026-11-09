@@ -81,6 +81,9 @@ TRADER_SERVICE=1
 RUNNER_MARKETS=NSE,FNO,CRYPTO,US
 WEB_HOST=0.0.0.0
 TZ=Asia/Kolkata
+# Zerodha Kite Connect (Indian market DATA only; the bot never places an order). Paid Connect plan needed.
+# KITE_API_KEY=
+# KITE_API_SECRET=
 EOF
   NEW_PW=1
 fi
@@ -92,10 +95,10 @@ chown root:trader "$ENVF"
 chmod 640 "$ENVF"
 
 say "Services"
-cp "$APP"/deploy/trader-{runner,api,web}.service /etc/systemd/system/
+cp "$APP"/deploy/trader-{runner,api,web,ticker}.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now trader-api trader-web trader-runner >/dev/null 2>&1
-systemctl restart trader-api trader-web trader-runner
+systemctl enable --now trader-api trader-web trader-runner trader-ticker >/dev/null 2>&1
+systemctl restart trader-api trader-web trader-runner trader-ticker
 
 say "Firewall"
 # keep SSH open on whatever port sshd really listens on, before the firewall is switched on
@@ -134,7 +137,7 @@ sudo -u trader "$APP/.venv/bin/python" "$APP/deploy/check_data.py" || true
 
 sleep 3
 say "Status"
-for s in trader-runner trader-api trader-web; do printf '  %-14s %s\n' "$s" "$(systemctl is-active $s)"; done
+for s in trader-runner trader-api trader-web trader-ticker; do printf '  %-14s %s\n' "$s" "$(systemctl is-active $s)"; done
 IP="$(curl -fsS https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')"
 echo
 case "$MODE" in

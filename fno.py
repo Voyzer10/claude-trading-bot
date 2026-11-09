@@ -51,6 +51,19 @@ class FnoError(Exception):
 
 # ------------------------------------------------------------------ data
 
+KITE_SYM = {"^NSEI": "NSE:NIFTY50", "^NSEBANK": "NSE:BANKNIFTY", "^INDIAVIX": "NSE:INDIAVIX"}
+
+
+def _kite():
+    """kite.py when Zerodha is connected today: live index levels, real option / future prices, real expiries
+    and lot sizes. Data only. None otherwise (then Yahoo, NSE's chain and the model, as before)."""
+    try:
+        import kite
+        return kite if kite.connected() else None
+    except Exception:
+        return None
+
+
 def _get(url, timeout=12, opener=None, headers=None):
     req = urllib.request.Request(url, headers=dict({"User-Agent": UA, "Accept": "*/*"}, **(headers or {})))
     op = opener or urllib.request.build_opener()
@@ -60,6 +73,15 @@ def _get(url, timeout=12, opener=None, headers=None):
 
 def yahoo_last(sym):
     """(price, quote_time_utc, previous_close) for an index symbol like ^NSEI."""
+    k = _kite()
+    if k and sym in KITE_SYM:
+        try:
+            q = k.quotes([KITE_SYM[sym]])[KITE_SYM[sym]]
+            tick = k.tick_price(KITE_SYM[sym])
+            p, qt = tick if tick else (q[0], q[1])
+            return float(p), qt, ((q[2] or {}).get("ohlc") or {}).get("close")
+        except Exception:
+            pass
     url = "https://query2.finance.yahoo.com/v8/finance/chart/%s?range=1d&interval=1m" % urllib.parse.quote(sym, safe="")
     doc = json.loads(_get(url))
     res = (doc.get("chart") or {}).get("result") or []
@@ -75,6 +97,20 @@ def yahoo_last(sym):
 
 def yahoo_bars(sym, rng="1d", interval="5m"):
     """Bars as dict t,o,h,l,c,v (nulls dropped)."""
+    k = _kite()
+    iv = {"1m": "minute", "5m": "5minute", "15m": "15minute", "60m": "60minute", "1h": "60minute", "1d": "day"}
+    if k and sym in KITE_SYM and interval in iv:
+        try:
+            days = int(rng[:-1]) if rng.endswith("d") else 1
+            now = datetime.now(timezone.utc)
+            start = (now.astimezone(IST) - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0)
+            rows = k.candles(KITE_SYM[sym], start.astimezone(timezone.utc), now, iv[interval])
+            if rows:
+                return {"t": [int(r[0].timestamp()) for r in rows], "o": [r[1] for r in rows],
+                        "h": [r[2] for r in rows], "l": [r[3] for r in rows], "c": [r[4] for r in rows],
+                        "v": [r[5] for r in rows]}
+        except Exception:
+            pass
     url = ("https://query2.finance.yahoo.com/v8/finance/chart/%s?range=%s&interval=%s&includePrePost=false"
            % (urllib.parse.quote(sym, safe=""), rng, interval))
     doc = json.loads(_get(url, timeout=20))
@@ -132,8 +168,18 @@ def last_weekday_of_month(y, m, wd):
 
 
 def next_expiry(index, today, min_days=0):
-    """Next option expiry on/after today+min_days (Nifty weekly Tuesday, Bank Nifty monthly last Tuesday)."""
+    """Next option expiry on/after today+min_days (Nifty weekly Tuesday, Bank Nifty monthly last Tuesday). With
+    Zerodha connected: the exchange's real expiry dates (holiday shifts included), for indices and stocks."""
     start = today + timedelta(days=min_days)
+    k = _kite()
+    if k:
+        try:
+            exps = sorted({c["expiry"] for c in k.fno_chain(index) if c["type"] in ("CE", "PE")})
+            nxt = [e for e in exps if e >= start.isoformat()]
+            if nxt:
+                return date.fromisoformat(nxt[0])
+        except Exception:
+            pass
     if FNO[index]["weekly"]:
         d = start
         while d.weekday() != EXPIRY_WEEKDAY:
@@ -149,7 +195,16 @@ def next_expiry(index, today, min_days=0):
 
 
 def futures_expiry(index, today):
-    """Index futures are monthly: the last Tuesday of the month."""
+    """Index futures are monthly: the last Tuesday of the month (Zerodha connected: the real date)."""
+    k = _kite()
+    if k:
+        try:
+            exps = sorted({c["expiry"] for c in k.fno_chain(index) if c["type"] == "FUT"})
+            nxt = [e for e in exps if e >= today.isoformat()]
+            if nxt:
+                return date.fromisoformat(nxt[0])
+        except Exception:
+            pass
     y, m = today.year, today.month
     for _ in range(3):
         d = last_weekday_of_month(y, m, EXPIRY_WEEKDAY)
@@ -182,7 +237,19 @@ def bs(spot, strike, t, vol, kind, r=RATE):
     return strike * math.exp(-r * t) * _ncdf(-d2) - spot * _ncdf(-d1), _ncdf(d1) - 1
 
 
-def atm_strike(index, spot):
+def atm_strike(index, spot, expiry=None):
+    """The strike nearest the spot: from Zerodha's real strike list when connected (stocks too)."""
+    k = _kite()
+    if k:
+        try:
+            ks = sorted({c["strike"] for c in k.fno_chain(index, expiry) if c["type"] == "CE"})
+            if ks:
+                best = min(ks, key=lambda x: abs(x - spot))
+                return int(best) if best == int(best) else best
+        except Exception:
+            pass
+    if index not in FNO:
+        raise FnoError("%s: strike list needs Zerodha connected" % index)
     step = FNO[index]["step"]
     return int(round(spot / step) * step)
 
@@ -190,7 +257,8 @@ def atm_strike(index, spot):
 # ------------------------------------------------------------------ instruments
 
 def make_option(index, expiry, strike, kind):
-    return "%s-%s-%d-%s" % (index, expiry.strftime("%Y%m%d"), strike, kind)
+    k = int(strike) if float(strike) == int(strike) else strike
+    return "%s-%s-%s-%s" % (index, expiry.strftime("%Y%m%d"), k, kind)
 
 
 def make_future(index, expiry):
@@ -202,20 +270,48 @@ def parse(name):
     if len(p) == 3 and p[1] == "FUT":
         return {"index": p[0], "type": "FUT", "expiry": datetime.strptime(p[2], "%Y%m%d").date()}
     if len(p) == 4 and p[3] in ("CE", "PE"):
-        return {"index": p[0], "type": p[3], "expiry": datetime.strptime(p[1], "%Y%m%d").date(), "strike": int(p[2])}
+        k = float(p[2])
+        return {"index": p[0], "type": p[3], "expiry": datetime.strptime(p[1], "%Y%m%d").date(),
+                "strike": int(k) if k == int(k) else k}
     raise FnoError("not an F&O instrument name: %s (e.g. NIFTY-20261103-22800-CE or NIFTY-FUT-20261124)" % name)
 
 
 def lot_size(name):
-    return FNO[parse(name)["index"]]["lot"]
+    k = _kite()
+    if k:
+        try:
+            return k.resolve("NFO:" + name.upper())["lot"]
+        except Exception:
+            pass
+    ix = parse(name)["index"]
+    if ix not in FNO:
+        raise FnoError("%s: the lot size needs Zerodha connected" % ix)
+    return FNO[ix]["lot"]
 
 
 def quote(name, now_utc=None, prefer_nse=True):
     """(price, quote_time_utc, source, extra) for an instrument."""
     now_utc = now_utc or datetime.now(timezone.utc)
     ins = parse(name)
+    k = _kite()
+    if k:                                    # Zerodha: the contract's real traded price
+        try:
+            key = "NFO:" + name.upper()
+            q = k.quotes([key]).get(key)
+            if q:
+                tick = k.tick_price(key)
+                p, qt = tick if tick else (q[0], q[1])
+                extra = {"oi": (q[2] or {}).get("oi"), "volume": (q[2] or {}).get("volume")}
+                if ins["index"] in FNO and ins["type"] != "FUT":
+                    try:
+                        extra["delta"] = round(delta(name, now_utc), 3)
+                    except Exception:
+                        pass
+                return float(p), qt, "Zerodha live", extra
+        except Exception:
+            pass
     if ins["index"] not in FNO:
-        raise FnoError("only NIFTY and BANKNIFTY are set up")
+        raise FnoError("%s: stock F&O prices need Zerodha connected" % ins["index"])
     spot, qt, _ = yahoo_last(FNO[ins["index"]]["yahoo"])
     t = years_to(ins["expiry"], now_utc)
     if ins["type"] == "FUT":

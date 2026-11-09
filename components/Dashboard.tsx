@@ -11,6 +11,8 @@ import Backtest from "@/components/Backtest";
 import Alerts from "@/components/Alerts";
 import Agents from "@/components/Agents";
 import SymbolIcon from "@/components/SymbolIcon";
+import Zerodha from "@/components/Zerodha";
+import { INDIA, useLiveTicks, type LiveTicks } from "@/lib/live";
 import { errText } from "@/lib/api";
 
 const POLL_MS = 30_000;
@@ -19,6 +21,7 @@ const STALE_MIN = 12; // the runner pushes every 5 minutes; silence beyond this 
 // ------------------------------------------------------------------ page
 
 export default function Dashboard() {
+  const live = useLiveTicks();
   const [data, setData] = useState<SnapshotResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
@@ -93,10 +96,11 @@ export default function Dashboard() {
       {snap && (
         <>
           <ControlPanel />
+          <Zerodha live={live} />
           <RunnerSection snap={snap} ageSec={ageSec} />
           <Agents refreshKey={refreshKey} />
           <MarketsStrip snap={snap} />
-          <LedgerSection snap={snap} onChange={changed} />
+          <LedgerSection snap={snap} onChange={changed} live={live} />
           <CoinsSection snap={snap} />
           <div className="grid-2">
             <ReasonsSection snap={snap} />
@@ -646,8 +650,20 @@ function SetupCell({ p }: { p: Position }) {
   );
 }
 
-function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => void }) {
-  const { accounts, open, closed } = snap.ledger;
+/** India positions with Zerodha's latest tick: price and gross open P&L change every second. */
+function withLive(open: Position[], live: LiveTicks | null): (Position & { live?: boolean })[] {
+  if (!live?.live) return open;
+  return open.map((p) => {
+    const t = INDIA(p.market) ? live.ticks[p.key] : undefined;
+    if (!t) return p;
+    const dir = p.side === "short" ? -1 : 1;
+    return { ...p, last: t.ltp, open_pnl: (t.ltp - p.entry) * p.qty * dir, quote_time: new Date().toISOString(), live: true };
+  });
+}
+
+function LedgerSection({ snap, onChange, live }: { snap: Snapshot; onChange: () => void; live: LiveTicks | null }) {
+  const { accounts, closed } = snap.ledger;
+  const open = withLive(snap.ledger.open, live);
   const { cmds, send, available } = useCommands(onChange);
   const [err, setErr] = useState<string | null>(null);
   const waiting = (key: string | null) =>
@@ -711,6 +727,7 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
                     <td data-label="Entry" className="num">{price(p.entry)}</td>
                     <td data-label="Now" className="num">
                       {p.last !== undefined ? price(p.last) : "—"}
+                      {p.live && <span className="live-dot" title="Live from Zerodha, updates every second" aria-label="live" />}
                       {(() => {
                         const age = p.quote_time ? (Date.now() - new Date(p.quote_time).getTime()) / 60000 : 0;
                         return age > 10 ? <span className="small stale" title="The price feed has not updated this quote">{" "}quote {Math.round(age)} min old</span> : null;

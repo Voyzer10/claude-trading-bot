@@ -1,0 +1,16 @@
+[Unit]
+Description=Trader bot Kite ticker (Zerodha WebSocket prices -> trader/live/ticks.json; data only, no orders)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=trader
+WorkingDirectory=/opt/trader
+EnvironmentFile=/etc/trader/trader.env
+ExecStart=/opt/trader/.venv/bin/python -u kite_ticker.py /opt/trader
+Restart=always
+RestartSec=10
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

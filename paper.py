@@ -285,11 +285,43 @@ def kind_of(m, t):
 def lot_of(m, t):
     if m != "NFO":
         return 1
+    k = kite_mod()
+    if k:                                # the exchange's own lot size (stocks and indices)
+        try:
+            return k.resolve(key(m, t))["lot"]
+        except Exception:
+            pass
     import fno
     return fno.lot_size(t)
 
 
 # ------------------------------------------------------------------ prices
+
+def kite_mod():
+    """kite.py when Zerodha is connected today (Indian market data), else None. Data only: it cannot trade."""
+    try:
+        import kite
+        return kite if kite.connected() else None
+    except Exception:
+        return None
+
+
+def kite_price(m, t):
+    """(price, time) for NSE / BSE / NFO from Zerodha: the live tick stream first, then a Kite quote. None if
+    Zerodha is not connected or does not know the instrument."""
+    if m not in ("NSE", "BSE", "NFO"):
+        return None
+    k = kite_mod()
+    if not k:
+        return None
+    tick = k.tick_price(key(m, t))
+    if tick:
+        return tick
+    try:
+        return k.ltp(key(m, t))
+    except Exception:
+        return None
+
 
 def _newest_quote(res):
     """(price, time) from one Yahoo chart result: the newer of meta.regularMarketPrice (at regularMarketTime) and
@@ -384,6 +416,9 @@ def us_backup_quote(t):
 
 def fetch_price(m, t):
     """Return (price, quote_time_utc). Raises PaperError."""
+    kq = kite_price(m, t)                # Indian market: Zerodha (live) when connected
+    if kq:
+        return float(kq[0]), kq[1]
     if m == "NFO":
         import fno
         try:
@@ -455,6 +490,15 @@ def fetch_minutes(m, t, days=1):
     """1-minute candles [(utc, o, h, l, c)] of the last `days` days (1..7), oldest first, or [] (F&O, or no data).
     Used by check_once to see what happened BETWEEN two checks: a stop or target touched and left again in the
     minutes in between."""
+    k = kite_mod() if m in ("NSE", "BSE", "NFO") else None
+    if k:
+        try:
+            now = datetime.now(timezone.utc)
+            out = k.minutes(key(m, t), now - timedelta(days=max(1, min(7, int(days)))), now)
+            if out:
+                return out
+        except Exception:
+            pass
     if m == "NFO":
         return []
     ysym = urllib.parse.quote(yahoo_symbol(m, t), safe="")

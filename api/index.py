@@ -415,3 +415,8 @@ if LOCAL:
     except ImportError:
         from _ops import router as _ops_router
     app.include_router(_ops_router)
+    try:
+        from api._kite import router as _kite_router
+    except ImportError:
+        from _kite import router as _kite_router
+    app.include_router(_kite_router)
