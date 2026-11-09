@@ -108,9 +108,10 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
 
         def cost_fn(sym, entry, stop, exit_px, side):
             return (entry + exit_px) * fee / abs(entry - stop)
-        events = events_v4(data, lambda t: t.date(), cost_fn, max_hold=12 * 60 // step)
+        events = events_v4(data, lambda t: t.date(), cost_fn, max_hold=None)   # PDF: TP / SL only, no time stop
         mode = "crypto-sv4" + ("" if step == 15 else "-%dm" % step)
-        what, costs = "%d coins, %s candles, 12h max hold" % (len(data), iv), "%.3f%% fee a side" % (fee * 100)
+        what, costs = "%d coins, %s candles, exits at TP / SL only (the PDF)" % (len(data), iv), \
+            "%.3f%% fee a side" % (fee * 100)
         grid_extra = {"session": ["all", "active"]}
     elif market == "nse":
         print("Fetching 60 days of 5-minute bars for %d NSE symbols (%s)..." % (len(syms), src), flush=True)

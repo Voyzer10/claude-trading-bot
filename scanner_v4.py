@@ -50,7 +50,7 @@ def mirror(rows):
 
 DEFAULTS = {"bos_max": 48, "reclaim_max": 3, "sig_max": 3, "conf_max": 2, "near_atr": 0.5, "ext_range_atr": 2.0,
             "ext_dist_atr": 3.0, "buffer_atr": 0.1, "min_rr": 1.0, "zone_window": 48, "leg_max": 24,
-            "max_hold": 48, "doji_pct": 0.15,
+            "max_hold": None, "doji_pct": 0.15,   # max_hold None: the PDF exits at TP / SL only (10 Nov 2026)
             # the PDF's skip rules (fixed numbers, 7 Nov 2026; 0 / False switches one off)
             "htf": True, "chop_er": 0.30, "er_n": 20, "bos_body_atr": 0.8, "bos_vol_x": 1.2, "vol_n": 20,
             "opp_zone": True, "opp_lookback": 48}
@@ -232,7 +232,7 @@ def _walk(bars, day, i, entry, stop, target, p, intraday):
             if k + 1 < n:
                 return k, c, "day end"
             return None, None, "open"
-        if k - i >= p["max_hold"]:
+        if p.get("max_hold") and k - i >= p["max_hold"]:
             return k, c, "time"
     return None, None, "open"
 

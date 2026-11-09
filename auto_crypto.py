@@ -783,8 +783,9 @@ def time_stops(cfg, log):
     led = P.load_ledger(pcfg)
     now = datetime.now(timezone.utc)
     changed = False
+    acc = pcfg["accounts"]["CRYPTO"]
     for pos in list(led["open"]):
-        if pos["market"] != "CRYPTO":
+        if pos["market"] != "CRYPTO" or P.pdf_only(pos, acc):   # v4 trades: TP / SL only (the PDF)
             continue
         age = now - datetime.fromisoformat(pos["entry_time"])
         if age >= timedelta(hours=cfg["max_hold_hours"]):
@@ -809,7 +810,15 @@ def process(state, res, log):
     _RULES.update(rules_tag(cfg))
     time_stops(cfg, log)
     out = []
-    for h in res.get("hits", []):
+    import smc_playbook as PB
+    v4 = PB.v4_only("CRYPTO")
+    if v4:   # Scanner v4 / v5 only: the rules setups (4h breakout, SMC, playbook, rulebook) are not traded
+        n = sum(1 for h in res.get("hits", []) if h.get("new") and h["setup"] in cfg["enabled_setups"])
+        if n:
+            log("AUTO CRYPTO: Scanner %s only: %d rules-setup hit%s ignored (%s); only %s setups are traded" % (
+                v4, n, "" if n == 1 else "s", ", ".join(sorted({h["setup"] for h in res.get("hits", [])
+                                                            if h.get("new") and h["setup"] in cfg["enabled_setups"]})), v4))
+    for h in ([] if v4 else res.get("hits", [])):
         if h.get("new") and h["setup"] in cfg["enabled_setups"]:
             try:
                 out.append(run_one(h, cfg, log))
@@ -818,7 +827,7 @@ def process(state, res, log):
     # The Scanner (v4, v3 or v2, per Settings): the owner's setups on this candle. One ticked in enabled_setups went
     # through run_smcp above; every other one goes through the agents (P.setup_decision: paper trade or LOG ONLY).
     for x in res.get("setups", []):
-        if x["setup"] in cfg["enabled_setups"]:
+        if x["setup"] in cfg["enabled_setups"] and not v4:
             continue
         try:
             rec = P.setup_decision("CRYPTO", x["symbol"], x, news=headlines(x["symbol"]))

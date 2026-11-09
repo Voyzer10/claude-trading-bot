@@ -11,6 +11,8 @@ import Backtest from "@/components/Backtest";
 import Alerts from "@/components/Alerts";
 import Agents from "@/components/Agents";
 import SymbolIcon from "@/components/SymbolIcon";
+import Zerodha from "@/components/Zerodha";
+import { INDIA, useLiveTicks, type LiveTicks } from "@/lib/live";
 import { errText } from "@/lib/api";
 
 const POLL_MS = 30_000;
@@ -19,6 +21,7 @@ const STALE_MIN = 12; // the runner pushes every 5 minutes; silence beyond this 
 // ------------------------------------------------------------------ page
 
 export default function Dashboard() {
+  const live = useLiveTicks();
   const [data, setData] = useState<SnapshotResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
@@ -93,10 +96,11 @@ export default function Dashboard() {
       {snap && (
         <>
           <ControlPanel />
+          <Zerodha live={live} />
           <RunnerSection snap={snap} ageSec={ageSec} />
           <Agents refreshKey={refreshKey} />
           <MarketsStrip snap={snap} />
-          <LedgerSection snap={snap} onChange={changed} />
+          <LedgerSection snap={snap} onChange={changed} live={live} />
           <CoinsSection snap={snap} />
           <div className="grid-2">
             <ReasonsSection snap={snap} />
@@ -646,8 +650,26 @@ function SetupCell({ p }: { p: Position }) {
   );
 }
 
-function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => void }) {
-  const { accounts, open, closed } = snap.ledger;
+/** India positions with Zerodha's latest tick: price and gross open P&L change every second. */
+function withLive(open: Position[], live: LiveTicks | null): (Position & { live?: boolean })[] {
+  if (!live?.live) return open;
+  return open.map((p) => {
+    const t = INDIA(p.market) ? live.ticks[p.key] : undefined;
+    if (!t) return p;
+    const dir = p.side === "short" ? -1 : 1;
+    return { ...p, last: t.ltp, open_pnl: (t.ltp - p.entry) * p.qty * dir, quote_time: new Date().toISOString(), live: true };
+  });
+}
+
+function LedgerSection({ snap, onChange, live }: { snap: Snapshot; onChange: () => void; live: LiveTicks | null }) {
+  const { accounts, closed } = snap.ledger;
+  const open = withLive(snap.ledger.open, live);
+  const [mkt, setMkt] = useState("all");
+  const MKTS: [string, string][] = [["all", "All"], ["CRYPTO", "Crypto"], ["US", "US"], ["NSE", "NSE"], ["NFO", "F&O"]];
+  const shown = mkt === "all" ? closed : closed.filter((c) => (mkt === "NSE" ? c.market === "NSE" || c.market === "BSE" : c.market === mkt));
+  const sum = shown.reduce((a, c) => a + (c.pnl ?? 0), 0);
+  const rsum = shown.reduce((a, c) => a + (c.r ?? 0), 0);
+  const wins = shown.filter((c) => (c.pnl ?? 0) > 0).length;
   const { cmds, send, available } = useCommands(onChange);
   const [err, setErr] = useState<string | null>(null);
   const waiting = (key: string | null) =>
@@ -711,6 +733,7 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
                     <td data-label="Entry" className="num">{price(p.entry)}</td>
                     <td data-label="Now" className="num">
                       {p.last !== undefined ? price(p.last) : "—"}
+                      {p.live && <span className="live-dot" title="Live from Zerodha, updates every second" aria-label="live" />}
                       {(() => {
                         const age = p.quote_time ? (Date.now() - new Date(p.quote_time).getTime()) / 60000 : 0;
                         return age > 10 ? <span className="small stale" title="The price feed has not updated this quote">{" "}quote {Math.round(age)} min old</span> : null;
@@ -745,19 +768,35 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
         </>
       )}
       <div className="list-head">
-        <h3 className="subtitle">Closed trades ({closed.length})</h3>
-        <span className="small muted">newest first</span>
+        <h3 className="subtitle">Closed trades ({mkt === "all" ? closed.length : `${shown.length} of ${closed.length}`})</h3>
+        <div className="seg-ctl" role="group" aria-label="Filter closed trades by market">
+          {MKTS.map(([k, name]) => {
+            const n = k === "all" ? closed.length : closed.filter((c) => (k === "NSE" ? c.market === "NSE" || c.market === "BSE" : c.market === k)).length;
+            return (
+              <button key={k} aria-pressed={mkt === k} onClick={() => setMkt(k)}>
+                {name} <span className="muted">{n}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
+      {mkt !== "all" && shown.length > 0 && (
+        <p className="small muted" style={{ margin: "0 0 8px" }}>
+          {shown.length} trades · {wins} won ({Math.round((100 * wins) / shown.length)}%) ·{" "}
+          <span className={sum > 0 ? "pos" : sum < 0 ? "neg" : ""}>{money(sum, currencyOf(acctOf(mkt)))}</span> ·{" "}
+          {rsum > 0 ? "+" : ""}{rsum.toFixed(1)}R · newest first
+        </p>
+      )}
       <div className="scroll">
         <table className="rtable">
           <thead>
             <tr><th>Closed</th><th>Instrument</th><th>Setup · liquidity</th><th>Entry → exit</th><th>P&amp;L</th><th>R</th><th>Exit</th></tr>
           </thead>
           <tbody>
-            {closed.length === 0 && (
-              <tr><td colSpan={7} className="muted">No closed paper trades yet.</td></tr>
+            {shown.length === 0 && (
+              <tr><td colSpan={7} className="muted">{closed.length ? "No closed trades in this market." : "No closed paper trades yet."}</td></tr>
             )}
-            {closed.slice().reverse().map((c, i) => (
+            {shown.slice().reverse().map((c, i) => (
               <tr key={i}>
                 <td data-label="Closed" className="num">{timeIST(c.exit_time, true)}</td>
                 <td data-label="Instrument" className="num"><span className="sym"><SymbolIcon id={c.key} />{c.key}</span></td>
@@ -783,7 +822,7 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
 /** The Trade Manager agent above the open positions: what it is watching and what it last did. */
 function TradeManagerStrip({ open, closed }: { open: Position[]; closed: Position[] }) {
   const stateOf = (p: Position) =>
-    p.trail_k ? (p.trailing ? "trailing" : "trailing exit") : p.locked ? "profit locked" : p.breakeven ? "breakeven" : "watching";
+    p.pdf_only ? "v4: PDF exits only" : p.trail_k ? (p.trailing ? "trailing" : "trailing exit") : p.locked ? "profit locked" : p.breakeven ? "breakeven" : "watching";
   const acts = [...open, ...closed]
     .flatMap((p) => (p.tm_log ?? []).map((x) => ({ ...x, key: p.key })))
     .sort((a, b) => (a.t < b.t ? 1 : -1))

@@ -63,21 +63,30 @@ DEFAULT_CONFIG = {
                    "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
                    "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
+                   "scanner_version": "v3", "v4_pdf_only": True, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
+                   "v5_target": "leg",
+                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
                    "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 60,
-                   "tm_candle_min": 5},
+                   "tm_candle_min": 5, "fno_stock_options": False},
         "US":     {"capital": 50000, "max_loss_per_trade": 50, "max_position_pct": 25,
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
                    "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
+                   "scanner_version": "v3", "v4_pdf_only": True, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
+                   "v5_target": "leg",
+                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
                    "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 60,
                    "tm_candle_min": 5},
         "CRYPTO": {"capital": 1000, "max_loss_per_trade": 10, "max_position_pct": 25,
                    "daily_loss_limit": 30, "max_trades_per_day": 10, "min_reward_risk": 1.0,
                    "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "max_same_side": 3, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
+                   "scanner_version": "v3", "v4_pdf_only": True, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
+                   "v5_target": "leg",
+                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
                    "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 240,
                    "tm_candle_min": 15},
         # trade_manager (owner, 7 Nov 2026: "agents should think and react"): manages every open paper trade that has
@@ -285,11 +294,43 @@ def kind_of(m, t):
 def lot_of(m, t):
     if m != "NFO":
         return 1
+    k = kite_mod()
+    if k:                                # the exchange's own lot size (stocks and indices)
+        try:
+            return k.resolve(key(m, t))["lot"]
+        except Exception:
+            pass
     import fno
     return fno.lot_size(t)
 
 
 # ------------------------------------------------------------------ prices
+
+def kite_mod():
+    """kite.py when Zerodha is connected today (Indian market data), else None. Data only: it cannot trade."""
+    try:
+        import kite
+        return kite if kite.connected() else None
+    except Exception:
+        return None
+
+
+def kite_price(m, t):
+    """(price, time) for NSE / BSE / NFO from Zerodha: the live tick stream first, then a Kite quote. None if
+    Zerodha is not connected or does not know the instrument."""
+    if m not in ("NSE", "BSE", "NFO"):
+        return None
+    k = kite_mod()
+    if not k:
+        return None
+    tick = k.tick_price(key(m, t))
+    if tick:
+        return tick
+    try:
+        return k.ltp(key(m, t))
+    except Exception:
+        return None
+
 
 def _newest_quote(res):
     """(price, time) from one Yahoo chart result: the newer of meta.regularMarketPrice (at regularMarketTime) and
@@ -384,6 +425,9 @@ def us_backup_quote(t):
 
 def fetch_price(m, t):
     """Return (price, quote_time_utc). Raises PaperError."""
+    kq = kite_price(m, t)                # Indian market: Zerodha (live) when connected
+    if kq:
+        return float(kq[0]), kq[1]
     if m == "NFO":
         import fno
         try:
@@ -455,6 +499,15 @@ def fetch_minutes(m, t, days=1):
     """1-minute candles [(utc, o, h, l, c)] of the last `days` days (1..7), oldest first, or [] (F&O, or no data).
     Used by check_once to see what happened BETWEEN two checks: a stop or target touched and left again in the
     minutes in between."""
+    k = kite_mod() if m in ("NSE", "BSE", "NFO") else None
+    if k:
+        try:
+            now = datetime.now(timezone.utc)
+            out = k.minutes(key(m, t), now - timedelta(days=max(1, min(7, int(days)))), now)
+            if out:
+                return out
+        except Exception:
+            pass
     if m == "NFO":
         return []
     ysym = urllib.parse.quote(yahoo_symbol(m, t), safe="")
@@ -858,6 +911,13 @@ def tm_event(pos, text, now=None):
 TM_KEYS = ("tm_be_r", "tm_lock_at", "tm_lock_keep", "tm_reversal", "tm_rev_min_r", "tm_stale_min", "tm_candle_min")
 
 
+def pdf_only(pos, acc):
+    """A Scanner v4 trade with v4_pdf_only on (default; owner, 10 Nov 2026: "v4 pr sirf v4 k concept wali pdf ...
+    sirf vahi rules chlne chahiye"): it exits ONLY at its stop, its target or the session's flat-by. No Trade Manager,
+    no breakeven move, no crypto time stop - none of those are in the 7 Nov PDF ("close by TP, SL or defined exit")."""
+    return pos.get("scanner") == "v4" and acc.get("v4_pdf_only", True)
+
+
 def tm_cfg(acc):
     """The account's Trade Manager settings, or None when it is off."""
     if not acc.get("trade_manager"):
@@ -973,8 +1033,11 @@ def step_bar(led, cfg, pos, acc, b, now, sh):
         return True
     best = l if sh else h
     _track_excursion(pos, best, h if sh else l, sh)
-    tm = tm_cfg(acc) if not pos.get("trail_k") else None
-    be = acc.get("breakeven_at_r") or (tm["tm_be_r"] if tm else None)
+    strict = pdf_only(pos, acc)
+    if strict or pos.get("pdf_only"):
+        pos["pdf_only"] = strict           # shown on the dashboard's Trade Manager strip
+    tm = tm_cfg(acc) if not pos.get("trail_k") and not strict else None
+    be = None if strict else acc.get("breakeven_at_r") or (tm["tm_be_r"] if tm else None)
     rs = pos.get("risk_stop", pos["stop"])
     be_hit = (best <= pos["entry"] - be * (rs - pos["entry"])) if (be and sh) else \
              (be and best >= pos["entry"] + be * (pos["entry"] - rs))
@@ -1109,7 +1172,7 @@ def check_position(cfg, led, pos, price, bars, now):
     for b in path:
         if step_bar(led, cfg, pos, acc, b, now, sh):
             return
-    tm = tm_cfg(acc) if not pos.get("trail_k") else None
+    tm = tm_cfg(acc) if not pos.get("trail_k") and not pdf_only(pos, acc) else None
     if tm:   # the Trade Manager thinks about the trade after every check (7 Nov 2026)
         why = tm_react(pos, bars, now, price, tm)
         if why:
@@ -1262,6 +1325,55 @@ if __name__ == "__main__":
 
 # ------------------------------------------------------------------ Scanner v3 setups: the agents, then the paper broker
 
+def _option_setup(rec, st, done, cfg, acc, market, symbol, s, op, version):
+    """setup_decision for an F&O stock with fno_stock_options on: the ATM option is paper bought."""
+    entry, stop = s["price"], s["stop"]
+    target = s.get("target") or s.get("target_2r")
+    name = s.get("name") or s["setup"]
+    risk_u = op["premium"] - op["stop"]
+    st["4_exit"] = {"instrument": "NFO:" + op["name"], "why": "%s setup -> buy the ATM %s" % (s["side"], op["kind"]),
+                    "premium": op["premium"], "premium_stop": op["stop"], "premium_target": op["target"],
+                    "stock_entry": entry, "stock_stop": stop, "stock_target": target, "lot": op["lot"],
+                    "iv": op["iv"], "delta": op["delta"], "expiry": op["expiry"],
+                    "r_multiple": round((op["target"] - op["premium"]) / risk_u, 2)}
+    st["5_timemachine"] = "n/a (backtest: research.py fno-sv4)"
+    if not acc.get("trade_setups", True):
+        st["6-8_budget_risk_broker"] = {"verdict": "pass, NOT sent to the broker (trade_setups off)"}
+        st["9_alerts"] = "no trade, nothing to watch"
+        return done("LOG ONLY", "%s on %s: ATM %s %s recorded only (trade_setups is off)" % (name, symbol, op["kind"],
+                                                                                            op["name"]))
+    import contextlib
+    import io
+    led = load_ledger(cfg)
+    key = "NFO:" + op["name"]
+    args = type("A", (), {"symbol": key, "stop": str(op["stop"]), "target": str(op["target"]), "qty": None,
+                          "price": None, "note": "scanner %s: %s on %s (stock stop %s, target %s)" % (
+                              version, name, symbol, stop, target), "force": False, "side": "long",
+                          "setup": s["setup"], "setup_name": name, "scanner": version,
+                          "liquidity": s.get("liquidity"),
+                          "entry_reason": "Scanner %s %s on %s at %s: bought the ATM %s (IV %.0f%%, delta %.2f); "
+                                          "premium stop / target = the option's value at the stock's stop %s / target %s"
+                                          % (version, s["side"], symbol, entry, op["kind"], op["iv"] * 100,
+                                             op["delta"], stop, target)})()
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            cmd_buy(args, cfg, led)
+        save_json(LEDGER, led)
+    except PaperError as e:
+        st["6-8_budget_risk_broker"] = "BLOCK: %s" % e
+        return done("blocked", str(e))
+    pos = next(p for p in led["open"] if p["key"] == key)
+    st["6-8_budget_risk_broker"] = {"verdict": "PASS, paper option bought", "qty": pos["qty"], "entry": pos["entry"],
+                                    "stop": pos["stop"], "target": pos["target"],
+                                    "max_loss": round(abs(pos["entry"] - pos["stop"]) * pos["qty"]
+                                                      + pos.get("entry_fee", 0), 2),
+                                    "report": buf.getvalue().strip().splitlines()}
+    st["9_alerts"] = "live.py / Trade Manager watch the premium: stop %s, target %s" % (pos["stop"], pos["target"])
+    return done("PAPER BUY", "%s %s @ %s, stop %s, target %s (Scanner %s: %s on %s)" % (
+        pos["qty"], key, pos["entry"], pos["stop"], pos["target"], version, name, symbol))
+
+
 def setup_decision(market, symbol, s, news=None, now_iso=None):
     """One of the owner's setups found by the Scanner (v3; smc_playbook.owner_setups dict), taken through the agents
     Entry (the candle close), Exit (stop, 2R or the v3 liquidity target, costs in R), Budget (size from this account's limits), Risk (costs <=
@@ -1291,12 +1403,28 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     sv = _PB.setup_version(s["setup"])
     if sv != version:
         return done("skipped", "this account runs Scanner %s: %s setups are off" % (version, sv))
+    if version == "v4" and s["setup"] not in acc.get("v4_setups", _PB.V4_SETUPS):
+        return done("skipped", "%s is unticked in Settings (Scanner v4: setups traded)" % (s.get("name") or s["setup"]))
+    if version == "v5" and s["setup"] not in acc.get("v5_setups", _PB.V5_SETUPS):
+        return done("skipped", "%s is unticked in Settings (Scanner v5: setups traded)" % (s.get("name") or s["setup"]))
     entry, stop, short = s["price"], s.get("stop"), s["side"] == "short"
     target = s.get("target") or s.get("target_2r")
     st["3_entry"] = {"side": s["side"], "price_now": entry, "note": "entry = the close of the candle that completed it"}
     risk = ((stop - entry) if short else (entry - stop)) if stop is not None else 0
     if risk <= 0:
         return done("skipped", "price %s is already past the stop %s" % (entry, stop))
+    if market in ("NSE", "BSE") and acc.get("fno_stock_options"):
+        # F&O stocks: buy the at-the-money option instead of the shares (fno_stock.py; backtest: research.py fno-sv4)
+        import fno_stock as _FS
+        try:
+            op = _FS.plan(symbol, s)
+        except _FS.NoOption as e:
+            if "has no F&O" not in str(e):
+                st["4_exit"] = {"stock_entry": entry, "stock_stop": stop, "stock_target": target}
+                return done("skipped", "stock option: %s" % e)
+            op = None                      # not an F&O stock: the shares, as before
+        if op:
+            return _option_setup(rec, st, done, cfg, acc, market, symbol, s, op, version)
     units = min(acc["max_loss_per_trade"] / risk, acc["capital"] * acc["max_position_pct"] / 100 / entry)
     qty = units if market == "CRYPTO" else int(units)
     cost = None

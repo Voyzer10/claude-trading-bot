@@ -92,6 +92,8 @@ export type Position = {
   mfe_r?: number;
   mae_r?: number;
   locked?: boolean;
+  /** a Scanner v4 trade managed by the PDF's exits only (stop / target / flat-by) */
+  pdf_only?: boolean;
   /** the Trade Manager's last actions on this trade (paper.py tm_event), oldest first */
   tm_log?: { t: string; text: string }[];
   /** why it was taken (paper.py cmd_buy, from 5 Nov 2026): setup, scanner version or "rules", liquidity, reason */

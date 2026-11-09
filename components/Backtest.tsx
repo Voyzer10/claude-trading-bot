@@ -19,6 +19,12 @@ const MODE_NAMES: Record<string, string> = {
   "crypto-sv4-5m": "Scanner v4 (crypto 5m)",
   "us-sv4": "Scanner v4 (US stocks 5m, ~100 liquid names)",
   "nse-sv4": "Scanner v4 (NSE 5m, India charges)",
+  "crypto-sv5": "Scanner v5: the 0.146 level (crypto 15m; vs C 0.10 / 0.20 / 0.236 / 0.30)",
+  "crypto-sv5-5m": "Scanner v5: the 0.146 level (crypto 5m)",
+  "us-sv5": "Scanner v5: the 0.146 level (US 5m)",
+  "nse-sv5": "Scanner v5: the 0.146 level (NSE 5m, India charges)",
+  "gold-sv5": "Scanner v5: the 0.146 level on gold (the reel's market)",
+  "fno-sv4": "Scanner v4 on F&O stocks as ATM options (model premiums, F&O charges)",
   "crypto-v3": "Scanner v3 sweep reversal (crypto 15m): BOS -> close beyond the swept swing -> doji / hammer -> close past trigger",
   "crypto-v3-5m": "Scanner v3 sweep reversal (crypto 5m)",
   "us-v3": "Scanner v3 sweep reversal (US stocks 5m, ~100 liquid names)",
@@ -151,6 +157,12 @@ export default function Backtest() {
         <button className="btn" onClick={() => start("crypto-sv4-5m")} disabled={running}>Scanner v4 crypto 5m</button>
         <button className="btn" onClick={() => start("us-sv4")} disabled={running}>Scanner v4 US</button>
         <button className="btn" onClick={() => start("nse-sv4")} disabled={running}>Scanner v4 NSE</button>
+        <button className="btn" onClick={() => start("fno-sv4")} disabled={running}>Scanner v4 stock options</button>
+        <button className="btn" onClick={() => start("crypto-sv5")} disabled={running}>Scanner v5 crypto 15m</button>
+        <button className="btn" onClick={() => start("crypto-sv5-5m")} disabled={running}>Scanner v5 crypto 5m</button>
+        <button className="btn" onClick={() => start("us-sv5")} disabled={running}>Scanner v5 US</button>
+        <button className="btn" onClick={() => start("nse-sv5")} disabled={running}>Scanner v5 NSE</button>
+        <button className="btn" onClick={() => start("gold-sv5")} disabled={running}>Scanner v5 gold</button>
         <button className="btn" onClick={() => start("crypto-v3")} disabled={running}>Scanner v3 crypto 15m</button>
         <button className="btn" onClick={() => start("crypto-v3-5m")} disabled={running}>Scanner v3 crypto 5m</button>
         <button className="btn" onClick={() => start("us-v3")} disabled={running}>Scanner v3 US</button>

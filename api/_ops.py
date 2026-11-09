@@ -87,12 +87,53 @@ RULE_FIELDS = {
     "smcp_liq": {"type": "choice", "choices": ["base", "all", "strong"]},
     "smcp_min_disp": {"type": "float", "min": 0.0, "max": 3.0},
 }
+# the other markets' strategy rules (Settings > Strategy rules, one tab per market): the agent's own config file
+_T = {"type": "time"}
+MARKET_RULES = {
+    "NSE": {"file": "auto_nse_config.json", "module": "auto_nse", "account": "INDIA", "fields": {
+        "entry_start": _T, "entry_end": _T, "fresh_minutes": {"type": "int", "min": 1, "max": 60},
+        "stop": {"type": "choice", "choices": ["range-mid", "range-low"]},
+        "target_r": {"type": "float", "min": 1.0, "max": 5.0}, "min_stop_pct": {"type": "float", "min": 0.0, "max": 5.0},
+        "max_chase_r": {"type": "float", "min": 0.0, "max": 2.0}, "min_vol_x": {"type": "float", "min": 0.0, "max": 10.0},
+        "max_gap_pct": {"type": "float", "min": 0.0, "max": 20.0}, "regime_filter": {"type": "bool"},
+        "allow_short": {"type": "bool"}, "min_sim_avg_r": {"type": "float", "min": -1.0, "max": 2.0},
+        "min_history_trades": {"type": "int", "min": 0, "max": 100},
+        "min_history_avg_r": {"type": "float", "min": -1.0, "max": 2.0},
+        "max_new_per_cycle": {"type": "int", "min": 1, "max": 20}}},
+    "US": {"file": "auto_us_config.json", "module": "auto_us", "account": "US", "fields": {
+        "scan_every_min": {"type": "int", "min": 5, "max": 60}, "or_minutes": {"type": "int", "min": 5, "max": 60},
+        "fresh_minutes": {"type": "int", "min": 1, "max": 60}, "max_new_per_cycle": {"type": "int", "min": 1, "max": 20},
+        "min_stop_pct": {"type": "float", "min": 0.0, "max": 5.0}, "max_chase_r": {"type": "float", "min": 0.0, "max": 2.0},
+        "allow_short": {"type": "bool"}, "short_regime": {"type": "bool"},
+        "min_mc_avg_r": {"type": "float", "min": -1.0, "max": 2.0},
+        "min_history_trades": {"type": "int", "min": 0, "max": 100},
+        "min_history_avg_r": {"type": "float", "min": -1.0, "max": 2.0}}},
+    "FNO": {"file": "auto_fno_config.json", "module": "auto_fno", "account": "INDIA", "fields": {
+        "indices": {"type": "setups", "choices": ["NIFTY", "BANKNIFTY"]},
+        "instruments": {"type": "setups", "choices": ["options", "futures"]},
+        "entry_start": _T, "entry_end": _T, "fresh_minutes": {"type": "int", "min": 1, "max": 60},
+        "target_r": {"type": "float", "min": 1.0, "max": 5.0}, "max_chase_r": {"type": "float", "min": 0.0, "max": 2.0},
+        "min_days_to_expiry": {"type": "int", "min": 0, "max": 10},
+        "theta_haircut_r": {"type": "float", "min": 0.0, "max": 1.0},
+        "min_sim_avg_r": {"type": "float", "min": -1.0, "max": 2.0},
+        "min_history_trades": {"type": "int", "min": 0, "max": 100},
+        "min_history_avg_r": {"type": "float", "min": -1.0, "max": 2.0}}},
+}
+
 RISK_FIELDS = {
     "capital": {"type": "float", "min": 100},
     "risk_limits": {"type": "bool"},
     "trade_setups": {"type": "bool"},
-    "scanner_version": {"type": "choice", "choices": ["v4", "v3", "v2"]},
+    "scanner_version": {"type": "choice", "choices": ["v5", "v4", "v3", "v2", "rules"]},
+    "v5_setups": {"type": "setups", "allow_empty": True, "choices": ["v5_level_long", "v5_level_short"]},
+    "v5_constant": {"type": "float", "min": 0.01, "max": 0.95},
+    "v5_move": {"type": "choice", "choices": ["swing", "day"]},
+    "v5_target": {"type": "choice", "choices": ["leg", "2R"]},
+    "v4_pdf_only": {"type": "bool"},
+    "v4_setups": {"type": "setups", "allow_empty": True,
+                  "choices": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"]},
     "trade_manager": {"type": "bool"},
+    "fno_stock_options": {"type": "bool"},
     "tm_be_r": {"type": "float", "min": 0.3, "max": 5},
     "tm_lock_at": {"type": "float", "min": 0.3, "max": 0.99},
     "tm_lock_keep": {"type": "float", "min": 0.1, "max": 0.95},
@@ -114,7 +155,7 @@ RISK_FIELDS = {
 PREF_FIELDS = {"usd_inr": {"type": "float", "min": 50, "max": 200},
                "daily_goal_inr": {"type": "float", "min": 0, "max": 1e7}}
 PREF_DEFAULT = {"usd_inr": 88.0, "daily_goal_inr": 500.0}
-BACKTEST_MODES = ["us-tm", "nse-tm", "crypto-tm", "crypto-tm-5m", "crypto-sv4", "crypto-sv4-5m", "us-sv4", "nse-sv4", "crypto-v3", "crypto-v3-5m", "us-v3", "nse-v3", "us-orb", "crypto-abcd", "crypto-abcd-5m", "us-abcd", "nse-abcd", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-v4", "crypto-v4-short", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
+BACKTEST_MODES = ["crypto-sv5", "crypto-sv5-5m", "us-sv5", "nse-sv5", "gold-sv5", "fno-sv4", "us-tm", "nse-tm", "crypto-tm", "crypto-tm-5m", "crypto-sv4", "crypto-sv4-5m", "us-sv4", "nse-sv4", "crypto-v3", "crypto-v3-5m", "us-v3", "nse-v3", "us-orb", "crypto-abcd", "crypto-abcd-5m", "us-abcd", "nse-abcd", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-v4", "crypto-v4-short", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
 
 
 # ------------------------------------------------------------------ small helpers
@@ -157,8 +198,14 @@ def _coerce(name, spec, v):
             if v not in spec["choices"]:
                 raise ValueError
             return v
+        if t == "time":
+            h, m = str(v).split(":")
+            if not (0 <= int(h) <= 23 and 0 <= int(m) <= 59) or len(m) != 2:
+                raise ValueError
+            return "%02d:%s" % (int(h), m)
         if t == "setups":
-            if not isinstance(v, list) or not v or any(x not in spec["choices"] for x in v):
+            if not isinstance(v, list) or (not v and not spec.get("allow_empty")) or \
+                    any(x not in spec["choices"] for x in v):
                 raise ValueError
             return list(dict.fromkeys(v))
         x = int(v) if t == "int" else float(v)
@@ -227,7 +274,15 @@ def settings_get():
     al = _read_json(ALERTS, {})
     prefs = dict(PREF_DEFAULT)
     prefs.update(_read_json(PREFS, {}))
-    return {"rules": {k: rules.get(k) for k in RULE_FIELDS}, "rule_defaults": {k: defaults.get(k) for k in RULE_FIELDS},
+    markets = {}
+    for m, spec in MARKET_RULES.items():
+        d = _market_defaults(m)
+        cur = dict(d)
+        cur.update(_read_json(os.path.join(LIVE, spec["file"]), {}))
+        markets[m] = {"rules": {k: cur.get(k) for k in spec["fields"]}, "defaults": {k: d.get(k) for k in spec["fields"]},
+                      "fields": spec["fields"], "account": spec["account"]}
+    return {"markets": markets,
+            "rules": {k: rules.get(k) for k in RULE_FIELDS}, "rule_defaults": {k: defaults.get(k) for k in RULE_FIELDS},
             "rule_fields": RULE_FIELDS, "rules_version": rules.get("rules_version"),
             "risk": risk, "risk_fields": RISK_FIELDS, "coins": coins, "prefs": prefs,
             "alerts": {"enabled": bool(al.get("enabled")), "token_set": bool(al.get("telegram_token")),
@@ -260,6 +315,60 @@ async def settings_rules(request: Request):
     _write_json(RULES, cur)
     audit("crypto rules: " + "; ".join(diffs) + " (applies on the next scan)")
     return {"ok": True, "changed": diffs}
+
+
+def _market_defaults(m):
+    if ROOT not in sys.path:
+        sys.path.insert(0, ROOT)
+    try:
+        return dict(__import__(MARKET_RULES[m]["module"]).DEFAULTS)
+    except Exception:
+        return {}
+
+
+@router.post("/settings/market-rules")
+async def settings_market_rules(request: Request):
+    """NSE / US / FNO strategy rules: written to that agent's own config (it reads it every cycle)."""
+    body = await request.json()
+    m, changes = body.get("market"), body.get("changes") or {}
+    if m not in MARKET_RULES:
+        raise HTTPException(400, "unknown market %r" % m)
+    spec = MARKET_RULES[m]
+    path = os.path.join(LIVE, spec["file"])
+    saved = _read_json(path, None)
+    cur = dict(_market_defaults(m))
+    cur.update(saved or {})
+    diffs = []
+    for k, v in changes.items():
+        if k not in spec["fields"]:
+            raise HTTPException(400, "%s cannot be changed here" % k)
+        nv = _coerce(k, spec["fields"][k], v)
+        if cur.get(k) != nv:
+            diffs.append("%s %s -> %s" % (k, cur.get(k), nv))
+            cur[k] = nv
+    if not diffs:
+        return {"ok": True, "changed": []}
+    if "entry_start" in cur and "entry_end" in cur and cur["entry_start"] >= cur["entry_end"]:
+        raise HTTPException(400, "the entry window must start before it ends")
+    cur["_edited"] = "changed from the dashboard %s" % _now().strftime("%Y-%m-%d %H:%M")
+    _write_json(path, cur)
+    audit("%s rules: %s (applies on the next cycle)" % (m, "; ".join(diffs)))
+    return {"ok": True, "changed": diffs}
+
+
+@router.post("/settings/market-rules/reset")
+async def settings_market_rules_reset(request: Request):
+    m = (await request.json()).get("market")
+    if m not in MARKET_RULES:
+        raise HTTPException(400, "unknown market %r" % m)
+    d = _market_defaults(m)
+    if not d:
+        raise HTTPException(500, "could not load the default rules")
+    path = os.path.join(LIVE, MARKET_RULES[m]["file"])
+    keep = {k: v for k, v in _read_json(path, {}).items() if k not in MARKET_RULES[m]["fields"]}
+    _write_json(path, dict(d, **keep))     # keeps the on/off switches (auto_buy ...) set elsewhere
+    audit("%s rules reset to the defaults" % m)
+    return {"ok": True}
 
 
 @router.post("/settings/rules/reset")
@@ -1054,7 +1163,7 @@ def _setup_label(rec):
     if isinstance(s1, dict) and s1.get("setup_name"):
         return s1["setup_name"]
     setup = rec.get("setup") or ""
-    if setup.startswith("v3_") or setup.startswith("v4_"):
+    if setup.startswith(("v3_", "v4_", "v5_")):
         return "%s %s" % (setup[:2], setup[3:].replace("_", " "))
     if setup.startswith("smcp_"):
         return "Playbook %s" % setup[5:].replace("_", " ")
@@ -1099,6 +1208,8 @@ def setups(limit: int = 300):
 
 
 def _tm_state(p):
+    if p.get("pdf_only"):
+        return "v4: PDF exits only"
     if p.get("trail_k"):
         return "trailing" if p.get("trailing") else "trailing exit"
     return "profit locked" if p.get("locked") else "breakeven" if p.get("breakeven") else "watching"
@@ -1195,8 +1306,10 @@ def agents():
     stop_k = cfg.get("stop_atr_k", 1.5)
     jobs = {
         1: "Every market, on each candle that closes. The rules that trade: a crypto coin's fresh close above its "
-           "4-hour high (below its low for shorts), NSE / US opening-range breaks. Your setups, one scanner version per account "
-           "(Settings: Scanner version), never mixed. v4 = your 7 Nov final workflow only: a primary trade (BOS, a "
+           "4-hour high (below its low for shorts), NSE / US opening-range breaks (these run ONLY when Scanner version is 'rules'). "
+           "Your setups, one scanner version per account (Settings: Scanner version), never mixed. v5 = the 0.146 "
+           "level: after a move, the level C x range short of its extreme (C = 0.146), touched and closed back on the "
+           "right side, stop beyond the extreme, target the other end of the move. v4 = your 7 Nov final workflow only: a primary trade (BOS, a "
            "sweep of an old low / high that is reclaimed, doji / hammer / inverted hammer, a break-and-close of the "
            "signal candle), then - only after it closed - one OB / FVG secondary (the zone tapped, then a "
            "break-and-close). v4 skips trades against the 1-hour trend, BOS out of chop or on a weak candle, and "

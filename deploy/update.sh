@@ -16,7 +16,8 @@ cd "$APP"
 sudo -u trader "$APP/.venv/bin/pip" install -q -r deploy/requirements.txt
 sudo -u trader npm ci --no-audit --no-fund --loglevel=error
 sudo -u trader env NEXT_TELEMETRY_DISABLED=1 npm run build
-cp deploy/trader-{runner,api,web}.service /etc/systemd/system/ && systemctl daemon-reload
-systemctl restart trader-api trader-web trader-runner
+cp deploy/trader-{runner,api,web,ticker}.service /etc/systemd/system/ && systemctl daemon-reload
+systemctl enable trader-ticker >/dev/null 2>&1 || true
+systemctl restart trader-api trader-web trader-runner trader-ticker
 sleep 3
-for s in trader-runner trader-api trader-web; do printf '  %-14s %s\n' "$s" "$(systemctl is-active $s)"; done
+for s in trader-runner trader-api trader-web trader-ticker; do printf '  %-14s %s\n' "$s" "$(systemctl is-active $s)"; done
