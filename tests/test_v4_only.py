@@ -51,9 +51,16 @@ if __name__ == "__main__":
         P.save_json(AC.AUTO_CONFIG, cfg)
         res = {"hits": [{"symbol": "SOL", "setup": "smcp_star_long", "new": True, "price": 1},
                         {"symbol": "ETH", "setup": "range_breakout_4h", "new": True, "price": 1}], "setups": []}
+        set_version(P, "CRYPTO", "rules")
+        AC.process({}, res, log)
+        check("1. crypto on 'rules': the ticked rules setups trade (the older rules are still selectable)",
+              sorted(ran) == ["range_breakout_4h", "smcp_star_long"], ran)
+        ran.clear()
+        logs.clear()
         set_version(P, "CRYPTO", "v3")
         AC.process({}, res, log)
-        check("1. crypto on v3: the ticked rules setups still trade (rollback works)", sorted(ran) == ["range_breakout_4h", "smcp_star_long"], ran)
+        check("   crypto on v3: only v3's own rules - the same hits are NOT traded (owner, 10 Nov)",
+              ran == [] and any("Scanner v3 only" in x for x in logs), (ran, logs))
         ran.clear()
         logs.clear()
         set_version(P, "CRYPTO", "v4")
@@ -81,6 +88,14 @@ if __name__ == "__main__":
                               "as_of": datetime.now(timezone.utc).isoformat(), "setups": []}, log)
         check("3. NSE on v4: no opening-range breakout trade, logged", out == [] and "nse" not in ran
               and any("NSE: Scanner v4 only" in x for x in logs), logs)
+        for v in ("v2", "rules"):
+            set_version(P, "INDIA", v)
+            AN.process({}, {"hits": [], "as_of": datetime.now(timezone.utc).isoformat(), "setups": []}, log)
+        import smc_playbook as PB
+        check("   v2 is 'own rules only' too; 'rules' runs the opening-range breaks and no Scanner setups",
+              PB.v4_only("NSE") is None and PB.owner_setups([(None,)] * 40, lambda t: t, version="rules") == [],
+              PB.v4_only("NSE"))
+        set_version(P, "INDIA", "v4")
 
         # F&O index ORB off under v4 (INDIA)
         logs.clear()

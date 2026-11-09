@@ -99,7 +99,7 @@ const RISK_LABELS: Record<string, string> = {
   tm_rev_min_r: "Trade Manager: reversal exit only after this many R in profit",
   tm_stale_min: "Trade Manager: close a trade that went nowhere after (minutes, 0 = off)",
   tm_candle_min: "Trade Manager: candle size for the reversal check (minutes)",
-  scanner_version: "Scanner version (v5 = the 0.146 level; v4 = 7 Nov final workflow: primary, then sequential OB/FVG; v3 = 5 Nov sweep reversal + FVG/OB retest; v2 = A-B-C-D, playbook, FVG / OB)",
+  scanner_version: "Scanner version: only the selected one's rules run (rules = only the older rules: crypto 4h breakout / SMC / playbook hits, NSE / US / F&O opening-range breakouts; v5 = the 0.146 level; v4 = 7 Nov final workflow: primary, then sequential OB/FVG; v3 = 5 Nov sweep reversal + FVG/OB retest; v2 = A-B-C-D, playbook, FVG / OB)",
   v5_constant: "Scanner v5: the constant C, from the move's start (reel 0.146; Fibonacci 0.236 / 0.382 / 0.5 / 0.618 and 1 - r: 0.854 / 0.764 / 0.214 / 0.114; ICT OTE 0.38 / 0.295 / 0.21; Gann 0.125 / 0.25 / 0.375). Above 0.5 only target 2R trades",
   v5_move: "Scanner v5: the move (swing = last swing low -> high; day = today's low -> high)",
   v5_target: "Scanner v5: target (leg = the other end of the move; 2R)",
@@ -187,7 +187,7 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
     : { rules: doc.markets[mkt]?.rules ?? {}, defaults: doc.markets[mkt]?.defaults ?? {}, fields: doc.markets[mkt]?.fields ?? {} };
   const acct = ACCOUNT_OF[mkt];
   const version = String(doc.risk[acct]?.scanner_version ?? "v3");
-  const v4 = version === "v4" || version === "v5";
+  const v4 = version !== "rules";   // every scanner version runs only its own setups
   const ownKey = version === "v5" ? "v5_setups" : "v4_setups";
   const ownNames = version === "v5" ? V5_NAMES : V4_NAMES;
   const savedV4 = (doc.risk[acct]?.[ownKey] as unknown as string[] | undefined) ?? Object.keys(ownNames);
@@ -247,7 +247,7 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
       </div>
       {v4 ? (
         <div className="notice" style={{ marginBottom: 12 }}>
-          <b>Scanner {version} is on for {acct}:</b> only the {version} setups ticked below are watched and traded. The {RULES_NAME[mkt]} rules
+          <b>Scanner {version} is on for {acct}:</b> only the {version} setups{version === "v4" || version === "v5" ? " ticked below" : ""} are watched and traded. The {RULES_NAME[mkt]} rules
           are off for this account{mkt === "FNO" ? ` (${version} does not trade the indices)` : ""}; their values below are kept for when you switch back.
           {version === "v5" && <> The 0.146 level is <b>not backtested yet</b>: run the Scanner v5 backtests first.</>}
         </div>
@@ -257,7 +257,12 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
         </p>
       )}
       {offDefault.length > 0 && <p className="small muted" style={{ margin: "0 0 10px" }}><b>Changed from the defaults:</b> {offDefault.join(", ")}.</p>}
-      {mkt !== "FNO" && (
+      {version === "rules" && (
+        <div className="notice" style={{ marginBottom: 12 }}>
+          <b>Rules only for {acct}:</b> the {RULES_NAME[mkt]} rules below run; no Scanner setups are traded.
+        </div>
+      )}
+      {mkt !== "FNO" && (version === "v4" || version === "v5") && (
         <div className="field" style={{ marginBottom: 12 }}>
           <span className="field-label">Setups traded: Scanner {version === "v5" ? "v5" : "v4"}{v4 ? "" : " (used when Scanner version is v4)"}</span>
           <div className="checks" role="group" aria-label={`Scanner ${version === "v5" ? "v5" : "v4"} setups traded`}>

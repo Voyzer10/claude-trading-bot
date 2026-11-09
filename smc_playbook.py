@@ -389,7 +389,7 @@ def _r(x):
     return round(x, 2) if ax >= 100 else round(x, 4) if ax >= 1 else float("%.6g" % x)
 
 
-SCANNER_VERSIONS = ("v5", "v4", "v3", "v2")
+SCANNER_VERSIONS = ("v5", "v4", "v3", "v2", "rules")   # "rules": only the older rules (no Scanner setups)
 
 
 def setup_version(setup):
@@ -400,13 +400,14 @@ def setup_version(setup):
 
 V4_SETUPS = ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"]
 V5_SETUPS = ["v5_level_long", "v5_level_short"]
-OWN_ONLY = ("v4", "v5")   # versions that trade ONLY their own setups
+OWN_ONLY = ("v5", "v4", "v3", "v2")   # every scanner version trades ONLY its own setups (owner, 10 Nov 2026)
 
 
 def v4_only(market):
-    """Scanner v4 or v5 on this market's account: ONLY that version's setups are watched and traded (owner, 10 Nov
-    2026). The older "rules" paths (crypto 4h breakout / SMC / playbook / rulebook hits, NSE / US / index F&O
-    opening-range breakouts) are switched off for that account. Name kept from v4; returns the version or None."""
+    """The selected scanner version's rules ONLY (owner, 10 Nov 2026: "jo scanner version selected h sirf ussi k rules
+    execute hone chahiye"). For v5 / v4 / v3 / v2 the older "rules" paths (crypto 4h breakout / SMC / playbook /
+    rulebook hits, NSE / US / index F&O opening-range breakouts) are off; returns the version. For "rules" those are
+    the only thing that runs (no Scanner setups); returns None. Name kept from v4."""
     v = scanner_version(market)
     return v if v in OWN_ONLY else None
 
@@ -448,6 +449,8 @@ def owner_setups(rows, day_of, ctx=None, version="v3", intraday=False, market=No
     if len(rows) < 35:
         return []
     i = len(rows) - 1
+    if version == "rules":
+        return []                     # "rules" selected: no Scanner setups at all
     if version == "v5":
         out = v5_setups(rows, day_of, i, intraday, v5_params(market) if market else {})
     elif version == "v4":

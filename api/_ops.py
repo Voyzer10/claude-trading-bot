@@ -124,7 +124,7 @@ RISK_FIELDS = {
     "capital": {"type": "float", "min": 100},
     "risk_limits": {"type": "bool"},
     "trade_setups": {"type": "bool"},
-    "scanner_version": {"type": "choice", "choices": ["v5", "v4", "v3", "v2"]},
+    "scanner_version": {"type": "choice", "choices": ["v5", "v4", "v3", "v2", "rules"]},
     "v5_setups": {"type": "setups", "allow_empty": True, "choices": ["v5_level_long", "v5_level_short"]},
     "v5_constant": {"type": "float", "min": 0.01, "max": 0.95},
     "v5_move": {"type": "choice", "choices": ["swing", "day"]},
@@ -1303,7 +1303,7 @@ def agents():
     stop_k = cfg.get("stop_atr_k", 1.5)
     jobs = {
         1: "Every market, on each candle that closes. The rules that trade: a crypto coin's fresh close above its "
-           "4-hour high (below its low for shorts), NSE / US opening-range breaks (both off for an account on v4 or v5). "
+           "4-hour high (below its low for shorts), NSE / US opening-range breaks (these run ONLY when Scanner version is 'rules'). "
            "Your setups, one scanner version per account (Settings: Scanner version), never mixed. v5 = the 0.146 "
            "level: after a move, the level C x range short of its extreme (C = 0.146), touched and closed back on the "
            "right side, stop beyond the extreme, target the other end of the move. v4 = your 7 Nov final workflow only: a primary trade (BOS, a "
