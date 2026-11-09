@@ -100,7 +100,7 @@ const RISK_LABELS: Record<string, string> = {
   tm_stale_min: "Trade Manager: close a trade that went nowhere after (minutes, 0 = off)",
   tm_candle_min: "Trade Manager: candle size for the reversal check (minutes)",
   scanner_version: "Scanner version (v5 = the 0.146 level; v4 = 7 Nov final workflow: primary, then sequential OB/FVG; v3 = 5 Nov sweep reversal + FVG/OB retest; v2 = A-B-C-D, playbook, FVG / OB)",
-  v5_constant: "Scanner v5: the constant C (level = move's extreme -/+ C x range; reel: 0.146)",
+  v5_constant: "Scanner v5: the constant C, from the move's start (reel 0.146; Fibonacci 0.236 / 0.382 / 0.5 / 0.618 and 1 - r: 0.854 / 0.764 / 0.214 / 0.114; ICT OTE 0.38 / 0.295 / 0.21; Gann 0.125 / 0.25 / 0.375). Above 0.5 only target 2R trades",
   v5_move: "Scanner v5: the move (swing = last swing low -> high; day = today's low -> high)",
   v5_target: "Scanner v5: target (leg = the other end of the move; 2R)",
   cooldown_losses: "Cooldown after N losses in a row (0 = off)",

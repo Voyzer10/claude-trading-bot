@@ -9,9 +9,18 @@ walk-forward 70/30, R after costs.
     python research.py nse-sv5          # NSE stocks, 5m, intraday (India charges)
     python research.py gold-sv5         # gold futures (GC=F), 5m - the reel's own market (XAUUSD 3m)
 
-The question this answers first: is 0.146 SPECIAL? The same rules are run with C = 0.10, 0.146, 0.20, 0.236 and
-0.30. If 0.146 is not clearly better out of sample than its neighbours, the reel's "exact pinpoint" levels were
-hindsight. Then: which move (the last swing, or today's low -> high), which target (the move's other end, or 2R).
+The question this answers first: is 0.146 - or ANY "famous" constant - special? C is measured from the move's START
+(the reel's way: support = low + C x range after an up-move). A Fibonacci retracement r measured from the move's end
+is the same level as C = 1 - r, so both are in the list. The famous constants (owner, 10 Nov 2026: "find the other
+constants like it"):
+  Fibonacci      0.146 (0.236 x 0.618), 0.236, 0.382, 0.5, 0.618, 0.786 (sqrt 0.618), 0.886 (sqrt 0.786), 0.65
+                 (golden pocket) and their mirrors 1 - r: 0.854, 0.764, 0.214, 0.114, 0.35
+  ICT OTE        0.62, 0.705, 0.79 (and 0.5 equilibrium): mirrors 0.38, 0.295, 0.21
+  Gann / Murrey  eighths 0.125, 0.25, 0.375, 0.625, 0.75, 0.875 and thirds 0.333, 0.667
+  geometry       0.707 (1 / sqrt 2)
+CONTROLS: 0.18, 0.27, 0.44, 0.56 - numbers no one uses. If the famous constants do not beat the controls out of sample,
+their "exact" levels are hindsight. Testing ~30 constants also means the best one can win by luck: trust a constant only
+if it AND its neighbours are positive out of sample, in more than one market. Then: which move (the last swing, or today's low -> high), which target (the move's other end, or 2R).
 "Live" = what Scanner v5 paper trades: C 0.146, swing move, target the move's end, both sides.
 """
 import itertools
@@ -21,7 +30,16 @@ from datetime import datetime, timezone
 import scanner_v5 as V5
 
 UTC = timezone.utc
-CONSTANTS = [0.10, 0.146, 0.20, 0.236, 0.30]
+FAMOUS = {
+    0.114: "fib 0.886 retrace", 0.125: "Gann 1/8", 0.146: "fib 0.146 (the reel)", 0.214: "fib 0.786 retrace",
+    0.21: "ICT 0.79", 0.236: "fib 0.236", 0.25: "Gann 2/8", 0.295: "ICT OTE 0.705", 0.333: "1/3", 0.35: "golden pocket 0.65",
+    0.375: "Gann 3/8", 0.38: "ICT 0.62", 0.382: "fib 0.382 / 0.618 retrace", 0.5: "half / equilibrium",
+    0.618: "fib 0.618 / 0.382 retrace", 0.625: "Gann 5/8", 0.667: "2/3", 0.705: "ICT 0.705 mirror", 0.707: "1/sqrt 2",
+    0.75: "Gann 6/8", 0.764: "fib 0.236 retrace", 0.786: "fib 0.786", 0.854: "fib 0.146 retrace", 0.875: "Gann 7/8",
+    0.886: "fib 0.886"}
+CONTROLS = {0.18: "control", 0.27: "control", 0.44: "control", 0.56: "control"}
+NAMES = {**FAMOUS, **CONTROLS}
+CONSTANTS = sorted(NAMES)
 MOVES = ["swing", "day"]
 TARGETS = ["leg", "2R"]
 LIVE = {"side": "both", "c": 0.146, "move": "swing", "target": "leg"}
@@ -34,9 +52,11 @@ def events_v5(data, day_of, cost_fn, intraday=False, max_hold=48, entry_ok=None)
                 zip(d["t"], d["o"], d["h"], d["l"], d["c"], d["v"]) if None not in (o, h, l, c)]
         if len(rows) < 250:
             continue
+        ctxs = V5.contexts(rows, day_of)
         for c, mv, tg in itertools.product(CONSTANTS, MOVES, TARGETS):
             try:
-                seq = V5.sequence(rows, day_of, intraday=intraday, c=c, move=mv, target=tg, max_hold=max_hold)
+                seq = V5.sequence(rows, day_of, intraday=intraday, ctxs=ctxs, c=c, move=mv, target=tg,
+                                  max_hold=max_hold)
             except Exception:
                 continue
             for t in seq:
@@ -96,15 +116,33 @@ def report(events, mode, what, costs, stats, tz_local):
              row(live, "LIVE (what Scanner v5 paper trades):  "),
              row(score(events, dict(LIVE, side="long"), split, stats), "LIVE, longs only:  "),
              row(score(events, dict(LIVE, side="short"), split, stats), "LIVE, shorts only:  "), "",
-             "IS 0.146 SPECIAL? Same rules, only the constant changes (both sides, target = the move's end):"]
+             "IS ANY CONSTANT SPECIAL? Same rules, only C changes (both sides). OUT-OF-SAMPLE avg R per trade (trades);"
+             " target = the move's end where reward:risk allows it (C < 0.5), else 2R:",
+             "  %-7s %-26s %-18s %-18s %-18s %-18s" % ("C", "what", "swing / move end", "swing / 2R", "day / move end",
+                                                         "day / 2R")]
     by_c = {}
-    for mv in MOVES:
-        lines.append("  move = %s" % mv)
-        for c in CONSTANTS:
-            r = score(events, {"side": "both", "c": c, "move": mv, "target": "leg"}, split, stats)
-            by_c[(mv, c)] = r["out_of_sample"]
-            o = r["out_of_sample"]
-            lines.append("    C=%-6g in %s\n             OUT %s" % (c, _s(r["in_sample"]), _s(o)))
+
+    def cell(o):
+        return "%+.2fR (%d)" % (o["avg_r"], o["trades"]) if o.get("trades") else "-"
+    for c in CONSTANTS:
+        cells = []
+        for mv in MOVES:
+            for tg in TARGETS:
+                o = score(events, {"side": "both", "c": c, "move": mv, "target": tg}, split, stats)["out_of_sample"]
+                by_c[(mv, tg, c)] = o
+                cells.append(cell(o))
+        lines.append("  %-7g %-26s %-18s %-18s %-18s %-18s" % (c, NAMES[c], *cells))
+
+    def group_avg(group):
+        rs = [by_c[(mv, tg, c)]["avg_r"] for c in group for mv in MOVES for tg in TARGETS
+              if by_c[(mv, tg, c)].get("trades", 0) >= 10]
+        return (sum(rs) / len(rs), len(rs)) if rs else (None, 0)
+    fa, fn = group_avg(FAMOUS)
+    ca, cn = group_avg(CONTROLS)
+    lines.append("  famous constants: avg %s over %d settings;  controls (no one uses them): avg %s over %d settings -> %s" % (
+        "%+.2fR" % fa if fa is not None else "-", fn, "%+.2fR" % ca if ca is not None else "-", cn,
+        "the famous ones are NOT better than random numbers" if fa is None or ca is None or fa <= ca + 0.05
+        else "the famous ones beat the controls by %.2fR (check it holds in the other markets)" % (fa - ca)))
     lines += ["", "TARGET: the move's other end vs 2R (C=0.146, swing):",
               row(score(events, dict(LIVE, target="2R"), split, stats), "  ")]
     grid = {"side": ["long", "short", "both"], "c": CONSTANTS, "move": MOVES, "target": TARGETS}
@@ -116,13 +154,18 @@ def report(events, mode, what, costs, stats, tz_local):
         lines.append(row(r, "%2d. " % n))
     good = [r for r in res if r["in_sample"]["avg_r"] > 0 and r["out_of_sample"]["avg_r"] > 0]
     lv = live["out_of_sample"]
-    oos_c = {c: by_c[("swing", c)].get("avg_r") for c in CONSTANTS if by_c[("swing", c)].get("trades", 0) >= 10}
+    oos_c = {c: by_c[("swing", "leg", c)].get("avg_r") for c in CONSTANTS
+             if by_c[("swing", "leg", c)].get("trades", 0) >= 10}
     best_c = max(oos_c, key=oos_c.get) if oos_c else None
     special = best_c == 0.146 and all(oos_c[0.146] - v >= 0.05 for c, v in oos_c.items() if c != 0.146)
+    pos = sorted(c for c, v in oos_c.items() if v > 0)
     lines += ["", "%d of %d combinations (with enough trades) positive both in- and out-of-sample." % (len(good), len(res)),
-              "0.146 vs the other constants (swing, out of sample, avg R): %s -> %s" % (
-                  ", ".join("%g: %+.2f" % (c, v) for c, v in oos_c.items()),
-                  "0.146 is clearly the best" if special else "0.146 is NOT clearly better than its neighbours"),
+              "0.146 (swing, move end, out of sample): %s; best constant there: %s -> %s" % (
+                  "%+.2fR" % oos_c[0.146] if 0.146 in oos_c else "too few trades",
+                  "%g (%s, %+.2fR)" % (best_c, NAMES[best_c], oos_c[best_c]) if best_c is not None else "-",
+                  "0.146 is clearly the best" if special else "0.146 is NOT clearly better than the others"),
+              "Positive out of sample (swing, move end): %s. A real level shows as a run of neighbours, not one number." % (
+                  ", ".join("%g" % c for c in pos) or "none"),
               "VERDICT: " + (("PASS: the live setting is positive out of sample (%+.2fR a trade over %d trades). Small "
                               "sample: paper trade it and keep checking." % (lv["avg_r"], lv["trades"]))
                              if lv.get("trades", 0) >= 20 and lv["avg_r"] > 0 else

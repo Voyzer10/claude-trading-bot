@@ -126,7 +126,7 @@ RISK_FIELDS = {
     "trade_setups": {"type": "bool"},
     "scanner_version": {"type": "choice", "choices": ["v5", "v4", "v3", "v2"]},
     "v5_setups": {"type": "setups", "allow_empty": True, "choices": ["v5_level_long", "v5_level_short"]},
-    "v5_constant": {"type": "float", "min": 0.01, "max": 0.5},
+    "v5_constant": {"type": "float", "min": 0.01, "max": 0.95},
     "v5_move": {"type": "choice", "choices": ["swing", "day"]},
     "v5_target": {"type": "choice", "choices": ["leg", "2R"]},
     "v4_setups": {"type": "setups", "allow_empty": True,

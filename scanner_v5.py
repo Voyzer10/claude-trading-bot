@@ -48,19 +48,33 @@ def _legs_swing(ctx, i):
     return j, ctx.bars[j][3], hi_i, hi
 
 
+def _day_index(ctx, day):
+    """Per candle (computed once per chart): the day's start, the day's highest-high index up to it, and the
+    lowest-low index from the day's start up to it."""
+    cached = getattr(ctx, "_v5_day", None)
+    if cached is not None:
+        return cached
+    bars, n = ctx.bars, len(ctx.bars)
+    start, hi_upto, lo_upto = [0] * n, [0] * n, [0] * n
+    for i in range(n):
+        new = i == 0 or day[i] != day[i - 1]
+        start[i] = i if new else start[i - 1]
+        hi_upto[i] = i if new or bars[i][2] > bars[hi_upto[i - 1]][2] else hi_upto[i - 1]
+        lo_upto[i] = i if new or bars[i][3] < bars[lo_upto[i - 1]][3] else lo_upto[i - 1]
+    ctx._v5_day = (start, hi_upto, lo_upto)
+    return ctx._v5_day
+
+
 def _legs_day(ctx, i, day):
     """Today's up-move up to candle i-1: (L index, L, H index, H) with the low before the high, or None."""
-    start = i
-    while start > 0 and day[start - 1] == day[i]:
-        start -= 1
-    if i - start < 3:
+    start, hi_upto, lo_upto = _day_index(ctx, day)
+    if i == 0 or start[i] != start[i - 1] or i - start[i] < 3:
         return None
-    bars = ctx.bars
-    hi_i = max(range(start, i), key=lambda x: bars[x][2])
-    if hi_i == start:
+    hi_i = hi_upto[i - 1]
+    if hi_i == start[i]:
         return None
-    lo_i = min(range(start, hi_i), key=lambda x: bars[x][3])
-    return lo_i, bars[lo_i][3], hi_i, bars[hi_i][2]
+    lo_i = lo_upto[hi_i - 1]
+    return lo_i, ctx.bars[lo_i][3], hi_i, ctx.bars[hi_i][2]
 
 
 def _walk(bars, day, i, entry, stop, target, p, intraday):
@@ -79,9 +93,9 @@ def _walk(bars, day, i, entry, stop, target, p, intraday):
     return None, None, "open"
 
 
-def longs(src, day_of, p, intraday=False):
-    """Long trades in src terms."""
-    ctx = PB.Context(src, day_of)
+def longs(src, day_of, p, intraday=False, ctx=None):
+    """Long trades in src terms. ctx: a PB.Context of src, to reuse it across many settings (the backtest)."""
+    ctx = ctx or PB.Context(src, day_of)
     day = ctx.day
     out, used, busy_until = [], set(), -1
     dead = set()                       # moves cancelled before an entry
@@ -143,12 +157,19 @@ def _real(t, short):
     return t
 
 
-def sequence(rows, day_of, intraday=False, **kw):
+def contexts(rows, day_of):
+    """(Context of the chart, its mirror, the mirrored rows): build once, pass to sequence(ctxs=...) many times."""
+    m = mirror(rows)
+    return PB.Context(rows, day_of), PB.Context(m, day_of), m
+
+
+def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
     """Every v5 trade on one chart, both sides, in time order: [{i, side, entry, stop, target, level, leg_low,
     leg_high, range, c, move, exit_i, exit, exit_reason}]."""
     p = dict(DEFAULTS, **kw)
-    trades = [_real(t, False) for t in longs(rows, day_of, p, intraday)]
-    trades += [_real(t, True) for t in longs(mirror(rows), day_of, p, intraday)]
+    ctx, mctx, m = ctxs or (None, None, mirror(rows))
+    trades = [_real(t, False) for t in longs(rows, day_of, p, intraday, ctx)]
+    trades += [_real(t, True) for t in longs(m, day_of, p, intraday, mctx)]
     return sorted(trades, key=lambda t: (t["i"], t["side"]))
 
 
