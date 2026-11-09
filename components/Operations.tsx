@@ -50,7 +50,9 @@ export function useCommands(onDone?: () => void) {
   return { cmds, send, available, refresh };
 }
 
-export default function Operations({ onChange }: { onChange: () => void }) {
+/** part "runner": runner actions, recent requests, machine. part "data": market-data check and downloads. */
+export default function Operations({ onChange, part = "all" }: { onChange: () => void; part?: "all" | "runner" | "data" }) {
+  const show = (x: string) => part === "all" || part === x;
   const { cmds, send, available } = useCommands(onChange);
   const [sys, setSys] = useState<Sys | null>(null);
   const [probes, setProbes] = useState<{ checked_at: string; results: Probe[] } | null>(null);
@@ -83,11 +85,11 @@ export default function Operations({ onChange }: { onChange: () => void }) {
   const runnerDown = sys && sys.runner.alive === false;
 
   return (
-    <section id="operations" className="panel" aria-labelledby="ops-h">
+    <section id={part === "all" ? "operations" : `operations-${part}`} className="panel" aria-labelledby={`ops-h-${part}`}>
       <div className="panel-head">
         <div>
-          <h2 id="ops-h">Operations</h2>
-          <p>Runner actions, machine health, market-data check and downloads.</p>
+          <h2 id={`ops-h-${part}`}>{part === "runner" ? "Runner actions and machine" : part === "data" ? "Data and downloads" : "Operations"}</h2>
+          <p>{part === "runner" ? "Scan now, restart, recent requests and machine health." : part === "data" ? "Market-data check and every file the bot keeps." : "Runner actions, machine health, market-data check and downloads."}</p>
         </div>
       </div>
       {msg && <div className={`notice ${msg.bad ? "bad" : "ok"}`} role="status" style={{ marginBottom: 12 }}>{msg.text}</div>}
@@ -99,6 +101,7 @@ export default function Operations({ onChange }: { onChange: () => void }) {
         </div>
       )}
 
+      {show("runner") && (
       <div className="grid-2">
         <div className="formblock">
           <h3 className="h3">Runner</h3>
@@ -148,7 +151,10 @@ export default function Operations({ onChange }: { onChange: () => void }) {
         </div>
       </div>
 
-      <div className="grid-2" style={{ marginTop: 16 }}>
+      )}
+
+      {show("data") && (
+      <div className="grid-2" style={{ marginTop: part === "data" ? 0 : 16 }}>
         <div className="formblock">
           <h3 className="h3">Market data check</h3>
           <p className="field-help" style={{ marginTop: 0 }}>
@@ -188,6 +194,7 @@ export default function Operations({ onChange }: { onChange: () => void }) {
           )}
         </div>
       </div>
+      )}
     </section>
   );
 }
