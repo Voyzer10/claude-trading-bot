@@ -327,6 +327,20 @@ def setups_scan(data, market, suffix, cutoff, tz, workers=8, keep=None):
     return out
 
 
+def watch_quote(d):
+    """{price, prev_close, chg_pct, t} from one Yahoo chart dict (5m candles of today), or None."""
+    if not d or not d.get("t"):
+        return None
+    closes = [(t, c) for t, c in zip(d["t"], d.get("c") or []) if c is not None]
+    if not closes:
+        return None
+    t, c = closes[-1]
+    meta = d.get("meta") or {}
+    pc = meta.get("chartPreviousClose") or meta.get("previousClose")
+    return {"price": round(float(c), 2), "prev_close": pc, "t": int(t),
+            "chg_pct": round((float(c) / pc - 1) * 100, 2) if pc else None}
+
+
 def orb_scan(symbols, market, now, cutoff, or_minutes=15, min_price=20.0, workers=8, quiet=False, side="long",
              setups=False):
     """Fetch and scan. Returns a dict (never prints). setups=True: also the Scanner's owner setups, v3 or v2 per Settings (res["setups"])."""
@@ -347,7 +361,14 @@ def orb_scan(symbols, market, now, cutoff, or_minutes=15, min_price=20.0, worker
                       "pct_now": round((r["last"] / ref - 1) * 100, 2)})
             hits.append(r)
     hits.sort(key=lambda h: h["time"])
-    return {"mode": "orb", "market": market, "as_of": cutoff.isoformat(), "universe": len(symbols),
+    # the dashboard's NSE watch list (owner, 10 Nov 2026): Nifty 50 prices from this same fetch, every scan
+    quotes = {}
+    if market == "NSE":
+        for s in NIFTY50:
+            q = watch_quote(data.get(s))
+            if q:
+                quotes[s] = q
+    return {"mode": "orb", "market": market, "as_of": cutoff.isoformat(), "universe": len(symbols), "quotes": quotes,
             "scanned": len(data), "failed": len(failed), "usable": usable, "hits": hits,
             "setups": setups_scan(data, market, SUFFIX[market], cutoff, IST, workers) if setups else []}
 

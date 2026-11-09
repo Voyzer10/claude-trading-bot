@@ -359,6 +359,12 @@ def scan_setups(log):
         return
     _SETUP_BAR["last"] = last.isoformat()
     data, _ = S.fetch_many(US_WATCH, "1d", "5m", 8, "", True)
+    try:   # the dashboard's US watch list (owner, 10 Nov 2026)
+        quotes = {s: q for s in US_WATCH for q in [S.watch_quote(data.get(s))] if q}
+        with open(os.path.join(LIVE_DIR, "us_watch.json"), "w", encoding="utf-8") as fh:
+            json.dump({"as_of": last.isoformat(), "symbols": list(US_WATCH), "quotes": quotes}, fh)
+    except Exception as e:
+        log("US watch list not saved: %s" % e)
     keep = lambda r: (9, 30) <= (r[0].hour, r[0].minute) < (16, 0)
     setups = S.setups_scan(data, "US", "", last, et, 8, keep)
     if not setups:

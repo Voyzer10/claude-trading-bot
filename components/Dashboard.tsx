@@ -11,7 +11,9 @@ import Backtest from "@/components/Backtest";
 import Alerts from "@/components/Alerts";
 import Agents from "@/components/Agents";
 import SymbolIcon from "@/components/SymbolIcon";
+import Icon from "@/components/Icon";
 import Zerodha, { ZerodhaBanner } from "@/components/Zerodha";
+import { FnoWatch, NseWatch, UsWatch } from "@/components/Watchlists";
 import { INDIA, useLiveTicks, type LiveTicks } from "@/lib/live";
 import { errText } from "@/lib/api";
 
@@ -83,10 +85,10 @@ export default function Dashboard() {
         {!data && !error && <div className="notice">Loading…</div>}
 
         {/* Home: what needs attention, P&L against the goal, open trades */}
-        <div className="pane" hidden={nav.tab !== "home"}>
+        <div className="pane pane-home" hidden={nav.tab !== "home"}>
           <ZerodhaBanner />
           {data && <Performance refreshKey={refreshKey} />}
-          {snap && <LedgerSection snap={snap} onChange={changed} live={live} part="open" />}
+          {snap && <div className="home-full"><LedgerSection snap={snap} onChange={changed} live={live} part="open" /></div>}
         </div>
 
         {/* Bot: control, the agents, the runner */}
@@ -115,8 +117,12 @@ export default function Dashboard() {
         {/* Markets: Zerodha live data, the markets, the coins */}
         <div className="pane" hidden={nav.tab !== "markets"}>
           {snap && <Zerodha live={live} />}
+          <Seg value={nav.sub.markets} onChange={(v) => nav.go("markets", v)} items={[["crypto", "Crypto"], ["nse", "NSE"], ["us", "US"], ["fno", "F&O"]]} label="Watch lists" />
+          <div className="pane" hidden={nav.sub.markets !== "crypto"}>{snap && <CoinsSection snap={snap} />}</div>
+          <div className="pane" hidden={nav.sub.markets !== "nse"}>{snap && <NseWatch snap={snap} live={live} />}</div>
+          <div className="pane" hidden={nav.sub.markets !== "us"}>{snap && <UsWatch snap={snap} />}</div>
+          <div className="pane" hidden={nav.sub.markets !== "fno"}>{snap && <FnoWatch snap={snap} live={live} />}</div>
           {snap && <MarketsStrip snap={snap} />}
-          {snap && <CoinsSection snap={snap} />}
         </div>
 
         {/* More: settings, backtest, phone alerts, the runner log, data and downloads */}
@@ -124,7 +130,7 @@ export default function Dashboard() {
           {nav.sub.more === "" ? (
             <MoreMenu go={(v) => nav.go("more", v)} />
           ) : (
-            <button className="btn back" onClick={() => nav.go("more", "")}>‹ {MORE.find(([k]) => k === nav.sub.more)?.[1] ?? "More"}</button>
+            <button className="btn back" onClick={() => nav.go("more", "")}><Icon name="left" size={16} />{MORE.find(([k]) => k === nav.sub.more)?.[1] ?? "More"}</button>
           )}
           <div className="pane" hidden={nav.sub.more !== "settings"}>{data && <Settings />}</div>
           <div className="pane" hidden={nav.sub.more !== "backtest"}>{data && <Backtest />}</div>
@@ -146,7 +152,7 @@ export default function Dashboard() {
 // ------------------------------------------------------------------ app shell: tabs, sub-tabs, theme
 
 type TabKey = "home" | "bot" | "trades" | "markets" | "more";
-type SubState = { bot: string; trades: string; more: string };
+type SubState = { bot: string; trades: string; markets: string; more: string };
 const TABS: [TabKey, string][] = [["home", "Home"], ["bot", "Bot"], ["trades", "Trades"], ["markets", "Markets"], ["more", "More"]];
 const MORE: [string, string, string][] = [
   ["settings", "Settings", "Strategy rules and risk limits"],
@@ -158,17 +164,17 @@ const MORE: [string, string, string][] = [
 // the old one-page anchors (#control, #logs ...) and the Zerodha login redirect still land in the right place
 const LEGACY: Record<string, [TabKey, string?]> = {
   performance: ["home"], ledger: ["home"], positions: ["home"], control: ["bot", "control"], runner: ["bot", "runner"],
-  agents: ["bot", "agents"], operations: ["more", "data"], coins: ["markets"], zerodha: ["markets"], reasons: ["trades", "skipped"],
+  agents: ["bot", "agents"], operations: ["more", "data"], coins: ["markets", "crypto"], zerodha: ["markets"], reasons: ["trades", "skipped"],
   decisions: ["trades", "decisions"], logs: ["more", "log"], settings: ["more", "settings"], backtest: ["more", "backtest"],
   alerts: ["more", "alerts"],
 };
-const SUB_DEFAULT: SubState = { bot: "control", trades: "closed", more: "" };
+const SUB_DEFAULT: SubState = { bot: "control", trades: "closed", markets: "crypto", more: "" };
 
 function parseHash(h: string): { tab: TabKey; sub: Partial<SubState> } {
   const [a, b] = h.replace(/^#/, "").split("/");
   if ((TABS as [string, string][]).some(([k]) => k === a)) {
     const tab = a as TabKey;
-    return { tab, sub: tab === "home" || tab === "markets" ? {} : { [tab]: b ?? (tab === "more" ? "" : SUB_DEFAULT[tab as keyof SubState]) } };
+    return { tab, sub: tab === "home" ? {} : { [tab]: b ?? (tab === "more" ? "" : SUB_DEFAULT[tab as keyof SubState]) } };
   }
   const l = LEGACY[a];
   if (l) return { tab: l[0], sub: l[1] !== undefined ? { [l[0]]: l[1] } : {} };
@@ -190,7 +196,7 @@ function useHashNav() {
   }, []);
   const go = (t: TabKey, s?: string) => {
     const next = s !== undefined ? { ...sub, [t]: s } : sub;
-    const part = t === "home" || t === "markets" ? "" : next[t as keyof SubState];
+    const part = t === "home" ? "" : next[t as keyof SubState];
     const h = "#" + t + (part ? "/" + part : "");
     if (window.location.hash !== h) window.history.pushState(null, "", window.location.pathname + window.location.search + h);
     setTab(t);
@@ -244,7 +250,7 @@ function MoreMenu({ go }: { go: (v: string) => void }) {
       {MORE.map(([k, name, sub]) => (
         <button key={k} className="menu-row" onClick={() => go(k)}>
           <span><b>{name}</b><span className="muted small">{sub}</span></span>
-          <span aria-hidden="true">›</span>
+          <Icon name="right" />
         </button>
       ))}
     </section>
@@ -268,7 +274,7 @@ function ThemeToggle() {
   };
   return (
     <button className="iconbtn" onClick={flip} aria-label={`Switch to the ${theme === "dark" ? "light" : "dark"} theme`}>
-      {theme === "dark" ? "☀" : "☾"}
+      <Icon name={theme === "dark" ? "sun" : "moon"} size={20} />
     </button>
   );
 }

@@ -476,23 +476,69 @@ body { background: var(--page); }
 .list-row-wrap:first-of-type { border-top: 1px solid var(--line); }
 .lr-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .lr-side { display: grid; justify-items: end; gap: 2px; }
-.chev { color: var(--muted); font-size: 12px; }
+.chev { color: var(--muted); display: inline-flex; }
 .lr-detail { padding: 0 16px 14px; }
 .menu-row > span:first-child { flex: 1; display: grid; gap: 2px; }
-.menu-row > span:last-child { color: var(--muted); font-size: 18px; }
+.menu-row > svg { color: var(--muted); flex: none; }
 .btn.back { justify-self: start; }
 
 /* Home: needs attention */
 .attention { display: flex; gap: 12px; align-items: center; border-color: var(--warn); }
-.attention h2 { font-size: 15px; font-weight: 600; margin-top: 2px; }
-.eyebrow { font-size: 12px; font-weight: 600; color: var(--warn); }
+.attention h2 { font-size: 15px; font-weight: 600; color: var(--warn); }
 .attention .btn.primary { flex: none; min-height: 44px; padding: 0 18px; }
 
 /* phones: compact closed-trade rows; wide screens: the full table */
 .closed-list { margin: 0 -16px -16px; }
 .narrow-only { display: block; }
 .wide-only { display: none; }
-@media (min-width: 700px) { .narrow-only { display: none; } .wide-only { display: block; } }
+@media (min-width: 900px) { .narrow-only { display: none; } .wide-only { display: block; } }
 input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 .checks input[type="checkbox"] { width: 18px; height: 18px; }
 .seg-ctl button[aria-pressed="true"] .muted { color: inherit; opacity: 0.75; }
+
+/* watch lists (NSE / US / F&O) */
+.watch-head { display: grid; gap: 8px; padding: 14px 16px 12px; }
+.watch-head h2 { font-size: 16px; font-weight: 600; }
+.watch-head p { margin: 0; }
+.watch-head input[type="search"] { width: 100%; min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink); font-size: 16px; }
+.seg-ctl.chips { border: 0; gap: 6px; }
+.seg-ctl.chips button { min-height: 36px; padding: 0 14px; border: 1px solid var(--line-2); border-radius: 999px; color: var(--ink); font-size: 13px; }
+.seg-ctl.chips button[aria-pressed="true"] { border-color: var(--accent); }
+.idx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 8px; }
+.list-row .sym { display: inline-flex; align-items: center; gap: 6px; }
+
+/* responsive pass (10 Nov 2026) */
+.tm-watch .chip { white-space: normal; overflow-wrap: anywhere; max-width: 100%; text-align: left; }
+.btn.back { gap: 4px; padding-left: 10px; }
+.iconbtn { display: inline-grid; place-items: center; }
+summary { cursor: pointer; }
+@media (pointer: coarse) {
+  summary { min-height: 44px; display: flex; align-items: center; }
+  .seg-ctl button, .seg-ctl.chips button { min-height: 44px; }
+  .btn { min-height: 44px; }
+}
+/* wide screens: more on the first screen of Home (hero beside the accounts) */
+@media (min-width: 1100px) {
+  .pane-home { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
+  .pane-home > .home-full, .pane-home > .notice { grid-column: 1 / -1; }
+  .pane-home > .home-hero { grid-column: 1; }
+  .pane-home > .home-accounts { grid-column: 2; }
+}
+.home-full { min-width: 0; display: grid; }
+/* the browser's own surfaces, in the palette */
+::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--ink); }
+input, textarea { caret-color: var(--accent); }
+html { scrollbar-color: var(--line-2) var(--bg); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+a { text-underline-offset: 3px; }
+.pane-home:not(:has(.home-accounts)) > .home-hero { grid-column: 1 / -1; }
+.hero .seg button { flex: 1 1 0; min-width: max-content; padding: 0 8px; }
+@media (max-width: 599px) { .markets .stat { padding: 10px 12px; } }
+@media (max-width: 359px) { .seg button { font-size: 13px; } .hero .seg button { padding: 0 6px; } }
+.watch-rows { display: grid; }
+.watch-rows > .list-row-wrap { border-top: 1px solid var(--line); }
+@media (min-width: 900px) {
+  .watch-rows { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  .watch-rows > .list-row-wrap { border-right: 1px solid var(--line); }
+}
