@@ -664,6 +664,12 @@ function withLive(open: Position[], live: LiveTicks | null): (Position & { live?
 function LedgerSection({ snap, onChange, live }: { snap: Snapshot; onChange: () => void; live: LiveTicks | null }) {
   const { accounts, closed } = snap.ledger;
   const open = withLive(snap.ledger.open, live);
+  const [mkt, setMkt] = useState("all");
+  const MKTS: [string, string][] = [["all", "All"], ["CRYPTO", "Crypto"], ["US", "US"], ["NSE", "NSE"], ["NFO", "F&O"]];
+  const shown = mkt === "all" ? closed : closed.filter((c) => (mkt === "NSE" ? c.market === "NSE" || c.market === "BSE" : c.market === mkt));
+  const sum = shown.reduce((a, c) => a + (c.pnl ?? 0), 0);
+  const rsum = shown.reduce((a, c) => a + (c.r ?? 0), 0);
+  const wins = shown.filter((c) => (c.pnl ?? 0) > 0).length;
   const { cmds, send, available } = useCommands(onChange);
   const [err, setErr] = useState<string | null>(null);
   const waiting = (key: string | null) =>
@@ -762,19 +768,35 @@ function LedgerSection({ snap, onChange, live }: { snap: Snapshot; onChange: () 
         </>
       )}
       <div className="list-head">
-        <h3 className="subtitle">Closed trades ({closed.length})</h3>
-        <span className="small muted">newest first</span>
+        <h3 className="subtitle">Closed trades ({mkt === "all" ? closed.length : `${shown.length} of ${closed.length}`})</h3>
+        <div className="seg-ctl" role="group" aria-label="Filter closed trades by market">
+          {MKTS.map(([k, name]) => {
+            const n = k === "all" ? closed.length : closed.filter((c) => (k === "NSE" ? c.market === "NSE" || c.market === "BSE" : c.market === k)).length;
+            return (
+              <button key={k} aria-pressed={mkt === k} onClick={() => setMkt(k)}>
+                {name} <span className="muted">{n}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
+      {mkt !== "all" && shown.length > 0 && (
+        <p className="small muted" style={{ margin: "0 0 8px" }}>
+          {shown.length} trades · {wins} won ({Math.round((100 * wins) / shown.length)}%) ·{" "}
+          <span className={sum > 0 ? "pos" : sum < 0 ? "neg" : ""}>{money(sum, currencyOf(acctOf(mkt)))}</span> ·{" "}
+          {rsum > 0 ? "+" : ""}{rsum.toFixed(1)}R · newest first
+        </p>
+      )}
       <div className="scroll">
         <table className="rtable">
           <thead>
             <tr><th>Closed</th><th>Instrument</th><th>Setup · liquidity</th><th>Entry → exit</th><th>P&amp;L</th><th>R</th><th>Exit</th></tr>
           </thead>
           <tbody>
-            {closed.length === 0 && (
-              <tr><td colSpan={7} className="muted">No closed paper trades yet.</td></tr>
+            {shown.length === 0 && (
+              <tr><td colSpan={7} className="muted">{closed.length ? "No closed trades in this market." : "No closed paper trades yet."}</td></tr>
             )}
-            {closed.slice().reverse().map((c, i) => (
+            {shown.slice().reverse().map((c, i) => (
               <tr key={i}>
                 <td data-label="Closed" className="num">{timeIST(c.exit_time, true)}</td>
                 <td data-label="Instrument" className="num"><span className="sym"><SymbolIcon id={c.key} />{c.key}</span></td>

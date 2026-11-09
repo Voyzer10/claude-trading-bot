@@ -63,21 +63,24 @@ DEFAULT_CONFIG = {
                    "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
                    "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
+                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
                    "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 60,
                    "tm_candle_min": 5, "fno_stock_options": False},
         "US":     {"capital": 50000, "max_loss_per_trade": 50, "max_position_pct": 25,
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
                    "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
+                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
                    "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 60,
                    "tm_candle_min": 5},
         "CRYPTO": {"capital": 1000, "max_loss_per_trade": 10, "max_position_pct": 25,
                    "daily_loss_limit": 30, "max_trades_per_day": 10, "min_reward_risk": 1.0,
                    "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "max_same_side": 3, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
+                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
                    "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 240,
                    "tm_candle_min": 15},
         # trade_manager (owner, 7 Nov 2026: "agents should think and react"): manages every open paper trade that has
@@ -1384,6 +1387,8 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     sv = _PB.setup_version(s["setup"])
     if sv != version:
         return done("skipped", "this account runs Scanner %s: %s setups are off" % (version, sv))
+    if version == "v4" and s["setup"] not in acc.get("v4_setups", _PB.V4_SETUPS):
+        return done("skipped", "%s is unticked in Settings (Scanner v4: setups traded)" % (s.get("name") or s["setup"]))
     entry, stop, short = s["price"], s.get("stop"), s["side"] == "short"
     target = s.get("target") or s.get("target_2r")
     st["3_entry"] = {"side": s["side"], "price_now": entry, "note": "entry = the close of the candle that completed it"}

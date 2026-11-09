@@ -390,6 +390,13 @@ def process(state, log, auto=True):
         scan_setups(log)
     except Exception as e:
         log("US Scanner failed: %s" % e)
+    import smc_playbook as PB
+    if PB.v4_only("US"):           # Scanner v4 only: the opening-range breakout scan and trades are off
+        ms["status"] = "Scanner v4 only: the opening-range breakout rules are off"
+        if ms.get("v4_note") != utc.date().isoformat():
+            ms["v4_note"] = utc.date().isoformat()
+            log("AUTO US: Scanner v4 only: opening-range breakouts are not scanned or traded today")
+        return
     start = et.replace(hour=9, minute=50, second=0, microsecond=0)
     stop = et.replace(hour=15, minute=30, second=0, microsecond=0)
     if not (start <= et < stop):

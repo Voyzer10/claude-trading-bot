@@ -272,6 +272,14 @@ def process(state, res, log):
     cfg = load_cfg()
     now = datetime.now(S.IST)
     record_setups(res.get("setups", []), log)
+    import smc_playbook as PB
+    if PB.v4_only("NSE"):          # Scanner v4 only: no opening-range breakout trades on this account
+        n = sum(1 for h in res.get("hits", []) if h.get("new"))
+        if n:
+            log("AUTO NSE: Scanner v4 only: %d opening-range break%s ignored; only v4 setups are traded" % (
+                n, "" if n == 1 else "s"))
+        state.setdefault("markets", {}).setdefault("NSE", {})["rules"] = "off (Scanner v4 only)"
+        return []
     if not (S.at(now, hm(cfg["entry_start"])) <= now < S.at(now, hm(cfg["entry_end"]))):
         return []
     cutoff = datetime.fromisoformat(res["as_of"])

@@ -397,6 +397,16 @@ def setup_version(setup):
     return "v4" if s.startswith("v4_") else "v3" if s.startswith("v3_") else "v2"
 
 
+V4_SETUPS = ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"]
+
+
+def v4_only(market):
+    """Scanner v4 on this market's account: ONLY v4 setups are watched and traded (owner, 10 Nov 2026). The older
+    "rules" paths (crypto 4h breakout / SMC / playbook / rulebook hits, NSE / US / index F&O opening-range
+    breakouts) are switched off for that account."""
+    return scanner_version(market) == "v4"
+
+
 def scanner_version(market):
     """Which Scanner a market runs: "v4" (the 7 Nov final workflow: primary sweep reversal, then a sequential OB/FVG
     secondary), "v3" (the 5 Nov workflow: sweep reversal + FVG/OB retest) or "v2" (A-B-C-D, playbook doji / star /

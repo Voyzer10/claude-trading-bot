@@ -5,7 +5,9 @@ import { getJSON, postJSON, OPS, errText } from "@/lib/api";
 import { currencyOf } from "@/lib/format";
 
 type Field = { type: string; min?: number; max?: number; choices?: string[]; accounts?: string[] };
+type MarketRules = { rules: Record<string, unknown>; defaults: Record<string, unknown>; fields: Record<string, Field>; account: string };
 type SettingsDoc = {
+  markets: Record<string, MarketRules>;
   rules: Record<string, unknown>;
   rule_defaults: Record<string, unknown>;
   rule_fields: Record<string, Field>;
@@ -50,6 +52,35 @@ const RULE_LABELS: Record<string, [string, string]> = {
   btc_regime: ["BTC filter", "Only buy when BTC is above the middle of its own 4h range."],
   max_fee_r: ["Max fees (R)", "Skip if the round-trip fee costs more than this."],
   max_hold_hours: ["Time stop (hours)", "Close an open crypto trade after this long."],
+  // NSE / US / F&O (the agents' own rules)
+  entry_start: ["Entries from (IST)", "No new trade before this time."],
+  entry_end: ["Entries until (IST)", "No new trade after this time."],
+  fresh_minutes: ["Fresh break (minutes)", "Only a break that triggered this recently is traded."],
+  "NSE.stop": ["Stop", "range-mid: the middle of the opening range. range-low: below the range."],
+  "NSE.target_r": ["Target (R)", "Take profit at this many times the risk."],
+  "FNO.target_r": ["Index target (R)", "Index target this many times the risk; the option's target follows by its delta."],
+  "NSE.min_stop_pct": ["Min stop distance (%)", "Skip stops tighter than this % of the price."],
+  "US.min_stop_pct": ["Min stop distance (%)", "Skip stops tighter than this % of the price."],
+  "NSE.max_chase_r": ["Max chase (R)", "Skip a break that already ran this far past the range."],
+  "US.max_chase_r": ["Max chase (R)", "Skip a break that already ran this far past the range (longs and shorts)."],
+  "FNO.max_chase_r": ["Max chase (R)", "Skip an index break that already ran this far."],
+  "NSE.min_vol_x": ["Min breakout volume (x)", "Breakout candle volume vs its recent average."],
+  max_gap_pct: ["Max opening gap (%)", "Skip a stock that opened this far from yesterday's close."],
+  regime_filter: ["Nifty filter", "Long only while Nifty is bullish, short only while bearish."],
+  "NSE.allow_short": ["Shorts (breakdowns)", "Also trade opening-range breakdowns as intraday shorts. Not backtested."],
+  "US.allow_short": ["Shorts (breakdowns)", "Also trade opening-range breakdowns, on paper."],
+  short_regime: ["Shorts: SPY filter", "Short only while SPY is below its opening-range middle and its open."],
+  min_sim_avg_r: ["Time machine: min average (R)", "The replays of this setup must average at least this."],
+  min_mc_avg_r: ["Time machine: min average (R)", "The replays of this setup must average at least this."],
+  min_history_trades: ["History: min past trades", "The setup must have fired at least this often before."],
+  min_history_avg_r: ["History: min average (R)", "Those past trades must average at least this."],
+  max_new_per_cycle: ["Max new trades per scan", "At most this many new trades from one scan."],
+  scan_every_min: ["Scan every (minutes)", "How often the whole US universe is scanned."],
+  or_minutes: ["Opening range (minutes)", "Length of the opening range (15 = 9:30-9:45 ET)."],
+  indices: ["Indices", "Which index's opening-range break is traded."],
+  instruments: ["Instruments", "options: the ATM call / put. futures: the index future (long only)."],
+  min_days_to_expiry: ["Min days to expiry", "Never buy an option this close to expiry: roll to the next."],
+  theta_haircut_r: ["Theta haircut (R)", "Option buyers lose time value: subtract this from the index edge."],
 };
 const RISK_LABELS: Record<string, string> = {
   max_loss_per_trade: "Max loss per trade",
@@ -124,43 +155,122 @@ export default function Settings() {
 
 type FormProps = { onSaved: (t: string) => void; onError: (t: string) => void };
 
-function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) {
-  const [v, setV] = useState<Record<string, unknown>>(doc.rules);
-  const [busy, setBusy] = useState(false);
-  useEffect(() => setV(doc.rules), [doc.rules]);
+type MarketKey = "CRYPTO" | "NSE" | "US" | "FNO";
+const MARKET_TABS: [MarketKey, string][] = [["CRYPTO", "Crypto"], ["NSE", "NSE stocks"], ["US", "US stocks"], ["FNO", "F&O"]];
+const ACCOUNT_OF: Record<MarketKey, string> = { CRYPTO: "CRYPTO", NSE: "INDIA", US: "US", FNO: "INDIA" };
+const V4_NAMES: Record<string, string> = {
+  v4_primary_long: "v4 primary long (sweep of a low, reclaimed, doji / hammer, break-and-close)",
+  v4_primary_short: "v4 primary short (sweep of a high, reclaimed, doji / inverted hammer, break-and-close)",
+  v4_secondary_long: "v4 OB / FVG secondary long (only after the primary closed)",
+  v4_secondary_short: "v4 OB / FVG secondary short (only after the primary closed)",
+};
+const RULES_NAME: Record<MarketKey, string> = {
+  CRYPTO: "4h breakout / SMC / playbook / rulebook",
+  NSE: "opening-range breakouts",
+  US: "opening-range breakouts",
+  FNO: "Nifty / Bank Nifty opening-range breakouts",
+};
 
-  const changed = Object.keys(doc.rule_fields).filter((k) => JSON.stringify(v[k]) !== JSON.stringify(doc.rules[k]));
-  const offDefault = Object.keys(doc.rule_fields).filter((k) => JSON.stringify(doc.rules[k]) !== JSON.stringify(doc.rule_defaults[k]));
-  const shortOn = Array.isArray(v.enabled_setups) && (v.enabled_setups as string[]).includes("range_breakdown_4h");
+/** Strategy rules, one tab per market: which setups are traded (Scanner v4 setups, or the older rules) and each
+ *  market's own rule values. Crypto: trader/live/auto_config.json. NSE / US / F&O: that agent's config file. */
+function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) {
+  const [mkt, setMkt] = useState<MarketKey>("CRYPTO");
+  const src = mkt === "CRYPTO"
+    ? { rules: doc.rules, defaults: doc.rule_defaults, fields: doc.rule_fields }
+    : { rules: doc.markets[mkt]?.rules ?? {}, defaults: doc.markets[mkt]?.defaults ?? {}, fields: doc.markets[mkt]?.fields ?? {} };
+  const acct = ACCOUNT_OF[mkt];
+  const version = String(doc.risk[acct]?.scanner_version ?? "v3");
+  const v4 = version === "v4";
+  const savedV4 = (doc.risk[acct]?.v4_setups as unknown as string[] | undefined) ?? Object.keys(V4_NAMES);
+  const [v, setV] = useState<Record<string, unknown>>(src.rules);
+  const [v4set, setV4set] = useState<string[]>(savedV4);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setV(src.rules); setV4set(savedV4); }, [doc, mkt]);
+
+  const keys = Object.keys(src.fields);
+  const changed = keys.filter((k) => JSON.stringify(v[k]) !== JSON.stringify(src.rules[k]));
+  const v4changed = JSON.stringify([...v4set].sort()) !== JSON.stringify([...savedV4].sort());
+  const offDefault = keys.filter((k) => JSON.stringify(src.rules[k]) !== JSON.stringify(src.defaults[k]));
+  const shortOn = mkt === "CRYPTO" && Array.isArray(v.enabled_setups) && (v.enabled_setups as string[]).includes("range_breakdown_4h")
+    && !(doc.rules.enabled_setups as string[] | undefined)?.includes("range_breakdown_4h");
+  const nChanges = changed.length + (v4changed ? 1 : 0);
+  const tabName = MARKET_TABS.find(([k]) => k === mkt)![1];
 
   async function save() {
     if (shortOn && !window.confirm("Crypto shorts are a paper forward test: the v7 short filters were positive out-of-sample on only 35 trades. Turn them on?")) return;
     setBusy(true);
     try {
-      const changes = Object.fromEntries(changed.map((k) => [k, v[k]]));
-      const r = await postJSON<{ changed: string[] }>(`${OPS}/settings/rules`, { changes });
-      onSaved(r.changed.length ? `Crypto rules saved: ${r.changed.join("; ")}` : "Nothing changed.");
+      const done: string[] = [];
+      if (changed.length) {
+        const changes = Object.fromEntries(changed.map((k) => [k, v[k]]));
+        const r = mkt === "CRYPTO"
+          ? await postJSON<{ changed: string[] }>(`${OPS}/settings/rules`, { changes })
+          : await postJSON<{ changed: string[] }>(`${OPS}/settings/market-rules`, { market: mkt, changes });
+        done.push(...r.changed);
+      }
+      if (v4changed) {
+        const r = await postJSON<{ changed: string[] }>(`${OPS}/settings/risk`, { account: acct, changes: { v4_setups: v4set } });
+        done.push(...r.changed);
+      }
+      onSaved(done.length ? `${tabName} saved: ${done.join("; ")}` : "Nothing changed.");
     } catch (e) { onError(`Not saved: ${errText(e)}`); } finally { setBusy(false); }
   }
   async function reset() {
-    if (!window.confirm("Reset the crypto rules to the backtested defaults?")) return;
+    if (!window.confirm(`Reset the ${tabName} rules to the defaults?`)) return;
     setBusy(true);
-    try { await postJSON(`${OPS}/settings/rules/reset`); onSaved("Crypto rules reset to the backtested defaults."); }
-    catch (e) { onError(errText(e)); } finally { setBusy(false); }
+    try {
+      if (mkt === "CRYPTO") await postJSON(`${OPS}/settings/rules/reset`);
+      else await postJSON(`${OPS}/settings/market-rules/reset`, { market: mkt });
+      onSaved(`${tabName} rules reset to the defaults.`);
+    } catch (e) { onError(errText(e)); } finally { setBusy(false); }
   }
 
   return (
     <fieldset className="formblock">
-      <legend>Crypto strategy rules (v{doc.rules_version ?? "?"})</legend>
-      <p className="small muted" style={{ margin: "0 0 10px" }}>
-        The defaults are what the backtest tested. Changing them means trading an untested rule: run a backtest first.
-        {offDefault.length > 0 && <> <b>Changed from the defaults:</b> {offDefault.join(", ")}.</>}
-      </p>
-      <div className="form-grid">
-        {Object.entries(doc.rule_fields).map(([k, f]) => {
-          const [label, help] = RULE_LABELS[k] ?? [k, ""];
-          const def = doc.rule_defaults[k];
-          const id = `rule-${k}`;
+      <legend>Strategy rules{mkt === "CRYPTO" && doc.rules_version ? ` (crypto v${doc.rules_version})` : ""}</legend>
+      <div className="filters" style={{ marginBottom: 10 }}>
+        <div className="seg-ctl" role="group" aria-label="Market">
+          {MARKET_TABS.map(([k, name]) => (
+            <button key={k} aria-pressed={k === mkt} onClick={() => setMkt(k)}>{name}</button>
+          ))}
+        </div>
+        <span className="small muted">Account {acct} · Scanner <b>{version}</b> (change it in Risk limits)</span>
+      </div>
+      {v4 ? (
+        <div className="notice" style={{ marginBottom: 12 }}>
+          <b>Scanner v4 is on for {acct}:</b> only the v4 setups ticked below are watched and traded. The {RULES_NAME[mkt]} rules
+          are off for this account{mkt === "FNO" ? " (v4 does not trade the indices)" : ""}; their values below are kept for when you switch back.
+        </div>
+      ) : (
+        <p className="small muted" style={{ margin: "0 0 10px" }}>
+          The defaults are what the backtest tested. Changing them means trading an untested rule: run a backtest first.
+        </p>
+      )}
+      {offDefault.length > 0 && <p className="small muted" style={{ margin: "0 0 10px" }}><b>Changed from the defaults:</b> {offDefault.join(", ")}.</p>}
+      {mkt !== "FNO" && (
+        <div className="field" style={{ marginBottom: 12 }}>
+          <span className="field-label">Setups traded: Scanner v4{v4 ? "" : " (used when Scanner version is v4)"}</span>
+          <div className="checks" role="group" aria-label="Scanner v4 setups traded">
+            {Object.entries(V4_NAMES).map(([c, name]) => (
+              <label key={c}>
+                <input type="checkbox" checked={v4set.includes(c)}
+                       onChange={(e) => setV4set(e.target.checked ? [...v4set, c] : v4set.filter((x) => x !== c))} />
+                {name}
+              </label>
+            ))}
+          </div>
+          <span className="field-help">
+            Your 7 Nov final workflow. Secondaries only come after that chart&apos;s primary closed. Unticked: found and logged, not traded.
+            {mkt === "NSE" ? " Shared with the INDIA account (NSE + F&O)." : ""}
+          </span>
+        </div>
+      )}
+      <div className={`form-grid${v4 ? " dimmed" : ""}`}>
+        {keys.map((k) => {
+          const f = src.fields[k];
+          const [label, help] = RULE_LABELS[`${mkt}.${k}`] ?? RULE_LABELS[k] ?? [k, ""];
+          const def = src.defaults[k];
+          const id = `rule-${mkt}-${k}`;
           let input;
           if (f.type === "bool") {
             input = (
@@ -175,6 +285,8 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
                 {f.choices!.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             );
+          } else if (f.type === "time") {
+            input = <input id={id} type="time" value={String(v[k] ?? "")} onChange={(e) => setV({ ...v, [k]: e.target.value })} />;
           } else if (f.type === "setups") {
             const cur = (v[k] as string[]) ?? [];
             input = (
@@ -190,13 +302,14 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
             );
           } else {
             input = (
-              <input id={id} type="number" inputMode="decimal" step="any" min={f.min} max={f.max} value={String(v[k] ?? "")}
+              <input id={id} type="number" inputMode="decimal" step={f.type === "int" ? 1 : "any"} min={f.min} max={f.max} value={String(v[k] ?? "")}
                      onChange={(e) => setV({ ...v, [k]: e.target.value === "" ? "" : Number(e.target.value) })} />
             );
           }
+          const lbl = k === "enabled_setups" ? (v4 ? "Setups traded: older rules (off under Scanner v4)" : "Setups traded: older rules") : label;
           return (
             <div key={k} className="field">
-              <label htmlFor={id} className="field-label">{label}</label>
+              <label htmlFor={id} className="field-label">{lbl}</label>
               {input}
               <span className="field-help">{help} Default: {Array.isArray(def) ? def.map((x) => SETUP_NAMES[x] ?? x).join(", ") : String(def)}.</span>
             </div>
@@ -205,11 +318,11 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
       </div>
       {shortOn && <div className="notice bad" style={{ marginTop: 10 }}>Crypto shorts are selected. The old short rule lost money; the v7 short filters (downtrend, tight range, trailing exit) were positive out-of-sample on 35 trades only: treat it as a paper test.</div>}
       <div className="actions">
-        <button className="btn primary" onClick={save} disabled={busy || changed.length === 0}>
-          {changed.length ? `Save ${changed.length} change${changed.length > 1 ? "s" : ""}` : "No changes"}
+        <button className="btn primary" onClick={save} disabled={busy || nChanges === 0}>
+          {nChanges ? `Save ${nChanges} change${nChanges > 1 ? "s" : ""}` : "No changes"}
         </button>
-        <button className="btn" onClick={() => setV(doc.rules)} disabled={busy || changed.length === 0}>Undo</button>
-        <button className="btn" onClick={reset} disabled={busy || offDefault.length === 0}>Reset to backtested defaults</button>
+        <button className="btn" onClick={() => { setV(src.rules); setV4set(savedV4); }} disabled={busy || nChanges === 0}>Undo</button>
+        <button className="btn" onClick={reset} disabled={busy || offDefault.length === 0}>Reset to defaults</button>
       </div>
     </fieldset>
   );
@@ -222,7 +335,7 @@ function RiskForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) {
   const [busy, setBusy] = useState(false);
   useEffect(() => setV(doc.risk[acct] ?? {}), [doc.risk, acct]);
 
-  const fields = Object.entries(doc.risk_fields).filter(([, f]) => !f.accounts || f.accounts.includes(acct));
+  const fields = Object.entries(doc.risk_fields).filter(([k, f]) => (!f.accounts || f.accounts.includes(acct)) && f.type !== "setups" && k in (doc.risk[acct] ?? {}));
   const changed = fields.map(([k]) => k).filter((k) => String(v[k]) !== String(doc.risk[acct]?.[k]));
   const cur = currencyOf(acct);
 
