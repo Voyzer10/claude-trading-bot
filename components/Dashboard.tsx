@@ -11,7 +11,7 @@ import Backtest from "@/components/Backtest";
 import Alerts from "@/components/Alerts";
 import Agents from "@/components/Agents";
 import SymbolIcon from "@/components/SymbolIcon";
-import Zerodha from "@/components/Zerodha";
+import Zerodha, { ZerodhaBanner } from "@/components/Zerodha";
 import { INDIA, useLiveTicks, type LiveTicks } from "@/lib/live";
 import { errText } from "@/lib/api";
 
@@ -57,76 +57,219 @@ export default function Dashboard() {
   const nowSec = (data?.now ?? Math.floor(Date.now() / 1000)) + tick * 0; // re-render on tick
   const ageSec = data?.received ? Math.floor(Date.now() / 1000) - data.received : null;
 
-  return (
-    <div className="wrap">
-      <header className="topbar">
-        <div className="titleblock">
-          <h1>Trader Bot Dashboard</h1>
-          <div className="muted small">Testing phase: paper trading (no broker connected yet) · times in IST</div>
-        </div>
-        <div className="topbar-cta topbar-actions">
-          <a className="btn" href="/api/py/ops/download/all.zip">Download all data</a>
-          <a className="btn primary" href="#backtest">Run a backtest</a>
-        </div>
-      </header>
-      <nav className="nav" aria-label="Sections">
-          <a href="#performance">Performance</a>
-          <a href="#control">Control</a>
-          <a href="#runner">Runner</a>
-          <a href="#agents">Agents</a>
-          <a href="#ledger">Positions</a>
-          <a href="#coins">Coins</a>
-          <a href="#reasons">Skip reasons</a>
-          <a href="#decisions">Decisions</a>
-          <a href="#logs">Logs</a>
-          <a href="#settings">Settings</a>
-          <a href="#operations">Operations</a>
-          <a href="#backtest">Backtest</a>
-          <a href="#alerts">Alerts</a>
-      </nav>
+  const nav = useHashNav();
+  const runState = !snap ? { label: "Loading", cls: "" } : ageSec !== null && ageSec > STALE_MIN * 60
+    ? { label: "No data", cls: "warn" } : { label: "Running", cls: "good" };
 
-      {error && (
-        <div className="notice bad">
-          Could not reach the dashboard API ({error}). Retrying every {POLL_MS / 1000}s.
+  return (
+    <div className="app">
+      <header className="appbar">
+        <div className="titleblock">
+          <h1>Trader Bot</h1>
+          <div className="muted small">Paper trading · times in IST</div>
         </div>
-      )}
-      {!snap && !error && data && <SetupHelp />}
-      {!data && !error && <div className="notice">Loading…</div>}
-      {data && <Performance refreshKey={refreshKey} />}
-      {snap && (
-        <>
-          <ControlPanel />
-          <Zerodha live={live} />
-          <RunnerSection snap={snap} ageSec={ageSec} />
-          <Agents refreshKey={refreshKey} />
-          <MarketsStrip snap={snap} />
-          <LedgerSection snap={snap} onChange={changed} live={live} />
-          <CoinsSection snap={snap} />
-          <div className="grid-2">
-            <ReasonsSection snap={snap} />
-            <RulesSection snap={snap} />
+        <span className={`runpill ${runState.cls}`} role="status"><span className="dot" aria-hidden="true" />{runState.label}</span>
+        <ThemeToggle />
+      </header>
+      <TabBar nav={nav} />
+
+      <main className="wrap">
+        {error && (
+          <div className="notice bad">
+            Could not reach the dashboard API ({error}). Retrying every {POLL_MS / 1000}s.
           </div>
-          <DecisionsSection decisions={snap.decisions} />
-          <LogsSection snap={snap} />
-        </>
-      )}
-      {data && (
-        <>
-          <Settings />
-          <Operations onChange={changed} />
-          <Backtest />
-          <Alerts />
-        </>
-      )}
-      {snap && (
-        <>
-          <footer className="muted small">
-            Snapshot built {timeIST(snap.generated_at, true)} · received {ageSec !== null ? ago(ageSec) : "—"} · page
-            refreshes every {POLL_MS / 1000}s · server time {timeIST(new Date(nowSec * 1000).toISOString())}
-          </footer>
-        </>
-      )}
+        )}
+        {!snap && !error && data && <SetupHelp />}
+        {!data && !error && <div className="notice">Loading…</div>}
+
+        {/* Home: what needs attention, P&L against the goal, open trades */}
+        <div className="pane" hidden={nav.tab !== "home"}>
+          <ZerodhaBanner />
+          {data && <Performance refreshKey={refreshKey} />}
+          {snap && <LedgerSection snap={snap} onChange={changed} live={live} part="open" />}
+        </div>
+
+        {/* Bot: control, the agents, the runner */}
+        <div className="pane" hidden={nav.tab !== "bot"}>
+          <Seg value={nav.sub.bot} onChange={(v) => nav.go("bot", v)} items={[["control", "Control"], ["agents", "Agents"], ["runner", "Runner"]]} label="Bot" />
+          <div className="pane" hidden={nav.sub.bot !== "control"}>{snap && <ControlPanel />}</div>
+          <div className="pane" hidden={nav.sub.bot !== "agents"}>{snap && <Agents refreshKey={refreshKey} />}</div>
+          <div className="pane" hidden={nav.sub.bot !== "runner"}>
+            {snap && <RunnerSection snap={snap} ageSec={ageSec} />}
+            {data && <Operations onChange={changed} part="runner" />}
+          </div>
+        </div>
+
+        {/* Trades: balances, closed trades, every decision, skip reasons */}
+        <div className="pane" hidden={nav.tab !== "trades"}>
+          {snap && <LedgerSection snap={snap} onChange={changed} live={live} part="accounts" />}
+          <Seg value={nav.sub.trades} onChange={(v) => nav.go("trades", v)} items={[["closed", "Closed"], ["decisions", "Decisions"], ["skipped", "Skipped"]]} label="Trades" />
+          <div className="pane" hidden={nav.sub.trades !== "closed"}>{snap && <LedgerSection snap={snap} onChange={changed} live={live} part="closed" />}</div>
+          <div className="pane" hidden={nav.sub.trades !== "decisions"}>{snap && <DecisionsSection decisions={snap.decisions} />}</div>
+          <div className="pane" hidden={nav.sub.trades !== "skipped"}>
+            {snap && <ReasonsSection snap={snap} />}
+            {snap && <RulesSection snap={snap} />}
+          </div>
+        </div>
+
+        {/* Markets: Zerodha live data, the markets, the coins */}
+        <div className="pane" hidden={nav.tab !== "markets"}>
+          {snap && <Zerodha live={live} />}
+          {snap && <MarketsStrip snap={snap} />}
+          {snap && <CoinsSection snap={snap} />}
+        </div>
+
+        {/* More: settings, backtest, phone alerts, the runner log, data and downloads */}
+        <div className="pane" hidden={nav.tab !== "more"}>
+          {nav.sub.more === "" ? (
+            <MoreMenu go={(v) => nav.go("more", v)} />
+          ) : (
+            <button className="btn back" onClick={() => nav.go("more", "")}>‹ {MORE.find(([k]) => k === nav.sub.more)?.[1] ?? "More"}</button>
+          )}
+          <div className="pane" hidden={nav.sub.more !== "settings"}>{data && <Settings />}</div>
+          <div className="pane" hidden={nav.sub.more !== "backtest"}>{data && <Backtest />}</div>
+          <div className="pane" hidden={nav.sub.more !== "alerts"}>{data && <Alerts />}</div>
+          <div className="pane" hidden={nav.sub.more !== "log"}>{snap && <LogsSection snap={snap} />}</div>
+          <div className="pane" hidden={nav.sub.more !== "data"}>{data && <Operations onChange={changed} part="data" />}</div>
+          {snap && nav.sub.more === "" && (
+            <footer className="muted small">
+              Snapshot built {timeIST(snap.generated_at, true)} · received {ageSec !== null ? ago(ageSec) : "—"} · page
+              refreshes every {POLL_MS / 1000}s · server time {timeIST(new Date(nowSec * 1000).toISOString())}
+            </footer>
+          )}
+        </div>
+      </main>
     </div>
+  );
+}
+
+// ------------------------------------------------------------------ app shell: tabs, sub-tabs, theme
+
+type TabKey = "home" | "bot" | "trades" | "markets" | "more";
+type SubState = { bot: string; trades: string; more: string };
+const TABS: [TabKey, string][] = [["home", "Home"], ["bot", "Bot"], ["trades", "Trades"], ["markets", "Markets"], ["more", "More"]];
+const MORE: [string, string, string][] = [
+  ["settings", "Settings", "Strategy rules and risk limits"],
+  ["backtest", "Backtest", "Test a rule before changing it live"],
+  ["alerts", "Phone alerts", "Telegram messages for trades and problems"],
+  ["log", "Runner log", "The runner's latest lines, newest first"],
+  ["data", "Data and downloads", "Trades, ledger, decisions, data check"],
+];
+// the old one-page anchors (#control, #logs ...) and the Zerodha login redirect still land in the right place
+const LEGACY: Record<string, [TabKey, string?]> = {
+  performance: ["home"], ledger: ["home"], positions: ["home"], control: ["bot", "control"], runner: ["bot", "runner"],
+  agents: ["bot", "agents"], operations: ["more", "data"], coins: ["markets"], zerodha: ["markets"], reasons: ["trades", "skipped"],
+  decisions: ["trades", "decisions"], logs: ["more", "log"], settings: ["more", "settings"], backtest: ["more", "backtest"],
+  alerts: ["more", "alerts"],
+};
+const SUB_DEFAULT: SubState = { bot: "control", trades: "closed", more: "" };
+
+function parseHash(h: string): { tab: TabKey; sub: Partial<SubState> } {
+  const [a, b] = h.replace(/^#/, "").split("/");
+  if ((TABS as [string, string][]).some(([k]) => k === a)) {
+    const tab = a as TabKey;
+    return { tab, sub: tab === "home" || tab === "markets" ? {} : { [tab]: b ?? (tab === "more" ? "" : SUB_DEFAULT[tab as keyof SubState]) } };
+  }
+  const l = LEGACY[a];
+  if (l) return { tab: l[0], sub: l[1] !== undefined ? { [l[0]]: l[1] } : {} };
+  return { tab: "home", sub: {} };
+}
+
+function useHashNav() {
+  const [tab, setTab] = useState<TabKey>("home");
+  const [sub, setSub] = useState<SubState>(SUB_DEFAULT);
+  useEffect(() => {
+    const apply = () => {
+      const p = parseHash(window.location.hash);
+      setTab(p.tab);
+      setSub((s) => ({ ...s, ...p.sub }));
+    };
+    apply();
+    window.addEventListener("hashchange", apply);
+    return () => window.removeEventListener("hashchange", apply);
+  }, []);
+  const go = (t: TabKey, s?: string) => {
+    const next = s !== undefined ? { ...sub, [t]: s } : sub;
+    const part = t === "home" || t === "markets" ? "" : next[t as keyof SubState];
+    const h = "#" + t + (part ? "/" + part : "");
+    if (window.location.hash !== h) window.history.pushState(null, "", window.location.pathname + window.location.search + h);
+    setTab(t);
+    setSub(next);
+    window.scrollTo(0, 0);
+  };
+  return { tab, sub, go };
+}
+
+function TabBar({ nav }: { nav: ReturnType<typeof useHashNav> }) {
+  return (
+    <nav className="tabbar" aria-label="Sections">
+      {TABS.map(([k, label]) => (
+        <button key={k} aria-current={nav.tab === k ? "page" : undefined} onClick={() => nav.go(k)}>
+          <TabIcon k={k} />
+          <span>{label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function TabIcon({ k }: { k: TabKey }) {
+  const d: Record<TabKey, string> = {
+    home: "M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z",
+    bot: "M12 3v3M7 8h10a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-6a3 3 0 0 1 3-3zM9 13h.01M15 13h.01M9 17h6",
+    trades: "M4 19V9M10 19V5M16 19v-7M22 19H2",
+    markets: "M3 17l5-5 4 4 8-8M15 8h5v5",
+    more: "M5 12h.01M12 12h.01M19 12h.01",
+  };
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={d[k]} />
+    </svg>
+  );
+}
+
+function Seg({ value, onChange, items, label }: { value: string; onChange: (v: string) => void; items: [string, string][]; label: string }) {
+  return (
+    <div className="seg" role="tablist" aria-label={label}>
+      {items.map(([k, name]) => (
+        <button key={k} role="tab" aria-selected={value === k} onClick={() => onChange(k)}>{name}</button>
+      ))}
+    </div>
+  );
+}
+
+function MoreMenu({ go }: { go: (v: string) => void }) {
+  return (
+    <section className="panel menu" aria-label="More">
+      {MORE.map(([k, name, sub]) => (
+        <button key={k} className="menu-row" onClick={() => go(k)}>
+          <span><b>{name}</b><span className="muted small">{sub}</span></span>
+          <span aria-hidden="true">›</span>
+        </button>
+      ))}
+    </section>
+  );
+}
+
+function ThemeToggle() {
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  useEffect(() => {
+    let t: string | null = null;
+    try { t = localStorage.getItem("theme"); } catch { /* storage blocked */ }
+    const v = t === "light" ? "light" : "dark";
+    setTheme(v);
+    document.documentElement.setAttribute("data-theme", v);
+  }, []);
+  const flip = () => {
+    const v = theme === "dark" ? "light" : "dark";
+    setTheme(v);
+    document.documentElement.setAttribute("data-theme", v);
+    try { localStorage.setItem("theme", v); } catch { /* storage blocked */ }
+  };
+  return (
+    <button className="iconbtn" onClick={flip} aria-label={`Switch to the ${theme === "dark" ? "light" : "dark"} theme`}>
+      {theme === "dark" ? "☀" : "☾"}
+    </button>
   );
 }
 
@@ -638,6 +781,46 @@ function setupOf(p: Position): { name: string; liq?: string; why?: string; scann
   return { name: n || "manual", scanner: v ? v[1].toLowerCase() : undefined };
 }
 
+/** Phones: closed trades as compact rows (symbol, setup · time, P&L, R); a tap opens the details. */
+function ClosedList({ trades, acctOf, empty }: { trades: Position[]; acctOf: (m: string) => string; empty: string }) {
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  return (
+    <div className="closed-list narrow-only">
+      {trades.length === 0 && <p className="muted small" style={{ padding: "12px 16px", margin: 0 }}>{empty}</p>}
+      {trades.map((c, i) => {
+        const id = `${c.key}-${c.exit_time ?? i}`;
+        const s = setupOf(c);
+        const isOpen = !!open[id];
+        const tone = (c.pnl ?? 0) > 0 ? "pos" : (c.pnl ?? 0) < 0 ? "neg" : "";
+        return (
+          <div key={id} className="list-row-wrap">
+            <button className="list-row" aria-expanded={isOpen} onClick={() => setOpen({ ...open, [id]: !isOpen })}>
+              <span className="lr-main">
+                <b className="sym"><SymbolIcon id={c.key} />{c.symbol}</b>
+                <span className="small muted">{s.name}{s.scanner && s.scanner !== "rules" ? ` (${s.scanner})` : ""} · {timeIST(c.exit_time, true)}</span>
+              </span>
+              <span className="lr-side">
+                <b className={`num ${tone}`}>{money(c.pnl, currencyOf(acctOf(c.market)))}</b>
+                <span className={`small num ${tone}`}>{c.r !== undefined ? `${c.r > 0 ? "+" : ""}${c.r}R` : "—"}</span>
+              </span>
+            </button>
+            {isOpen && (
+              <dl className="kv lr-detail">
+                <dt>Instrument</dt><dd className="num">{c.key}</dd>
+                <dt>Entry → exit</dt><dd className="num">{price(c.entry)} → {price(c.exit)}</dd>
+                {c.mfe_r !== undefined && (<><dt>Best / worst</dt><dd className="num">+{c.mfe_r.toFixed(1)} / {(c.mae_r ?? 0).toFixed(1)}R</dd></>)}
+                {s.liq && (<><dt>Liquidity</dt><dd>{s.liq}</dd></>)}
+                {s.why && (<><dt>Why taken</dt><dd>{s.why}</dd></>)}
+                <dt>Exit</dt><dd>{c.reason}</dd>
+              </dl>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function SetupCell({ p }: { p: Position }) {
   const s = setupOf(p);
   return (
@@ -661,7 +844,10 @@ function withLive(open: Position[], live: LiveTicks | null): (Position & { live?
   });
 }
 
-function LedgerSection({ snap, onChange, live }: { snap: Snapshot; onChange: () => void; live: LiveTicks | null }) {
+/** The paper ledger. part: "accounts" (balances), "open" (Trade Manager + open positions), "closed" (closed trades
+ *  with the market filter) or "all". The tabbed layout shows each part where it belongs; nothing is dropped. */
+function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot; onChange: () => void; live: LiveTicks | null; part?: "all" | "accounts" | "open" | "closed" }) {
+  const show = (x: string) => part === "all" || part === x;
   const { accounts, closed } = snap.ledger;
   const open = withLive(snap.ledger.open, live);
   const [mkt, setMkt] = useState("all");
@@ -681,17 +867,22 @@ function LedgerSection({ snap, onChange, live }: { snap: Snapshot; onChange: () 
     try { await send(key ? "close" : "close_all", key); } catch (e) { setErr(errText(e)); }
   }
   const acctOf = (m: string) => (m === "NSE" || m === "BSE" || m === "NFO" ? "INDIA" : m);
+  const title = part === "open" ? "Open trades" : part === "closed" ? "Closed trades" : part === "accounts" ? "Paper accounts" : "Paper ledger";
   return (
-    <section id="ledger" className="panel" aria-labelledby="led-h">
+    <section id={part === "all" ? "ledger" : `ledger-${part}`} className={`panel ledger-${part}`} aria-labelledby={`led-h-${part}`}>
+      {part !== "closed" && part !== "accounts" && (
       <div className="panel-head">
         <div>
-          <h2 id="led-h">Paper ledger</h2>
+          <h2 id={`led-h-${part}`}>{title}</h2>
           <p>
             {open.length} open · {closed.length} closed. Judge the strategy after 30+ trades, not one day.
           </p>
         </div>
       </div>
-      <div className="accounts" style={{ marginBottom: 14 }}>
+      )}
+      {(part === "closed" || part === "accounts") && <h2 id={`led-h-${part}`} className="sr-only">{title}</h2>}
+      {show("accounts") && (
+      <div className="accounts" style={{ marginBottom: part === "accounts" ? 0 : 14 }}>
         {Object.entries(accounts).map(([name, a]) => {
           const d = a.cash - a.start_capital;
           const cur = currencyOf(name);
@@ -706,8 +897,9 @@ function LedgerSection({ snap, onChange, live }: { snap: Snapshot; onChange: () 
           );
         })}
       </div>
-      <TradeManagerStrip open={open} closed={closed} />
-      {open.length > 0 && (
+      )}
+      {show("open") && <TradeManagerStrip open={open} closed={closed} />}
+      {show("open") && open.length > 0 && (
         <>
           <div className="list-head">
             <h3 className="subtitle">Open positions ({open.length})</h3>
@@ -767,6 +959,7 @@ function LedgerSection({ snap, onChange, live }: { snap: Snapshot; onChange: () 
           </div>
         </>
       )}
+      {show("closed") && (<>
       <div className="list-head">
         <h3 className="subtitle">Closed trades ({mkt === "all" ? closed.length : `${shown.length} of ${closed.length}`})</h3>
         <div className="seg-ctl" role="group" aria-label="Filter closed trades by market">
@@ -787,7 +980,8 @@ function LedgerSection({ snap, onChange, live }: { snap: Snapshot; onChange: () 
           {rsum > 0 ? "+" : ""}{rsum.toFixed(1)}R · newest first
         </p>
       )}
-      <div className="scroll">
+      <ClosedList trades={shown.slice().reverse()} acctOf={acctOf} empty={closed.length ? "No closed trades in this market." : "No closed paper trades yet."} />
+      <div className="scroll wide-only">
         <table className="rtable">
           <thead>
             <tr><th>Closed</th><th>Instrument</th><th>Setup · liquidity</th><th>Entry → exit</th><th>P&amp;L</th><th>R</th><th>Exit</th></tr>
@@ -813,6 +1007,7 @@ function LedgerSection({ snap, onChange, live }: { snap: Snapshot; onChange: () 
           </tbody>
         </table>
       </div>
+      </>)}
     </section>
   );
 }

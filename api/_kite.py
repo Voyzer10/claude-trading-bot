@@ -54,7 +54,7 @@ def kite_login():
     try:
         return RedirectResponse(K.login_url(), status_code=302)
     except K.KiteError as e:
-        return RedirectResponse("/?kite=" + urllib.parse.quote(str(e)) + "#control", status_code=302)
+        return RedirectResponse("/?kite=" + urllib.parse.quote(str(e)) + "#zerodha", status_code=302)
 
 
 @router.get("/api/py/kite/callback")
@@ -67,7 +67,7 @@ def kite_callback(request_token: str = "", status: str = ""):
             msg = "connected"
         except K.KiteError as e:
             msg = str(e)
-    return RedirectResponse("/?kite=" + urllib.parse.quote(msg) + "#control", status_code=302)
+    return RedirectResponse("/?kite=" + urllib.parse.quote(msg) + "#zerodha", status_code=302)
 
 
 @router.post("/api/py/kite/logout")

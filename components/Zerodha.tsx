@@ -145,3 +145,27 @@ export default function Zerodha({ live }: { live: LiveTicks | null }) {
     </section>
   );
 }
+
+/** Home: "needs attention" while Zerodha is set up but not connected today (Kite logins expire every morning). */
+export function ZerodhaBanner() {
+  const [st, setSt] = useState<Status | null>(null);
+  useEffect(() => {
+    const load = () => getJSON<Status>("/api/py/kite/status").then(setSt).catch(() => setSt(null));
+    load();
+    const id = setInterval(load, 60000);
+    return () => clearInterval(id);
+  }, []);
+  if (!st || !st.configured || st.connected) return null;
+  return (
+    <section className="panel attention" aria-labelledby="kite-attn">
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="eyebrow">Needs attention</div>
+        <h2 id="kite-attn">Zerodha not connected today</h2>
+        <p className="small muted" style={{ margin: "2px 0 0" }}>
+          Kite logins expire every morning. Indian prices come from Yahoo and F&amp;O from the model until you connect.
+        </p>
+      </div>
+      <a className="btn primary" href="/api/py/kite/login">Connect</a>
+    </section>
+  );
+}

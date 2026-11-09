@@ -25,6 +25,8 @@ const tone = (x: number) => (x > 0 ? "pos" : x < 0 ? "neg" : "");
 export default function Performance({ refreshKey }: { refreshKey: number }) {
   const [p, setP] = useState<Perf | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [period, setPeriod] = useState("today");
+  const [openAcc, setOpenAcc] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     getJSON<Perf>(`${OPS}/performance`).then((x) => { setP(x); setErr(null); }).catch((e) => setErr(errText(e)));
@@ -35,74 +37,72 @@ export default function Performance({ refreshKey }: { refreshKey: number }) {
   const goal = p.prefs.daily_goal_inr;
   const monthPct = p.month.goal_inr > 0 ? Math.max(0, Math.min(100, (p.month.pnl_inr / p.month.goal_inr) * 100)) : 0;
 
-  return (
-    <section id="performance" className="panel" aria-labelledby="perf-h">
-      <div className="panel-head">
-        <div>
-          <h2 id="perf-h">Performance vs goal</h2>
-          <p>
-            All paper accounts in rupees (US$ at ₹{p.prefs.usd_inr}). Goal ₹{goal}/day. {p.total_trades} closed trades,{" "}
-            {p.open_positions} open. Judge after 30+ trades.
-          </p>
-        </div>
-      </div>
-      <div className="markets">
-        <div className={`stat stripe ${p.inr.today >= goal ? "s-good" : p.inr.today < 0 ? "s-bad" : ""}`}>
-          <span className="label">Today</span>
-          <span className={`value ${tone(p.inr.today)}`}>{inr(p.inr.today)}</span>
-          <span className="sub">goal {inr(goal)}</span>
-        </div>
-        <div className="stat">
-          <span className="label">This month</span>
-          <span className={`value ${tone(p.month.pnl_inr)}`}>{inr(p.month.pnl_inr)}</span>
-          <span className="sub">
-            goal so far {inr(p.month.goal_inr)} · {p.month.green_days} green / {p.month.red_days} red days
-          </span>
-          <div className="track" style={{ marginTop: 4 }} aria-hidden="true">
-            <div className="fill" style={{ width: `${monthPct}%` }} />
-          </div>
-        </div>
-        <div className="stat">
-          <span className="label">Last 7 days</span>
-          <span className={`value ${tone(p.inr.d7)}`}>{inr(p.inr.d7)}</span>
-          <span className="sub">30 days {inr(p.inr.d30)}</span>
-        </div>
-        <div className="stat">
-          <span className="label">All time</span>
-          <span className={`value ${tone(p.inr.all)}`}>{inr(p.inr.all)}</span>
-          <span className="sub">since the paper accounts started</span>
-        </div>
-      </div>
+  const periods: [string, string][] = [["today", "Today"], ["d7", "7 days"], ["month", "Month"], ["all", "All time"]];
+  const hero: Record<string, { value: number; sub: string; bar: number | null }> = {
+    today: { value: p.inr.today, sub: `goal ${inr(goal)}`, bar: goal > 0 ? Math.max(0, Math.min(100, (p.inr.today / goal) * 100)) : null },
+    d7: { value: p.inr.d7, sub: `30 days ${inr(p.inr.d30)}`, bar: null },
+    month: { value: p.month.pnl_inr, sub: `goal so far ${inr(p.month.goal_inr)} · ${p.month.green_days} green / ${p.month.red_days} red days`, bar: monthPct },
+    all: { value: p.inr.all, sub: "since the paper accounts started", bar: null },
+  };
+  const h = hero[period];
 
-      {p.daily.length > 0 && <DailyBars days={p.daily} goal={goal} />}
+  return (
+    <>
+      <section id="performance" className="panel hero" aria-labelledby="perf-h">
+        <div className="seg" role="tablist" aria-label="Period">
+          {periods.map(([k, label]) => (
+            <button key={k} role="tab" aria-selected={period === k} onClick={() => setPeriod(k)}>{label}</button>
+          ))}
+        </div>
+        <h2 id="perf-h" className="hero-label">Profit and loss · all paper accounts in ₹</h2>
+        <div className={`hero-value num ${tone(h.value)}`}>{inr(h.value)}</div>
+        <div className="small muted">{h.sub}</div>
+        {h.bar !== null && (
+          <div className="track hero-track" aria-hidden="true"><div className="fill" style={{ width: `${h.bar}%` }} /></div>
+        )}
+        {p.daily.length > 0 && <DailyBars days={p.daily} goal={goal} />}
+        <p className="small muted" style={{ margin: "10px 0 0" }}>
+          US$ at ₹{p.prefs.usd_inr}. Goal ₹{goal}/day. {p.total_trades} closed trades, {p.open_positions} open. Judge after 30+ trades.
+        </p>
+      </section>
 
       {Object.keys(p.accounts).length > 0 && (
-        <div className="tablewrap" style={{ marginTop: 14 }}>
-          <table className="rtable">
-            <thead>
-              <tr><th>Account</th><th>Trades</th><th>Win rate</th><th>Avg R</th><th>Today</th><th>7 days</th><th>All</th><th>Best / worst</th></tr>
-            </thead>
-            <tbody>
-              {Object.entries(p.accounts).map(([name, a]) => {
-                const cur = currencyOf(name);
-                return (
-                  <tr key={name}>
-                    <td data-label="Account">{name}</td>
-                    <td data-label="Trades" className="num">{a.trades}</td>
-                    <td data-label="Win rate" className="num">{a.win_rate !== null ? `${a.win_rate}%` : "—"}</td>
-                    <td data-label="Avg R" className={`num ${tone(a.avg_r ?? 0)}`}>{a.avg_r !== null ? `${a.avg_r > 0 ? "+" : ""}${a.avg_r}R` : "—"}</td>
-                    <td data-label="Today" className={`num ${tone(a.today)}`}>{money(a.today, cur)}</td>
-                    <td data-label="7 days" className={`num ${tone(a.d7)}`}>{money(a.d7, cur)}</td>
-                    <td data-label="All" className={`num ${tone(a.pnl)}`}>{money(a.pnl, cur)}</td>
-                    <td data-label="Best / worst" className="num">{money(a.best, cur)} / {money(a.worst, cur)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <section className="panel list-card" aria-labelledby="acc-h">
+          <h2 id="acc-h" className="list-title">Accounts</h2>
+          {Object.entries(p.accounts).map(([name, a]) => {
+            const cur = currencyOf(name);
+            const isOpen = !!openAcc[name];
+            return (
+              <div key={name} className="list-row-wrap">
+                <button className="list-row" aria-expanded={isOpen} onClick={() => setOpenAcc({ ...openAcc, [name]: !isOpen })}>
+                  <span className="lr-main">
+                    <b>{name}</b>
+                    <span className="small muted">
+                      {a.trades} trades · {a.win_rate !== null ? `${a.win_rate}% win` : "no win rate yet"} ·{" "}
+                      <span className={tone(a.avg_r ?? 0)}>{a.avg_r !== null ? `${a.avg_r > 0 ? "+" : ""}${a.avg_r}R` : "—"}</span>
+                    </span>
+                  </span>
+                  <span className="lr-side">
+                    <b className={`num ${tone(a.pnl)}`}>{money(a.pnl, cur)}</b>
+                    <span className="small muted">all time</span>
+                  </span>
+                  <span className="chev" aria-hidden="true">{isOpen ? "▾" : "▸"}</span>
+                </button>
+                {isOpen && (
+                  <dl className="kv lr-detail">
+                    <dt>Today</dt><dd className={`num ${tone(a.today)}`}>{money(a.today, cur)}</dd>
+                    <dt>7 days</dt><dd className={`num ${tone(a.d7)}`}>{money(a.d7, cur)}</dd>
+                    <dt>30 days</dt><dd className={`num ${tone(a.d30)}`}>{money(a.d30, cur)}</dd>
+                    <dt>All</dt><dd className={`num ${tone(a.pnl)}`}>{money(a.pnl, cur)}</dd>
+                    <dt>Best / worst</dt><dd className="num">{money(a.best, cur)} / {money(a.worst, cur)}</dd>
+                  </dl>
+                )}
+              </div>
+            );
+          })}
+        </section>
       )}
-    </section>
+    </>
   );
 }
 
@@ -113,7 +113,7 @@ function DailyBars({ days, goal }: { days: Perf["daily"]; goal: number }) {
   return (
     <figure style={{ margin: "14px 0 0" }}>
       <figcaption className="small muted" style={{ marginBottom: 6 }}>
-        Daily P&amp;L, last {last.length} trading days (dashed line = goal)
+        Daily P&amp;L · last {last.length} trading days (dashed line = goal)
       </figcaption>
       <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="daybars" role="img"
            aria-label={`Daily P&L for ${last.length} days`}>
