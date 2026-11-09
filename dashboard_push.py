@@ -254,8 +254,10 @@ def build(state=None):
         "markets": {
             "CRYPTO": {"mode": "auto paper" if "range_breakout_4h" in (rules["crypto"] or {}).get("enabled_setups", ["range_breakout_4h"]) else "off",
                        "shorts": "range_breakdown_4h" in (rules["crypto"] or {}).get("enabled_setups", [])},
-            "US": {"mode": "auto paper", "status": us.get("status"), "as_of": us.get("as_of"), "hits": us.get("hits")},
-            "NSE": {"mode": "auto paper" if (rules["nse"] or {}).get("auto_buy") else "log only",
+            "US": {"mode": "auto paper", "status": us.get("status"), "as_of": us.get("as_of"), "hits": us.get("hits"),
+                   "watch": _us_watch()},
+            "NSE": {"watch": _nse_watch(nse),
+                    "mode": "auto paper" if (rules["nse"] or {}).get("auto_buy") else "log only",
                     "regime": nse.get("regime"), "orb_as_of": (nse.get("orb") or {}).get("as_of"),
                     "orb_hits": len((nse.get("orb") or {}).get("hits", [])),
                     "universe": (nse.get("orb") or nse.get("daily") or {}).get("universe")},
@@ -273,6 +275,32 @@ def build(state=None):
         "logs": logs,
     }
     return snap
+
+
+HIT_KEYS = ("symbol", "side", "price", "last", "time", "at", "holding", "pct_now", "pct_over", "vol_x", "gap_pct",
+            "range_high", "range_low", "or_high", "or_low")
+
+
+def _nse_watch(nse):
+    """NSE watch list for the dashboard: Nifty 50 prices (from the last ORB scan) and today's opening-range breaks."""
+    orb = nse.get("orb") or {}
+    try:
+        import scan_nse as S
+        syms = list(S.NIFTY50)
+    except Exception:
+        syms = sorted((orb.get("quotes") or {}).keys())
+    return {"symbols": syms, "quotes": orb.get("quotes") or {}, "as_of": orb.get("as_of"),
+            "hits": [{k: h.get(k) for k in HIT_KEYS if h.get(k) is not None} for h in (orb.get("hits") or [])[:60]]}
+
+
+def _us_watch():
+    """US watch list: the scanner's liquid names with their last 5-minute close, and today's opening-range breaks."""
+    doc = _json(os.path.join(LIVE, "us_watch.json"), {}) or {}
+    wl = _json(os.path.join(os.path.dirname(os.path.abspath(__file__)), "us", "trader", "watchlist.json"), {}) or {}
+    hits = wl.get("hits", []) if isinstance(wl, dict) else []
+    return {"symbols": doc.get("symbols") or [], "quotes": doc.get("quotes") or {}, "as_of": doc.get("as_of"),
+            "hits_as_of": wl.get("as_of") if isinstance(wl, dict) else None,
+            "hits": [{k: h.get(k) for k in HIT_KEYS if h.get(k) is not None} for h in hits[:60]]}
 
 
 def _cfg():

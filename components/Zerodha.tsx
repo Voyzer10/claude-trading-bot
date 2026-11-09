@@ -157,9 +157,8 @@ export function ZerodhaBanner() {
   }, []);
   if (!st || !st.configured || st.connected) return null;
   return (
-    <section className="panel attention" aria-labelledby="kite-attn">
+    <section className="panel attention home-full" aria-labelledby="kite-attn" role="status">
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="eyebrow">Needs attention</div>
         <h2 id="kite-attn">Zerodha not connected today</h2>
         <p className="small muted" style={{ margin: "2px 0 0" }}>
           Kite logins expire every morning. Indian prices come from Yahoo and F&amp;O from the model until you connect.

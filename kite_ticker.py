@@ -25,6 +25,11 @@ import kite as K
 LEDGER = os.path.join("trader", "paper", "ledger.json")
 WATCH = os.path.join("trader", "live", "kite_watch.json")
 ALWAYS = [k for k, _ in K.WATCH_INDICES]
+try:   # the NSE watch list on the dashboard (Nifty 50), live every second
+    import scan_nse as _S
+    ALWAYS += ["NSE:" + s for s in _S.NIFTY50]
+except Exception:
+    pass
 MISSING = []   # watched keys Kite did not know (shown on the dashboard, so a wrong index name is visible)
 WS = "wss://ws.kite.trade?api_key=%s&access_token=%s"
 

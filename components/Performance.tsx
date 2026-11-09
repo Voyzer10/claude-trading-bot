@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getJSON, OPS, errText } from "@/lib/api";
 import { currencyOf, money } from "@/lib/format";
+import Icon from "@/components/Icon";
 
 type Acc = {
   trades: number; wins: number; pnl: number; today: number; d7: number; d30: number;
@@ -48,7 +49,7 @@ export default function Performance({ refreshKey }: { refreshKey: number }) {
 
   return (
     <>
-      <section id="performance" className="panel hero" aria-labelledby="perf-h">
+      <section id="performance" className="panel hero home-hero" aria-labelledby="perf-h">
         <div className="seg" role="tablist" aria-label="Period">
           {periods.map(([k, label]) => (
             <button key={k} role="tab" aria-selected={period === k} onClick={() => setPeriod(k)}>{label}</button>
@@ -67,7 +68,7 @@ export default function Performance({ refreshKey }: { refreshKey: number }) {
       </section>
 
       {Object.keys(p.accounts).length > 0 && (
-        <section className="panel list-card" aria-labelledby="acc-h">
+        <section className="panel list-card home-accounts" aria-labelledby="acc-h">
           <h2 id="acc-h" className="list-title">Accounts</h2>
           {Object.entries(p.accounts).map(([name, a]) => {
             const cur = currencyOf(name);
@@ -86,7 +87,7 @@ export default function Performance({ refreshKey }: { refreshKey: number }) {
                     <b className={`num ${tone(a.pnl)}`}>{money(a.pnl, cur)}</b>
                     <span className="small muted">all time</span>
                   </span>
-                  <span className="chev" aria-hidden="true">{isOpen ? "▾" : "▸"}</span>
+                  <span className="chev"><Icon name={isOpen ? "down" : "right"} size={16} /></span>
                 </button>
                 {isOpen && (
                   <dl className="kv lr-detail">

@@ -152,7 +152,10 @@ if __name__ == "__main__":
         check("   the index watch list (Bank Nifty + the CNX sector indices) is streamed: %d of %d resolve"
               % (len(set(w.values()) & ok_keys), len(ok_keys)), ok_keys <= set(w.values()), sorted(w.values()))
         check("   an index Kite does not list (PSE missing from this fake list) is reported, not silent",
-              T.MISSING == ["NSE:NIFTYPSE"], T.MISSING)
+              "NSE:NIFTYPSE" in T.MISSING and "NSE:RELIANCE" not in T.MISSING, T.MISSING[:5])
+        check("   the Nifty 50 stocks are streamed too (the dashboard's NSE watch list)",
+              "NSE:RELIANCE" in T.ALWAYS and sum(1 for k in T.ALWAYS if not k.startswith("NSE:NIFTY")
+                                                 and k != "NSE:BANKNIFTY" and k != "NSE:INDIAVIX") == 50)
 
         # ---- 4. WebSocket packets
         def pk(*ints, fmt=None):
