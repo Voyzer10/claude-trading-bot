@@ -15,6 +15,7 @@ type Status = {
 };
 
 const INDICES: [string, string][] = [["NSE:NIFTY50", "Nifty 50"], ["NSE:BANKNIFTY", "Bank Nifty"], ["NSE:INDIAVIX", "India VIX"]];
+const SECTOR_START = 3; // after Nifty, Bank Nifty and VIX come the sector indices
 
 const fmt = (x: number) => x.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const istTime = (iso: string | null) =>
@@ -95,23 +96,52 @@ export default function Zerodha({ live }: { live: LiveTicks | null }) {
           <span className="chip">orders: blocked</span>
         </div>
       )}
-      {on && (
-        <div className="kite-indices">
-          {INDICES.map(([k, name]) => {
-            const t = live?.ticks[k];
-            const ch = t && t.close ? ((t.ltp - t.close) / t.close) * 100 : null;
-            return (
-              <div key={k} className="stat">
-                <span className="label">{name}</span>
-                <span className="value num" style={{ fontSize: 19 }}>{t ? fmt(t.ltp) : "—"}</span>
-                <span className={`sub ${ch === null ? "" : ch > 0 ? "pos" : ch < 0 ? "neg" : ""}`}>
-                  {ch === null ? (live?.live ? "waiting for a tick" : "market closed or stream off") : `${ch > 0 ? "+" : ""}${ch.toFixed(2)}% today`}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {on && (() => {
+        const list = live?.indices?.length ? live.indices : INDICES;
+        const change = (k: string) => {
+          const t = live?.ticks[k];
+          return { t, ch: t && t.close ? ((t.ltp - t.close) / t.close) * 100 : null };
+        };
+        const cls = (ch: number | null) => (ch === null ? "" : ch > 0 ? "pos" : ch < 0 ? "neg" : "");
+        return (
+          <>
+            <div className="kite-indices">
+              {list.slice(0, SECTOR_START).map(([k, name]) => {
+                const { t, ch } = change(k);
+                return (
+                  <div key={k} className="stat">
+                    <span className="label">{name}</span>
+                    <span className="value num" style={{ fontSize: 19 }}>{t ? fmt(t.ltp) : "—"}</span>
+                    <span className={`sub ${cls(ch)}`}>
+                      {ch === null ? (live?.live ? "waiting for a tick" : "market closed or stream off") : `${ch > 0 ? "+" : ""}${ch.toFixed(2)}% today`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            {list.length > SECTOR_START && (
+              <>
+                <h3 className="subtitle" style={{ margin: "14px 0 6px" }}>Sector indices</h3>
+                <div className="kite-sectors" role="list">
+                  {list.slice(SECTOR_START).map(([k, name]) => {
+                    const { t, ch } = change(k);
+                    return (
+                      <div key={k} className="kite-sector" role="listitem">
+                        <span className="name">{name}</span>
+                        <span className="num">{t ? fmt(t.ltp) : "—"}</span>
+                        <span className={`num ${cls(ch)}`}>{ch === null ? "" : `${ch > 0 ? "+" : ""}${ch.toFixed(2)}%`}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+            {!!live?.missing?.length && (
+              <p className="small muted" style={{ marginTop: 8 }}>Zerodha did not recognise: {live.missing.join(", ")}</p>
+            )}
+          </>
+        );
+      })()}
     </section>
   );
 }

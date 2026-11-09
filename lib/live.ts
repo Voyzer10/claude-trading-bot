@@ -4,7 +4,16 @@ import { useEffect, useState } from "react";
 
 /** One instrument's latest tick from Zerodha (kite_ticker.py -> /api/py/live/ticks). */
 export type Tick = { ltp: number; t?: number; open?: number; high?: number; low?: number; close?: number; volume?: number; oi?: number };
-export type LiveTicks = { age_s: number | null; live: boolean; connected: boolean; ticks: Record<string, Tick> };
+export type LiveTicks = {
+  age_s: number | null;
+  live: boolean;
+  connected: boolean;
+  ticks: Record<string, Tick>;
+  /** the index watch list [paper key, label] (kite.WATCH_INDICES) */
+  indices?: [string, string][];
+  /** watched keys Zerodha did not recognise */
+  missing?: string[];
+};
 
 /** Polls the Indian market ticks every second while the page is visible. Returns null until the first answer,
  *  or when the server has no Zerodha endpoints (cloud mode). */

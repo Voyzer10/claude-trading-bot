@@ -5,7 +5,8 @@ for the dashboard (prices changing every second) and paper.py (stops / targets o
 
 Read only: the WebSocket only streams prices. Nothing here can place an order.
 
-Subscribes to: Nifty 50, Bank Nifty, India VIX, every open NSE / BSE / NFO paper position, and the symbols in
+Subscribes to: the index watch list (kite.WATCH_INDICES: Nifty 50, Bank Nifty, India VIX, the sector
+indices), every open NSE / BSE / NFO paper position, and the symbols in
 trader/live/kite_watch.json (written by the F&O agent). The list is re-read every 10 seconds.
 Needs today's Kite login (dashboard: Control > Connect Zerodha); without it, it waits and retries.
 
@@ -23,7 +24,8 @@ import kite as K
 
 LEDGER = os.path.join("trader", "paper", "ledger.json")
 WATCH = os.path.join("trader", "live", "kite_watch.json")
-ALWAYS = ["NSE:NIFTY50", "NSE:BANKNIFTY", "NSE:INDIAVIX"]
+ALWAYS = [k for k, _ in K.WATCH_INDICES]
+MISSING = []   # watched keys Kite did not know (shown on the dashboard, so a wrong index name is visible)
 WS = "wss://ws.kite.trade?api_key=%s&access_token=%s"
 
 
@@ -85,12 +87,13 @@ def wanted():
             keys += list(json.load(fh).get("keys") or [])[:2000]
     except (FileNotFoundError, ValueError):
         pass
-    out = {}
+    out, missing = {}, []
     for k in dict.fromkeys(keys):
         try:
             out[K.resolve(k)["token"]] = k
         except Exception:
-            continue
+            missing.append(k)
+    MISSING[:] = missing
     return out
 
 
@@ -161,7 +164,8 @@ class Ticker:
 
     def write(self):
         with self.lock:
-            doc = {"written": time.time(), "source": "kite websocket", "ticks": dict(self.ticks)}
+            doc = {"written": time.time(), "source": "kite websocket", "ticks": dict(self.ticks),
+                   "missing": list(MISSING)}
         tmp = K.TICKS_FILE + ".tmp"
         os.makedirs(os.path.dirname(K.TICKS_FILE), exist_ok=True)
         with open(tmp, "w", encoding="utf-8") as fh:

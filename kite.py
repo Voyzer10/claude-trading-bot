@@ -54,7 +54,19 @@ ALLOWED = [
 # paper names for the indices -> Kite (exchange, tradingsymbol)
 INDEX = {"NIFTY50": ("NSE", "NIFTY 50"), "NIFTY": ("NSE", "NIFTY 50"), "BANKNIFTY": ("NSE", "NIFTY BANK"),
          "NIFTYBANK": ("NSE", "NIFTY BANK"), "FINNIFTY": ("NSE", "NIFTY FIN SERVICE"),
-         "INDIAVIX": ("NSE", "INDIA VIX")}
+         "INDIAVIX": ("NSE", "INDIA VIX"), "NIFTYENERGY": ("NSE", "NIFTY ENERGY"),
+         "NIFTYFIN": ("NSE", "NIFTY FIN SERVICE"), "NIFTYFMCG": ("NSE", "NIFTY FMCG"),
+         "NIFTYINFRA": ("NSE", "NIFTY INFRA"), "NIFTYREALTY": ("NSE", "NIFTY REALTY"),
+         "NIFTYAUTO": ("NSE", "NIFTY AUTO"), "NIFTYIT": ("NSE", "NIFTY IT"), "NIFTYMETAL": ("NSE", "NIFTY METAL"),
+         "NIFTYPHARMA": ("NSE", "NIFTY PHARMA"), "NIFTYPSE": ("NSE", "NIFTY PSE")}
+
+# the index watch list: always streamed by kite_ticker.py and shown live on the dashboard (owner, 10 Nov 2026:
+# Bank Nifty and the CNX sector indices; NSE renamed "CNX ..." to "NIFTY ...")
+WATCH_INDICES = [("NSE:NIFTY50", "Nifty 50"), ("NSE:BANKNIFTY", "Bank Nifty"), ("NSE:INDIAVIX", "India VIX"),
+                 ("NSE:NIFTYENERGY", "Energy"), ("NSE:NIFTYFIN", "Finance"), ("NSE:NIFTYFMCG", "FMCG"),
+                 ("NSE:NIFTYINFRA", "Infra"), ("NSE:NIFTYREALTY", "Realty"), ("NSE:NIFTYAUTO", "Auto"),
+                 ("NSE:NIFTYIT", "IT"), ("NSE:NIFTYMETAL", "Metal"), ("NSE:NIFTYPHARMA", "Pharma"),
+                 ("NSE:NIFTYPSE", "PSE")]
 
 
 class KiteError(Exception):

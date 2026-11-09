@@ -81,4 +81,5 @@ def live_ticks():
     doc, age = _ticker()
     ticks = {k: {f: v.get(f) for f in FIELDS if v.get(f) is not None} for k, v in (doc.get("ticks") or {}).items()}
     return {"age_s": None if age is None else round(age, 1), "live": age is not None and age < 5,
-            "connected": K.connected(), "ticks": ticks}
+            "connected": K.connected(), "ticks": ticks, "indices": K.WATCH_INDICES,
+            "missing": doc.get("missing") or []}

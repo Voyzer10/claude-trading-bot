@@ -30,7 +30,17 @@ INSTR = {
            "instrument_type,segment,exchange\n"
            "738561,2885,RELIANCE,RELIANCE INDUSTRIES,0,,0,0.05,1,EQ,NSE,NSE\n"
            "256265,1001,NIFTY 50,NIFTY 50,0,,0,0,0,EQ,INDICES,NSE\n"
-           "260105,1016,NIFTY BANK,NIFTY BANK,0,,0,0,0,EQ,INDICES,NSE\n",
+           "260105,1016,NIFTY BANK,NIFTY BANK,0,,0,0,0,EQ,INDICES,NSE\n"
+           "270000,2000,INDIA VIX,INDIA VIX,0,,0,0,0,EQ,INDICES,NSE\n"
+           "270001,2001,NIFTY ENERGY,NIFTY ENERGY,0,,0,0,0,EQ,INDICES,NSE\n"
+           "270002,2002,NIFTY FIN SERVICE,NIFTY FIN SERVICE,0,,0,0,0,EQ,INDICES,NSE\n"
+           "270003,2003,NIFTY FMCG,NIFTY FMCG,0,,0,0,0,EQ,INDICES,NSE\n"
+           "270004,2004,NIFTY INFRA,NIFTY INFRA,0,,0,0,0,EQ,INDICES,NSE\n"
+           "270005,2005,NIFTY REALTY,NIFTY REALTY,0,,0,0,0,EQ,INDICES,NSE\n"
+           "270006,2006,NIFTY AUTO,NIFTY AUTO,0,,0,0,0,EQ,INDICES,NSE\n"
+           "270007,2007,NIFTY IT,NIFTY IT,0,,0,0,0,EQ,INDICES,NSE\n"
+           "270008,2008,NIFTY METAL,NIFTY METAL,0,,0,0,0,EQ,INDICES,NSE\n"
+           "270009,2009,NIFTY PHARMA,NIFTY PHARMA,0,,0,0,0,EQ,INDICES,NSE\n",
     "NFO": "instrument_token,exchange_token,tradingsymbol,name,last_price,expiry,strike,tick_size,lot_size,"
            "instrument_type,segment,exchange\n"
            "12345602,48225,NIFTY25N1725500CE,NIFTY,0,2026-11-17,25500,0.05,75,CE,NFO-OPT,NFO\n"
@@ -135,6 +145,14 @@ if __name__ == "__main__":
               {c["type"] for c in ch} == {"CE", "PE", "FUT"} and all(c["lot"] == 500 for c in ch), ch)
         check("   paper names round-trip (RELIANCE-20261124-1412.5-CE)",
               K.paper_name([c for c in ch if c["type"] == "CE"][0], "RELIANCE") == "RELIANCE-20261124-1412.5-CE")
+
+        import kite_ticker as T
+        w = T.wanted()
+        ok_keys = {k for k, _ in K.WATCH_INDICES} - {"NSE:NIFTYPSE"}
+        check("   the index watch list (Bank Nifty + the CNX sector indices) is streamed: %d of %d resolve"
+              % (len(set(w.values()) & ok_keys), len(ok_keys)), ok_keys <= set(w.values()), sorted(w.values()))
+        check("   an index Kite does not list (PSE missing from this fake list) is reported, not silent",
+              T.MISSING == ["NSE:NIFTYPSE"], T.MISSING)
 
         # ---- 4. WebSocket packets
         def pk(*ints, fmt=None):
