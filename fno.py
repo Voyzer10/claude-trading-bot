@@ -25,6 +25,7 @@ Rules as of Oct 2026 (verify on nseindia.com; change them in FNO below if they c
 import http.cookiejar
 import json
 import math
+import re
 import sys
 import time
 import urllib.parse
@@ -266,7 +267,8 @@ def make_future(index, expiry):
 
 
 def parse(name):
-    p = name.upper().split("-")
+    u = name.upper()
+    p = u.rsplit("-", 2) if re.search(r"-FUT-\d{8}$", u) else u.rsplit("-", 3)   # BAJAJ-AUTO-FUT-..., M&M-...
     if len(p) == 3 and p[1] == "FUT":
         return {"index": p[0], "type": "FUT", "expiry": datetime.strptime(p[2], "%Y%m%d").date()}
     if len(p) == 4 and p[3] in ("CE", "PE"):

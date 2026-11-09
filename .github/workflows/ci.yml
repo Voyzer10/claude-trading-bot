@@ -60,6 +60,10 @@ jobs:
         run: python tests/test_us_long_entry.py
       - name: Zerodha data only - order endpoints refused, login, instruments, ticks (offline)
         run: python tests/test_kite.py
+      - name: F&O stocks as ATM options - contract, premium stop / target, sizing, switch (offline)
+        run: python tests/test_fno_stock.py
+      - name: Stock-option backtest pricing - theta, spread, charges, account fit (offline)
+        run: python tests/test_fno_sv4.py
       - name: Scanner v2 finds the owner's setups, the agents record them, no trade (offline)
         run: python tests/test_scanner_setups.py
       - name: Scanner v4 acceptance tests (primary, sequential OB/FVG secondary, version gate) (offline)

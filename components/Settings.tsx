@@ -59,6 +59,7 @@ const RISK_LABELS: Record<string, string> = {
   capital: "Paper capital (changing it adds / removes the difference as cash; P&L kept)",
   risk_limits: "Risk limits ON (daily loss, trades/day, cooldown, weekly, max per side). Off while paper testing; turn on before real money",
   trade_setups: "Paper trade the Scanner's setups (v4, v3 or v2, as chosen in Scanner version)",
+  fno_stock_options: "F&O stocks: buy the ATM option instead of the shares (Zerodha needed; backtest: Scanner v4 stock options)",
   trade_manager: "Trade Manager on (breakeven, profit lock, reversal and no-follow-through exits)",
   tm_be_r: "Trade Manager: stop to the entry at (R)",
   tm_lock_at: "Trade Manager: lock profit once this share of the way to the target is covered (0.8 = 80%)",

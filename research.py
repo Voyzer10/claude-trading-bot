@@ -620,7 +620,7 @@ def live_timing_main(a, syms, src):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="Walk-forward backtest of the breakout rules. Not financial advice.")
-    p.add_argument("mode", choices=["nse", "nse-v2", "crypto", "crypto-short", "crypto-mr", "crypto-5m", "crypto-live", "crypto-v4", "crypto-v4-5m", "crypto-v4-short", "crypto-smc", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-abcd", "crypto-abcd-5m", "nse-abcd", "us-abcd", "us-orb", "crypto-v3", "crypto-v3-5m", "nse-v3", "us-v3", "crypto-sv4", "crypto-sv4-5m", "nse-sv4", "us-sv4", "us-tm", "nse-tm", "crypto-tm", "crypto-tm-5m", "fno"])
+    p.add_argument("mode", choices=["nse", "nse-v2", "crypto", "crypto-short", "crypto-mr", "crypto-5m", "crypto-live", "crypto-v4", "crypto-v4-5m", "crypto-v4-short", "crypto-smc", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-abcd", "crypto-abcd-5m", "nse-abcd", "us-abcd", "us-orb", "crypto-v3", "crypto-v3-5m", "nse-v3", "us-v3", "crypto-sv4", "crypto-sv4-5m", "nse-sv4", "us-sv4", "us-tm", "nse-tm", "crypto-tm", "crypto-tm-5m", "fno", "fno-sv4"])
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--workers", type=int, default=6)
     p.add_argument("--top", type=int, default=10)
@@ -661,6 +661,12 @@ def main(argv=None):
             syms = syms[:a.limit]
         return research_tm.main(a, syms, src, fetch_all, fetch, stats, OUT, IST,
                                 market="nse" if a.mode == "nse-tm" else "us")
+    if a.mode == "fno-sv4":  # Scanner v4 on F&O stocks, bought as ATM options: research_fno_sv4.py
+        import research_fno_sv4
+        syms, src = list(S.NIFTY50), "Nifty 50 (all in F&O)"
+        if a.limit:
+            syms = syms[:a.limit]
+        return research_fno_sv4.main(a, syms, src, fetch_all, stats, OUT, IST)
     if a.mode in ("nse-sv4", "us-sv4"):  # Scanner v4 on stocks: research_scanner_v4.py
         import research_abcd
         import research_scanner_v4

@@ -238,7 +238,8 @@ def instruments(exch):
 
 def _fno_parse(name):
     """Paper F&O names: UNDERLYING-YYYYMMDD-STRIKE-CE|PE or UNDERLYING-FUT-YYYYMMDD (index or stock)."""
-    p = name.upper().split("-")
+    u = name.upper()
+    p = u.rsplit("-", 2) if re.search(r"-FUT-\d{8}$", u) else u.rsplit("-", 3)   # BAJAJ-AUTO-FUT-..., M&M-...
     if len(p) == 3 and p[1] == "FUT":
         return {"name": p[0], "type": "FUT", "expiry": datetime.strptime(p[2], "%Y%m%d").date()}
     if len(p) == 4 and p[3] in ("CE", "PE"):
