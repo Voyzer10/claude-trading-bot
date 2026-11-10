@@ -110,7 +110,7 @@ def last_bar_close(now_utc):
     return t - timedelta(minutes=t.minute % BAR_MIN)
 
 
-def intraday_one(d, cutoff):
+def intraday_one(d, cutoff, symbol=None, v4_ledger=None):
     bars = []
     for t, o, h, l, c, v in zip(d["t"], d.get("o") or d["c"], d["h"], d["l"], d["c"], d["v"]):
         start = datetime.fromtimestamp(t, timezone.utc)
@@ -176,7 +176,7 @@ def intraday_one(d, cutoff):
         import smc_playbook as PB2
         rows2 = [(b[0], b[5] if b[5] is not None else b[3], b[1], b[2], b[3], b[4] or 0) for b in bars]
         own = PB2.owner_setups(rows2, lambda t: t.date(), version=PB2.scanner_version("CRYPTO"),
-                                 market="CRYPTO")
+                                 market="CRYPTO", symbol=symbol, ledger=v4_ledger)
     except Exception:
         own = []
     return {"price": last[3], "bar_end": (last[0] + timedelta(minutes=BAR_MIN)).isoformat(),
@@ -222,9 +222,14 @@ def intraday_scan(symbols, now_utc, workers=6, quiet=False):
     # 5 days: the playbook's liquidity map needs yesterday's full high / low and 2 days of swing points
     data, failed = S.fetch_many(symbols, "5d", "%dm" % BAR_MIN, workers, SUFFIX, quiet, fetcher=crypto_chart)
     cutoff = last_bar_close(now_utc)
+    import smc_playbook as PB
+    v4_ledger = None
+    if PB.scanner_version("CRYPTO") == "v4":
+        import paper as P
+        v4_ledger = P.load_json(P.LEDGER, {"open": [], "closed": []})
     hits, usable, coins, usable_res = [], 0, {}, []
     for s, d in data.items():
-        r = intraday_one(d, cutoff)
+        r = intraday_one(d, cutoff, s, v4_ledger)
         if r is None:
             coins[s] = {"usable": False}
             continue

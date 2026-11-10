@@ -56,7 +56,8 @@ if __name__ == "__main__":
         import paper as P
         now = datetime(2026, 11, 10, 5, 0, tzinfo=timezone.utc)      # 10:30 IST
         setup = {"setup": "v4_primary_long", "name": "v4 primary long", "side": "long", "price": 1412.0,
-                 "stop": 1402.0, "target": 1432.0, "scanner": "v4", "liquidity": "swept 1404, reclaimed"}
+                 "stop": 1402.0, "target": 1432.0, "scanner": "v4", "liquidity": "swept 1404, reclaimed",
+                 "v4_signal_at": now.isoformat()}
         fk = FakeKite(prem=30.0)
         op = FS.plan("RELIANCE", setup, now=now, kite=fk)
         check("1. long setup -> the ATM CALL of the first expiry 3+ days away (24 Nov, strike 1420 nearest 1412)",
@@ -101,8 +102,16 @@ if __name__ == "__main__":
               pos.get("qty") == 500 and abs(pos["entry"] - pos["stop"]) * pos["qty"] <= 1500
               and pos["stop"] < pos["entry"] < pos["target"], pos)
         check("   the trade says why: setup, scanner, IV / delta, the stock's stop and target",
-              pos.get("scanner") == "v4" and "ATM CE" in pos.get("entry_reason", "") and "1407" in pos.get("entry_reason", ""),
+              pos.get("scanner") == "v4" and pos.get("v4_chart") == "NSE:RELIANCE"
+              and "ATM CE" in pos.get("entry_reason", "") and "1407" in pos.get("entry_reason", ""),
               pos.get("entry_reason"))
+        if pos:
+            pos.pop("v4_chart", None)
+            pos.pop("v4_signal_at", None)
+            P.save_json(P.LEDGER, led)
+            again = P.setup_decision("NSE", "RELIANCE", tight)
+            check("   an older v4 option without chart metadata still blocks overlap",
+                  again["result"] == "skipped" and "wait for the open trade" in again["why"], again)
         cfg = P.load_config()
         cfg["accounts"]["INDIA"]["fno_stock_options"] = False
         P.save_json(P.CONFIG, cfg)

@@ -63,7 +63,7 @@ DEFAULT_CONFIG = {
                    "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
                    "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "v4_pdf_only": True, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
@@ -73,7 +73,7 @@ DEFAULT_CONFIG = {
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
                    "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "v4_pdf_only": True, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
@@ -83,7 +83,7 @@ DEFAULT_CONFIG = {
                    "daily_loss_limit": 30, "max_trades_per_day": 10, "min_reward_risk": 1.0,
                    "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "max_same_side": 3, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "v4_pdf_only": True, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
@@ -869,7 +869,7 @@ def cmd_buy(a, cfg, led):
         pos["margin"] = margin
     # why this trade was taken (dashboard, downloads): the setup, the scanner that found it, the liquidity it
     # swept / the zone it retested, and the entry reason in words. Optional: callers that know them pass them.
-    for f in ("setup", "setup_name", "scanner", "liquidity", "entry_reason"):
+    for f in ("setup", "setup_name", "scanner", "liquidity", "entry_reason", "v4_chart", "v4_signal_at"):
         v = getattr(a, f, None)
         if v not in (None, ""):
             pos[f] = v
@@ -911,11 +911,9 @@ def tm_event(pos, text, now=None):
 TM_KEYS = ("tm_be_r", "tm_lock_at", "tm_lock_keep", "tm_reversal", "tm_rev_min_r", "tm_stale_min", "tm_candle_min")
 
 
-def pdf_only(pos, acc):
-    """A Scanner v4 trade with v4_pdf_only on (default; owner, 10 Nov 2026: "v4 pr sirf v4 k concept wali pdf ...
-    sirf vahi rules chlne chahiye"): it exits ONLY at its stop, its target or the session's flat-by. No Trade Manager,
-    no breakeven move, no crypto time stop - none of those are in the 7 Nov PDF ("close by TP, SL or defined exit")."""
-    return pos.get("scanner") == "v4" and acc.get("v4_pdf_only", True)
+def pdf_only(pos):
+    """V4 uses its original stop, target and the account's defined session exit."""
+    return pos.get("scanner") == "v4"
 
 
 def tm_cfg(acc):
@@ -1033,11 +1031,13 @@ def step_bar(led, cfg, pos, acc, b, now, sh):
         return True
     best = l if sh else h
     _track_excursion(pos, best, h if sh else l, sh)
-    strict = pdf_only(pos, acc)
+    strict = pdf_only(pos)
     if strict or pos.get("pdf_only"):
         pos["pdf_only"] = strict           # shown on the dashboard's Trade Manager strip
-    tm = tm_cfg(acc) if not pos.get("trail_k") and not strict else None
-    be = None if strict else acc.get("breakeven_at_r") or (tm["tm_be_r"] if tm else None)
+    if strict:
+        return False
+    tm = tm_cfg(acc) if not pos.get("trail_k") else None
+    be = acc.get("breakeven_at_r") or (tm["tm_be_r"] if tm else None)
     rs = pos.get("risk_stop", pos["stop"])
     be_hit = (best <= pos["entry"] - be * (rs - pos["entry"])) if (be and sh) else \
              (be and best >= pos["entry"] + be * (pos["entry"] - rs))
@@ -1172,7 +1172,7 @@ def check_position(cfg, led, pos, price, bars, now):
     for b in path:
         if step_bar(led, cfg, pos, acc, b, now, sh):
             return
-    tm = tm_cfg(acc) if not pos.get("trail_k") and not pdf_only(pos, acc) else None
+    tm = tm_cfg(acc) if not pos.get("trail_k") and not pdf_only(pos) else None
     if tm:   # the Trade Manager thinks about the trade after every check (7 Nov 2026)
         why = tm_react(pos, bars, now, price, tm)
         if why:
@@ -1325,7 +1325,7 @@ if __name__ == "__main__":
 
 # ------------------------------------------------------------------ Scanner v3 setups: the agents, then the paper broker
 
-def _option_setup(rec, st, done, cfg, acc, market, symbol, s, op, version):
+def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields):
     """setup_decision for an F&O stock with fno_stock_options on: the ATM option is paper bought."""
     entry, stop = s["price"], s["stop"]
     target = s.get("target") or s.get("target_2r")
@@ -1344,7 +1344,8 @@ def _option_setup(rec, st, done, cfg, acc, market, symbol, s, op, version):
                                                                                             op["name"]))
     import contextlib
     import io
-    led = load_ledger(cfg)
+    if led is None:
+        led = load_ledger(cfg)
     key = "NFO:" + op["name"]
     args = type("A", (), {"symbol": key, "stop": str(op["stop"]), "target": str(op["target"]), "qty": None,
                           "price": None, "note": "scanner %s: %s on %s (stock stop %s, target %s)" % (
@@ -1354,7 +1355,7 @@ def _option_setup(rec, st, done, cfg, acc, market, symbol, s, op, version):
                           "entry_reason": "Scanner %s %s on %s at %s: bought the ATM %s (IV %.0f%%, delta %.2f); "
                                           "premium stop / target = the option's value at the stock's stop %s / target %s"
                                           % (version, s["side"], symbol, entry, op["kind"], op["iv"] * 100,
-                                             op["delta"], stop, target)})()
+                                             op["delta"], stop, target), **v4_fields})()
     buf = io.StringIO()
     try:
         with contextlib.redirect_stdout(buf):
@@ -1407,6 +1408,27 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
         return done("skipped", "%s is unticked in Settings (Scanner v4: setups traded)" % (s.get("name") or s["setup"]))
     if version == "v5" and s["setup"] not in acc.get("v5_setups", _PB.V5_SETUPS):
         return done("skipped", "%s is unticked in Settings (Scanner v5: setups traded)" % (s.get("name") or s["setup"]))
+    led, v4_fields = None, {}
+    if version == "v4":
+        import scanner_v4 as V4
+        chart = key(market, symbol)
+        led = load_ledger(cfg)
+        opened, closed = V4.chart_state(led, chart)
+        if opened:
+            return done("skipped", "v4: wait for the open trade on this chart to close")
+        signal = _iso(s.get("v4_signal_at"))
+        exited = _iso(closed.get("exit_time")) if closed else None
+        if signal is None or (exited is not None and signal <= exited):
+            return done("skipped", "v4: no fresh confirmed signal after the last exit")
+        if s["setup"].startswith("v4_secondary_"):
+            details = s.get("details") or {}
+            primary = _iso(details.get("primary_at"))
+            tap = _iso(details.get("tapped_at"))
+            if (not closed or closed.get("setup") != "v4_primary_" + s["side"]
+                    or primary is None or primary != _iso(closed.get("v4_signal_at"))
+                    or exited is None or tap is None or not exited < tap < signal):
+                return done("skipped", "v4: secondary needs a matching closed primary and a later confirmed zone tap")
+        v4_fields = {"v4_chart": chart, "v4_signal_at": signal.isoformat()}
     entry, stop, short = s["price"], s.get("stop"), s["side"] == "short"
     target = s.get("target") or s.get("target_2r")
     st["3_entry"] = {"side": s["side"], "price_now": entry, "note": "entry = the close of the candle that completed it"}
@@ -1424,7 +1446,7 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
                 return done("skipped", "stock option: %s" % e)
             op = None                      # not an F&O stock: the shares, as before
         if op:
-            return _option_setup(rec, st, done, cfg, acc, market, symbol, s, op, version)
+            return _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields)
     units = min(acc["max_loss_per_trade"] / risk, acc["capital"] * acc["max_position_pct"] / 100 / entry)
     qty = units if market == "CRYPTO" else int(units)
     cost = None
@@ -1452,13 +1474,14 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     # paper trade it: paper.py sizes at the live price, keeps the stop / 2R target, and its own checks still apply
     import contextlib
     import io
-    led = load_ledger(cfg)
+    if led is None:
+        led = load_ledger(cfg)
     args = type("A", (), {"symbol": "%s:%s" % (market, symbol), "stop": str(stop), "target": str(target), "qty": None,
                           "price": None, "note": "scanner %s: %s" % (version, name), "force": False,
                           "side": "short" if short else "long", "setup": s["setup"], "setup_name": name,
                           "scanner": version, "liquidity": s.get("liquidity"),
                           "entry_reason": "found by Scanner %s; entry on the close of the %s candle, planned R:R %.1f" % (
-                              version, (s.get("bar_end") or "")[11:16] or "last", abs(target - entry) / risk)})()
+                              version, (s.get("bar_end") or "")[11:16] or "last", abs(target - entry) / risk), **v4_fields})()
     buf = io.StringIO()
     try:
         with contextlib.redirect_stdout(buf):

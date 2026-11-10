@@ -313,6 +313,10 @@ def setups_scan(data, market, suffix, cutoff, tz, workers=8, keep=None):
     on today's charts `data` joined to earlier days. Returns [setup dicts with symbol / market / bar_end]."""
     import smc_playbook as PB
     version = PB.scanner_version(market)
+    v4_ledger = None
+    if version == "v4":
+        import paper as P
+        v4_ledger = P.load_json(P.LEDGER, {"open": [], "closed": []})
     today = cutoff.astimezone(tz).date()
     hist = earlier_days(list(data), suffix, today, tz, workers, keep)
     out = []
@@ -322,7 +326,7 @@ def setups_scan(data, market, suffix, cutoff, tz, workers=8, keep=None):
         if not rows:
             continue
         for x in PB.owner_setups(hist.get(sym, []) + rows, lambda t: t.astimezone(tz).date(), version=version,
-                                intraday=True, market=market):
+                                intraday=True, market=market, symbol=sym, ledger=v4_ledger):
             out.append(dict(x, symbol=sym, market=market, bar_end=(rows[-1][0] + timedelta(minutes=5)).isoformat()))
     return out
 

@@ -72,7 +72,8 @@ if __name__ == "__main__":
         # v4 setups: ticked ones go through the agents, unticked are skipped
         set_version(P, "CRYPTO", "v4", v4_setups=["v4_primary_long"], trade_setups=False)
         a = P.setup_decision("CRYPTO", "SOL", {"setup": "v4_primary_long", "name": "v4 primary long", "side": "long",
-                                               "price": 100.0, "stop": 99.0, "target": 103.0})
+                                               "price": 100.0, "stop": 99.0, "target": 103.0,
+                                               "v4_signal_at": datetime.now(timezone.utc).isoformat()})
         b = P.setup_decision("CRYPTO", "SOL", {"setup": "v4_secondary_long", "name": "v4 OB/FVG secondary long",
                                                "side": "long", "price": 100.0, "stop": 99.0, "target": 103.0})
         check("2. a ticked v4 setup goes through the agents; an unticked one is skipped with the reason",
