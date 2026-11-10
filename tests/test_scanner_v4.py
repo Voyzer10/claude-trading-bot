@@ -51,7 +51,7 @@ TRIG = (100.0, 100.4, 99.95, 100.3)      # breaks and CLOSES above the hammer hi
 TRIG_WICK = (100.0, 100.4, 99.95, 100.04)
 LEG = [(100.3, 100.9, 100.25, 100.85), (100.85, 101.45, 100.8, 101.4), (101.4, 101.55, 101.2, 101.5)]  # FVG 100.9-101.2
 TP = (101.5, 103.1, 101.45, 103.0)       # primary target 103 hit -> primary CLOSED
-PULL = [(103.0, 103.05, 102.0, 102.1), (102.1, 102.15, 101.3, 101.35)]
+PULL = [(103.0, 103.05, 101.4, 102.1), (102.1, 102.15, 101.3, 101.35)]
 TAP = (101.35, 101.4, 101.1, 101.15)     # taps the FVG (top 101.2) and closes inside
 NEAR = (101.35, 101.4, 101.25, 101.3)    # comes near (101.25) but does not touch 101.2
 CONF = (101.15, 101.6, 101.1, 101.5)     # closes above the tap candle's high 101.4 -> secondary BUY
@@ -96,6 +96,10 @@ if __name__ == "__main__":
     no_conf = seq(build([SWEEP, HAMMER, TRIG] + LEG + [TP] + PULL + [TAP, (101.15, 101.38, 101.1, 101.3),
                                                                      (101.3, 101.39, 101.2, 101.35)]))
     check("8. tap without a break-and-close: no secondary", not [t for t in no_conf if t["kind"] == "secondary"], no_conf)
+    gap_pull = [(103.0, 103.05, 102.0, 102.1), PULL[1]]
+    opposing = seq(build([SWEEP, HAMMER, TRIG] + LEG + [TP] + gap_pull + [TAP, CONF]))
+    check("   an opposing FVG ahead of the secondary blocks entry",
+          opposing[0]["secondary_note"] == "nearby opposing zone", opposing)
     stopped = seq(build([SWEEP, HAMMER, TRIG] + LEG + [(101.5, 101.55, 99.0, 99.2), (99.2, 99.6, 99.1, 99.5),
                                                        (99.5, 101.0, 99.4, 100.95)]))
     check("9. primary stopped out (closed through the zones): no secondary",
@@ -158,6 +162,49 @@ if __name__ == "__main__":
         check("    a v4 account paper trades the v4 primary with its liquidity target",
               rec["result"] == "PAPER BUY" and rec["steps"]["1_scanner"]["scanner"] == "v4"
               and rec["steps"]["4_exit"]["target"] == got[0]["target"], rec)
+        chart = {"version": "v4", "market": "CRYPTO", "symbol": "TST"}
+        empty = {"open": [], "closed": []}
+        check("   a simulated primary exit never enables a live secondary",
+              not PB.owner_setups(full, DAY, ledger=empty, **chart))
+        led = P.load_ledger(cfg)
+        check("   the open primary blocks the scanner and the paper entry",
+              not PB.owner_setups(full, DAY, ledger=led, **chart)
+              and P.setup_decision("CRYPTO", "TST", got2[0])["result"] == "skipped")
+        check("   a primary on another chart cannot unlock a secondary",
+              P.setup_decision("CRYPTO", "OTHER", got2[0])["result"] == "skipped")
+        exit_at = full[prim[0]["exit_i"]][0] + timedelta(minutes=1)
+        P.close_position(led, cfg, led["open"][0], 103, "target", exit_at)
+        P.save_json(P.LEDGER, led)
+        live = PB.owner_setups(full, DAY, ledger=led, **chart)
+        check("   a real primary close enables the later FVG tap and confirmation",
+              [s["setup"] for s in live] == ["v4_secondary_long"], live)
+        no_target_hit = build([SWEEP, HAMMER, TRIG] + LEG
+                              + [(101.5, 102.9, 101.45, 102.8), (102.8, 102.95, 101.4, 102.1), PULL[1], TAP, CONF])
+        check("   a recorded exit can unlock the secondary even if the chart target was never hit",
+              seq(no_target_hit)[0]["exit_i"] is None
+              and bool(PB.owner_setups(no_target_hit, DAY, ledger=led, **chart)))
+        import scan_crypto as C
+        C.set_timeframe("5m")
+        data = {"t": [int(row[0].timestamp()) for row in full]}
+        data.update({k: [row[i] for row in full] for i, k in enumerate("ohlcv", start=1)})
+        C.S.fetch_many = lambda *args, **kwargs: ({"TST": data}, [])
+        scanned = C.intraday_scan(["TST"], full[-1][0] + timedelta(minutes=5 + C.SETTLE_MIN))
+        check("   the normal crypto scan uses the recorded close",
+              [s["setup"] for s in scanned["setups"]] == ["v4_secondary_long"], scanned["setups"])
+        late = dict(led["closed"][0], exit_time=(full[-2][0] + timedelta(minutes=1)).isoformat())
+        check("   a tap in the primary's exit candle is too early",
+              not PB.owner_setups(full, DAY, ledger=dict(led, closed=[late]), **chart))
+        if live:
+            P.fetch_price = lambda m, t: (101.5, datetime.now(timezone.utc))
+            second = P.setup_decision("CRYPTO", "TST", live[0])
+            check("   a matching secondary fills once", second["result"] == "PAPER BUY", second)
+            if second["result"] == "PAPER BUY":
+                led = P.load_ledger(cfg)
+                P.close_position(led, cfg, led["open"][0], 103, "target", full[-1][0] + timedelta(minutes=6))
+                P.save_json(P.LEDGER, led)
+                check("   closing the secondary resets the sequence and blocks a replay",
+                      P.setup_decision("CRYPTO", "TST", live[0])["result"] == "skipped"
+                      and not PB.owner_setups(full, DAY, ledger=led, **chart))
         v2rec = P.setup_decision("CRYPTO", "ABC", {"setup": "abcd_long", "name": "A-B-C-D long", "side": "long",
                                                    "price": 100.3, "stop": 99.0, "target_2r": 102.9}, news=[])
         v3rec = P.setup_decision("CRYPTO", "XYZ", {"setup": "v3_sweep_long", "name": "v3 sweep long", "side": "long",

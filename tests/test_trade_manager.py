@@ -141,12 +141,10 @@ if __name__ == "__main__":
         check("   no 'went nowhere' exit at 75 min: still open", pos is not None and not closed, closed)
         pos, closed = run(P, "long", 102.0, lambda n: minutes(n, 30, up_then_down), 98.8, pos_extra=v4,
                           extra={"v4_pdf_only": False})
-        check("   with v4_pdf_only off, the Trade Manager manages it again (locked at +1R)",
-              closed and closed[0]["reason"] == "profit lock stop", closed)
+        check("   an old v4_pdf_only setting cannot enable Trade Manager for v4",
+              closed and closed[0]["reason"] == "stop", closed)
         import auto_crypto as AC
         cfg = P.load_config()
-        cfg["accounts"]["CRYPTO"]["v4_pdf_only"] = True
-        P.save_json(P.CONFIG, cfg)
         led = P.load_ledger(cfg)
         led["open"], led["closed"] = [], []
         P.fetch_price = lambda m, t: (100.0, datetime.now(timezone.utc))

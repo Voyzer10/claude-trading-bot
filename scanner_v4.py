@@ -37,10 +37,12 @@ SKIP RULES (the PDF's pages 1, 2 and 4; on by default, each can be switched off 
   - opp_zone:  no nearby opposing zone: no unfilled bearish FVG (bullish for shorts) overlapping the space from the
                entry to 1R beyond it (page 2).
 
-One sequence per chart: while a primary or a secondary is open, or a secondary is being looked for, no new
-primary is taken. The trades are walked candle by candle (stop first when a candle touches both) to know when they
-close; intraday markets close at the day's last candle.
+One sequence per chart: a fresh primary can reset a search for an unfilled secondary. Open trades block new entries.
+Research walks candles to simulate exits (stop first when a candle touches both). The runner uses the paper ledger.
 """
+from bisect import bisect_right
+from datetime import datetime
+
 import smc_playbook as PB
 
 
@@ -197,6 +199,7 @@ def primaries(src, ctx, p, htf=None):
                 a = ctx.atr[i]
                 if not a or i in taken:
                     break
+                extreme = min(bars[k][3] for k in range(j, i + 1))
                 if (bars[i][2] - bars[i][3]) > p["ext_range_atr"] * a or (c - extreme) > p["ext_dist_atr"] * a:
                     break                                                    # extended: no chasing
                 stop = extreme - p["buffer_atr"] * a
@@ -251,7 +254,7 @@ def _zones(bars, prim, upto):
     return zones
 
 
-def secondary(bars, ctx, prim, closed_at, stop_at, p):
+def secondary(bars, ctx, prim, closed_at, stop_at, p, htf=None):
     """The OB / FVG secondary after a primary closed at candle closed_at; looked for until stop_at (exclusive):
     zone must exist, be tapped, then confirmed by a close above the tap candle's high. None if there is none."""
     n = len(bars)
@@ -271,10 +274,10 @@ def secondary(bars, ctx, prim, closed_at, stop_at, p):
         live = [z for z in zones if not z["dead"]]
         if not live:
             return None, "zone invalidated"
-        tapped = [z for z in live if l <= z["top"]]
+        tapped = [z for z in live if l <= z["top"] and h >= z["bot"]]
         if tapped:
             z = max(tapped, key=lambda x: x["top"])
-            for i in range(t + 1, min(n, t + p["conf_max"] + 1, end + p["conf_max"])):
+            for i in range(t + 1, min(n, t + p["conf_max"] + 1, stop_at)):
                 ci = bars[i][4]
                 if ci < z["bot"]:
                     break
@@ -287,6 +290,10 @@ def secondary(bars, ctx, prim, closed_at, stop_at, p):
                     tgt = _targets(ctx, bars, i, ci, (move_hi,))
                     if tgt is None or (tgt - ci) < p["min_rr"] * (ci - stop):
                         return None, "poor R:R"
+                    if htf is not None and htf[i] == "down":
+                        return None, "against the higher timeframe"
+                    if p["opp_zone"] and opposing_zone(bars, i, ci, ci - stop, p["opp_lookback"]):
+                        return None, "nearby opposing zone"
                     return {"i": i, "kind": "secondary", "zone": z["name"], "zone_top": z["top"],
                             "zone_bottom": z["bot"], "tap": t, "entry": ci, "stop": stop, "target": tgt, "atr": a,
                             "primary_at": prim["i"], "primary_closed_at": closed_at}, "entry"
@@ -306,20 +313,20 @@ def sequence(rows, day_of, intraday=False, **kw):
         src = mrows if short else rows
         ctx = PB.Context(src, day_of)
         htf = htf_dirs(src, day_of) if p.get("htf") else None
-        sides[short] = (src, ctx, primaries(src, ctx, p, htf))
+        sides[short] = (src, ctx, htf, primaries(src, ctx, p, htf))
     day = [day_of(r[0]) for r in rows]
-    cands = sorted([(c["i"], short, c) for short in (False, True) for c in sides[short][2]], key=lambda x: (x[0], x[1]))
+    cands = sorted([(c["i"], short, c) for short in (False, True) for c in sides[short][3]], key=lambda x: (x[0], x[1]))
     out, free = [], 0
     for idx, (i, short, prim) in enumerate(cands):
         if i < free:
             continue
-        src, ctx, _ = sides[short]
+        src, ctx, htf, _ = sides[short]
         k, px, why = _walk(src, day, i, prim["entry"], prim["stop"], prim["target"], p, intraday)
         out.append(_real(dict(prim, exit_i=k, exit=px, exit_reason=why), short))
         if k is None:
             break                                            # primary still open: nothing else on this chart
         nxt = next((c[0] for c in cands[idx + 1:] if c[0] > k), len(rows))
-        sec, note = secondary(src, ctx, prim, k, nxt, p)
+        sec, note = secondary(src, ctx, prim, k, nxt, p, htf)
         out[-1]["secondary_note"] = note
         if sec is None:
             free = k + 1
@@ -330,6 +337,62 @@ def sequence(rows, day_of, intraday=False, **kw):
             break
         free = k2 + 1
     return out
+
+
+def chart_state(ledger, chart):
+    """The open trade and latest close for this v4 chart, including a mapped option position."""
+    market, _, symbol = chart.partition(":")
+
+    def matches(pos):
+        if pos.get("scanner") != "v4":
+            return False
+        if pos.get("v4_chart"):
+            return pos["v4_chart"] == chart
+        if pos.get("key") == chart:
+            return True
+        # Older stock-option fills identify the chart only through the option's underlying.
+        contract = pos.get("symbol", "").rsplit("-", 3)
+        return (market in ("NSE", "BSE") and pos.get("market") == "NFO" and len(contract) == 4
+                and contract[0] == symbol and contract[-1] in ("CE", "PE"))
+
+    opened = next((pos for pos in ledger["open"] if matches(pos)), None)
+    closed = next((pos for pos in reversed(ledger["closed"]) if matches(pos)), None)
+    return opened, closed
+
+
+def live_candidate(rows, day_of, ledger, chart):
+    """Evaluate the last closed candle using only filled trades to advance the live sequence."""
+    opened, closed = chart_state(ledger, chart)
+    if opened:
+        return []
+    starts = [row[0] for row in rows]
+    closed_at = datetime.fromisoformat(closed["exit_time"]) if closed else None
+    previous_at = closed.get("v4_signal_at") if closed else None
+    last = len(rows) - 1
+    if closed_at is not None and starts[last] <= closed_at:
+        return []
+    p = DEFAULTS
+    secondary_candidate = None
+    for short in (False, True):
+        src = mirror(rows) if short else rows
+        ctx = PB.Context(src, day_of)
+        htf = htf_dirs(src, day_of)
+        candidates = primaries(src, ctx, p, htf)
+        if candidates and candidates[-1]["i"] == last:
+            return [_real(candidates[-1], short)]
+        if not previous_at or closed["setup"] != ("v4_primary_short" if short else "v4_primary_long"):
+            continue
+        previous = datetime.fromisoformat(previous_at)
+        primary = next((c for c in candidates if starts[c["i"]] == previous), None)
+        if primary is None:
+            continue
+        k = bisect_right(starts, closed_at) - 1
+        if k <= primary["i"]:
+            continue
+        candidate, _ = secondary(src, ctx, primary, k, len(rows), p, htf)
+        if candidate and candidate["i"] == last:
+            secondary_candidate = _real(dict(candidate, primary_exit_time=closed_at.isoformat()), short)
+    return [secondary_candidate] if secondary_candidate else []
 
 
 def _real(t, short):

@@ -438,7 +438,7 @@ def scanner_version(market):
         return "v3"
 
 
-def owner_setups(rows, day_of, ctx=None, version="v3", intraday=False, market=None):
+def owner_setups(rows, day_of, ctx=None, version="v3", intraday=False, market=None, symbol=None, ledger=None):
     """The owner's setups that complete on the LAST row (closed candles, oldest first), for one scanner version:
       v4: only the 7 Nov final workflow (scanner_v4.py): primary, then a sequential OB / FVG secondary.
       v3: only the 5 Nov workflow PDFs (sweep_reversal.py): v3 sweep reversal and v3 FVG / OB retest.
@@ -454,7 +454,7 @@ def owner_setups(rows, day_of, ctx=None, version="v3", intraday=False, market=No
     if version == "v5":
         out = v5_setups(rows, day_of, i, intraday, v5_params(market) if market else {})
     elif version == "v4":
-        out = v4_setups(rows, day_of, i, intraday)
+        out = v4_setups(rows, day_of, i, intraday, ledger, "%s:%s" % (market, symbol))
     elif version == "v3":
         out = v3_setups(rows, day_of, i, ctx)
     else:
@@ -593,12 +593,12 @@ def v5_setups(rows, day_of, i, intraday=False, params=None):
     return out
 
 
-def v4_setups(rows, day_of, i, intraday=False):
-    """Scanner v4 (scanner_v4.py): the primary or the sequential OB / FVG secondary whose entry is candle i. The
-    sequence is rebuilt from the candles every time, so a secondary only appears after the primary closed."""
+def v4_setups(rows, day_of, i, intraday=False, ledger=None, chart=None):
+    """Format the current v4 signal from the live ledger or from a chart-only simulation."""
     import scanner_v4 as V4
     try:
-        seq = V4.sequence(rows, day_of, intraday=intraday)
+        seq = (V4.live_candidate(rows, day_of, ledger, chart) if ledger is not None
+               else V4.sequence(rows, day_of, intraday=intraday))
     except Exception:
         return []
     out = []
@@ -619,10 +619,10 @@ def v4_setups(rows, day_of, i, intraday=False):
             liq = "%s tap %s-%s after the primary closed" % (t["zone"], _r(lo), _r(hi))
             det = {"zone": t["zone"], "zone_low": _r(lo), "zone_high": _r(hi),
                    "primary_at": rows[t["primary_at"]][0].isoformat(),
-                   "primary_closed_at": rows[t["primary_closed_at"]][0].isoformat(),
+                   "primary_closed_at": t.get("primary_exit_time") or rows[t["primary_closed_at"]][0].isoformat(),
                    "tapped_at": rows[t["tap"]][0].isoformat(), "rr": round(V4.rr(t), 2)}
         out.append({"setup": "v4_%s_%s" % (t["kind"], t["side"]), "side": t["side"], "price": _r(t["entry"]),
                     "stop": _r(t["stop"]), "target": _r(t["target"]),
                     "target_2r": _r(t["entry"] - 2 * risk if short else t["entry"] + 2 * risk),
-                    "liquidity": liq, "details": det})
+                    "liquidity": liq, "details": det, "v4_signal_at": rows[i][0].isoformat()})
     return out

@@ -783,9 +783,8 @@ def time_stops(cfg, log):
     led = P.load_ledger(pcfg)
     now = datetime.now(timezone.utc)
     changed = False
-    acc = pcfg["accounts"]["CRYPTO"]
     for pos in list(led["open"]):
-        if pos["market"] != "CRYPTO" or P.pdf_only(pos, acc):   # v4 trades: TP / SL only (the PDF)
+        if pos["market"] != "CRYPTO" or P.pdf_only(pos):   # v4 trades: TP / SL only (the PDF)
             continue
         age = now - datetime.fromisoformat(pos["entry_time"])
         if age >= timedelta(hours=cfg["max_hold_hours"]):
