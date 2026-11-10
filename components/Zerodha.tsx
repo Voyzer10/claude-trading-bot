@@ -21,6 +21,42 @@ const fmt = (x: number) => x.toLocaleString("en-IN", { minimumFractionDigits: 2,
 const istTime = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }) : "";
 
+/** Connect by pasting the address of the page the Zerodha login lands on. Kite only redirects to https:// or
+ *  http://127.0.0.1, and this dashboard is plain http, so that page will not open - its address carries the token. */
+function KitePaste({ onDone }: { onDone: (msg: string) => void }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  async function go() {
+    setBusy(true);
+    setErr(null);
+    try {
+      await postJSON("/api/py/kite/token", { text });
+      setText("");
+      onDone("Zerodha connected: Indian prices now come from Kite.");
+    } catch (e) {
+      setErr(errText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="kite-paste">
+      <ol className="small">
+        <li>Tap <a href="/api/py/kite/login" target="_blank" rel="noopener">Log in to Zerodha</a> and log in.</li>
+        <li>It ends on a page that does not open (127.0.0.1). Copy that page&apos;s whole address.</li>
+        <li>Paste it here within 2 minutes:</li>
+      </ol>
+      <div className="kite-paste-row">
+        <input type="url" inputMode="url" autoComplete="off" spellCheck={false} placeholder="http://127.0.0.1:3000/...request_token=..."
+               value={text} onChange={(e) => setText(e.target.value)} aria-label="Address after the Zerodha login" />
+        <button className="btn primary" onClick={go} disabled={busy || !text.trim()}>{busy ? "Connecting…" : "Connect"}</button>
+      </div>
+      {err && <p className="small neg" role="alert" style={{ margin: "6px 0 0" }}>{err}</p>}
+    </div>
+  );
+}
+
 /** Zerodha (Kite Connect) as the Indian market data source: the daily login and a live index strip.
  *  Data only: the server refuses every order endpoint. */
 export default function Zerodha({ live }: { live: LiveTicks | null }) {
@@ -69,9 +105,7 @@ export default function Zerodha({ live }: { live: LiveTicks | null }) {
         {st && st.configured && (
           on ? (
             <button className="btn" onClick={logout}>Disconnect</button>
-          ) : (
-            <a className="btn primary" href="/api/py/kite/login">Connect Zerodha</a>
-          )
+          ) : null
         )}
       </div>
       {msg && <div className="notice" style={{ marginBottom: 10 }}>{msg}</div>}
@@ -96,6 +130,7 @@ export default function Zerodha({ live }: { live: LiveTicks | null }) {
           <span className="chip">orders: blocked</span>
         </div>
       )}
+      {st && st.configured && !on && <KitePaste onDone={(m) => { setMsg(m); load(); }} />}
       {on && (() => {
         const list = live?.indices?.length ? live.indices : INDICES;
         const change = (k: string) => {
@@ -156,6 +191,7 @@ export function ZerodhaBanner() {
     return () => clearInterval(id);
   }, []);
   if (!st || !st.configured || st.connected) return null;
+  const reload = () => getJSON<Status>("/api/py/kite/status").then(setSt).catch(() => setSt(null));
   return (
     <section className="panel attention home-full" aria-labelledby="kite-attn" role="status">
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -164,7 +200,7 @@ export function ZerodhaBanner() {
           Kite logins expire every morning. Indian prices come from Yahoo and F&amp;O from the model until you connect.
         </p>
       </div>
-      <a className="btn primary" href="/api/py/kite/login">Connect</a>
+      <KitePaste onDone={reload} />
     </section>
   );
 }
