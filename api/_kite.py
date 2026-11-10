@@ -2,18 +2,20 @@
 
   GET  /api/py/kite/status     configured? connected today? who, until when (never a key or token)
   GET  /api/py/kite/login      -> Zerodha's login page (once a day; Kite tokens expire ~6:00 IST)
-  GET  /api/py/kite/callback   Zerodha sends the browser back here with a request_token (set this URL as the
-                               app's Redirect URL in the Kite developer console)
+  GET  /api/py/kite/callback   Zerodha sends the browser back here with a request_token (needs an https dashboard:
+                               Kite only accepts https:// or http://127.0.0.1 Redirect URLs)
+  POST /api/py/kite/token      {"text": the post-login address or the request_token}: connect by pasting it
   POST /api/py/kite/logout     forget today's session
   GET  /api/py/live/ticks      the latest Indian market ticks (kite_ticker.py), for the dashboard's 1-second view
 """
 import json
 import os
+import re
 import sys
 import time
 import urllib.parse
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -68,6 +70,33 @@ def kite_callback(request_token: str = "", status: str = ""):
         except K.KiteError as e:
             msg = str(e)
     return RedirectResponse("/?kite=" + urllib.parse.quote(msg) + "#zerodha", status_code=302)
+
+
+def token_from(text):
+    """The request_token from what the owner pastes after the Zerodha login: the whole address of the page the
+    login lands on (http://127.0.0.1/...?request_token=XXXX&...) or the token alone."""
+    t = (text or "").strip()
+    m = re.search(r"request_token=([A-Za-z0-9]+)", t)
+    if m:
+        return m.group(1)
+    return t if re.fullmatch(r"[A-Za-z0-9]{8,64}", t) else None
+
+
+@router.post("/api/py/kite/token")
+async def kite_token(request: Request):
+    """Connect by pasting the post-login address. Kite only redirects to https:// or http://127.0.0.1, and this
+    dashboard runs on plain http, so the login lands on an unreachable 127.0.0.1 page whose address carries the
+    request_token."""
+    body = await request.json()
+    tok = token_from(body.get("text"))
+    if not tok:
+        raise HTTPException(400, "no request_token in that text: paste the whole address of the page after the login")
+    try:
+        st = K.exchange(tok)
+    except K.KiteError as e:
+        raise HTTPException(400, "Zerodha refused it: %s (a token works once, for a few minutes: log in again)" % e)
+    print("kite: connected by pasted login address (user %s)" % st.get("user"), flush=True)
+    return st
 
 
 @router.post("/api/py/kite/logout")

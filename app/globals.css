@@ -542,3 +542,14 @@ a { text-underline-offset: 3px; }
   .watch-rows { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
   .watch-rows > .list-row-wrap { border-right: 1px solid var(--line); }
 }
+
+/* Zerodha: connect by pasting the post-login address */
+.kite-paste { margin-top: 12px; display: grid; gap: 6px; min-width: 0; }
+.kite-paste ol { margin: 0; padding-left: 20px; display: grid; gap: 2px; color: var(--muted); }
+.kite-paste ol a { color: var(--accent); }
+.kite-paste-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.kite-paste-row input { flex: 1 1 220px; min-width: 0; min-height: 44px; padding: 0 12px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: 16px; }
+.kite-paste-row .btn { min-height: 44px; }
+.attention { flex-wrap: wrap; }
+.attention > .kite-paste { flex: 1 1 100%; }

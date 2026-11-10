@@ -190,6 +190,30 @@ if __name__ == "__main__":
         K.forget_session()
         check("   not connected: no Kite at all (paper falls back to Yahoo / the model)",
               P.kite_mod() is None and P.kite_price("NSE", "RELIANCE") is None)
+        # ---- 6. connect by pasting the post-login address (Kite will not redirect to a plain-http dashboard)
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        import api._kite as AK
+        AK.K.LIVE_DIR, AK.K.SESSION_FILE = K.LIVE_DIR, K.SESSION_FILE
+        url = "http://127.0.0.1:3000/api/py/kite/callback?type=login&status=success&request_token=AbC123xyz789&action=login"
+        check("6. the token is read from the whole pasted address, or from the token alone",
+              AK.token_from(url) == "AbC123xyz789" and AK.token_from(" AbC123xyz789 ") == "AbC123xyz789"
+              and AK.token_from("hello there") is None)
+        used = []
+        AK.K.exchange = lambda t: used.append(t) or {"connected": True, "user": "AB1234"}
+        app = FastAPI()
+        app.include_router(AK.router)
+        c = TestClient(app)
+        r = c.post("/api/py/kite/token", json={"text": url})
+        bad = c.post("/api/py/kite/token", json={"text": "copied the wrong thing"})
+
+        def refuse(t):
+            raise K.KiteError("Token is invalid or has expired")
+        AK.K.exchange = refuse
+        old_tok = c.post("/api/py/kite/token", json={"text": url})
+        check("   POST /api/py/kite/token connects with it; wrong text and an expired token give a clear 400",
+              r.status_code == 200 and used == ["AbC123xyz789"] and bad.status_code == 400
+              and old_tok.status_code == 400 and "log in again" in old_tok.text, (r.text, bad.text, old_tok.text))
         check("   and nothing was sent over the network in this whole test", not sent, sent)
     finally:
         os.chdir(old)
