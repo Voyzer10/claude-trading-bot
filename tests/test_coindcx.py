@@ -27,11 +27,16 @@ def check(name, ok, extra=""):
 
 
 PAIRS = ["B-BTC_USDT", "B-ETH_USDT", "B-1000PEPE_USDT", "B-SOL_USDT"]
-RT = {"ts": 1794370000000, "vs": 1, "prices": {
-    "B-BTC_USDT": {"ls": 104250.5, "mp": 104251.0, "h": 105000, "l": 103000, "pc": 1.25},
-    "B-ETH_USDT": {"mp": 3900.0, "h": 4000, "l": 3800, "pc": -0.5},          # no last price: mark price used
-    "B-1000PEPE_USDT": {"ls": 0.0123, "h": 0.013, "l": 0.012, "pc": 2.0},     # 1000 PEPE per contract
-    "B-SOL_USDT": {"ls": 0, "mp": 0}}}                                        # no usable price
+# the public spot ticker (api.coindcx.com/exchange/ticker), as the VPS got it on 11 Nov 2026
+TICKER = [
+    {"market": "BTCUSDT", "change_24_hour": "1.250", "high": "105000", "low": "103000", "last_price": "104250.5",
+     "timestamp": 1794380421},
+    {"market": "ETHUSDT", "change_24_hour": "-0.500", "high": "4000", "low": "3800", "last_price": "3900.0",
+     "timestamp": 1794380420},
+    {"market": "1000PEPEUSDT", "change_24_hour": "2.000", "high": "0.013", "low": "0.012", "last_price": "0.0123",
+     "timestamp": 1794380419},                                                # only the 1000x market exists
+    {"market": "SOLUSDT", "last_price": "0", "timestamp": 1794380418},        # no usable price
+    {"market": "BTCINR", "last_price": "9100000", "timestamp": 1794380418}]   # INR market: never used
 
 
 def candles_doc(start, n, step_min=5):
@@ -50,8 +55,8 @@ class Fake:
         u = urllib.parse.urlsplit(url)
         if u.path.endswith("/active_instruments"):
             body = PAIRS
-        elif u.path.endswith("/current_prices/futures/rt"):
-            body = RT
+        elif u.path == "/exchange/ticker":
+            body = TICKER
         elif u.path == "/market_data/candlesticks":
             q = urllib.parse.parse_qs(u.query)
             body = candles_doc(datetime.fromtimestamp(int(q["from"][0]), timezone.utc), 6)
@@ -69,13 +74,13 @@ if __name__ == "__main__":
         C.urllib.request.urlopen = fake
 
         # 1. only public GET market data can be sent
-        ok_urls = [C.RT_URL, C.INSTR_URL, C.CANDLES_URL + "?pair=B-BTC_USDT&resolution=5&pcode=f"]
+        ok_urls = [C.TICKER_URL, C.RT_URL, C.INSTR_URL, C.CANDLES_URL + "?pair=B-BTC_USDT&resolution=5&pcode=f"]
         bad = [("POST", "https://api.coindcx.com/exchange/v1/orders/create"),
                ("POST", "https://api.coindcx.com/exchange/v1/derivatives/futures/orders/create"),
                ("GET", "https://api.coindcx.com/exchange/v1/users/balances"),
                ("GET", "http://public.coindcx.com/market_data/v3/current_prices/futures/rt"),
                ("GET", "https://evil.example/market_data/candlesticks"),
-               ("POST", C.RT_URL)]
+               ("POST", C.TICKER_URL)]
         check("1. the public market-data URLs are allowed", all(C.allowed(u) for u in ok_urls))
         refused = []
         for m, u in bad:
@@ -95,9 +100,13 @@ if __name__ == "__main__":
               C.pair_of("BTC") == ("B-BTC_USDT", 1) and C.pair_of("pepe") == ("B-1000PEPE_USDT", 1000)
               and C.pair_of("MKR") is None)
         px = C.prices(["BTC", "ETH", "PEPE", "SOL", "MKR"])
-        check("   prices: last price, else mark price; PEPE in its own units; no price -> left out",
+        check("   prices from the USDT spot ticker; PEPE from 1000PEPEUSDT in its own units; no price -> left out",
               px["BTC"][0] == 104250.5 and px["ETH"][0] == 3900.0 and abs(px["PEPE"][0] - 0.0000123) < 1e-12
               and "SOL" not in px and "MKR" not in px, px)
+        allp, _ = C.current_prices()
+        check("   coin -> USDT market (never the INR one); 1000x market only when the plain one is missing",
+              C.market_of("BTC", allp) == ("BTCUSDT", 1) and C.market_of("PEPE", allp) == ("1000PEPEUSDT", 1000)
+              and C.market_of("MKR", allp) is None)
         check("   every request was a plain GET with no credentials",
               all(m == "GET" and not any(k.lower().startswith(("x-auth", "authorization")) for k in h)
                   for m, _, h in fake.sent), fake.sent)
@@ -122,7 +131,7 @@ if __name__ == "__main__":
             json.dump({"open": [{"market": "CRYPTO", "symbol": "SOL"}, {"market": "NSE", "symbol": "TCS"}]}, fh)
         coins = T.wanted()
         check("4. the ticker watches the universe plus open crypto positions", coins == ["BTC", "ETH", "PEPE", "MKR", "SOL"], coins)
-        ticks, missing = T.build(coins, C.current_prices(), C.instruments())
+        ticks, missing = T.build(coins, C.current_prices())
         T.write(ticks, missing)
         check("   ticks keyed like paper positions, with high / low / change; missing coins listed",
               set(ticks) == {"CRYPTO:BTC", "CRYPTO:ETH", "CRYPTO:PEPE"} and ticks["CRYPTO:BTC"]["chg_pct"] == 1.25
@@ -143,9 +152,10 @@ if __name__ == "__main__":
         json.dump(doc, open(C.TICKS_FILE, "w"))
         p2, _ = P.fetch_price("CRYPTO", "ETH")
         check("   with the file stale, one CoinDCX REST call", p2 == 3900.0, p2)
-        mins = P.fetch_minutes("CRYPTO", "BTC")
-        check("   1-minute candles for intrabar stop / target checks come from CoinDCX",
-              mins and len(mins[0]) == 5, mins[:1])
+        before = len(fake.sent)
+        P.urllib.request.urlopen = lambda *a, **k: (_ for _ in ()).throw(OSError("offline"))
+        P.fetch_minutes("CRYPTO", "BTC")
+        check("   1-minute candles do not go to public.coindcx.com (403 from the VPS)", len(fake.sent) == before)
 
         # 6. the dashboard endpoint
         from fastapi import FastAPI

@@ -126,12 +126,12 @@ def live_ticks():
     ticks = {k: {f: v.get(f) for f in FIELDS if v.get(f) is not None} for k, v in (doc.get("ticks") or {}).items()}
     cdoc, cage = _crypto()
     crypto_live = cage is not None and cage < 5
-    if crypto_live:   # CoinDCX USDT futures, public data (coindcx_ticker.py)
+    if crypto_live:   # CoinDCX USDT markets, public data (coindcx_ticker.py)
         for k, v in (cdoc.get("ticks") or {}).items():
             ticks[k] = {f: v.get(f) for f in FIELDS + ("chg_pct",) if v.get(f) is not None}
     return {"age_s": None if age is None else round(age, 1), "live": age is not None and age < 5,
             "connected": K.connected(), "ticks": ticks, "indices": K.WATCH_INDICES,
             "missing": doc.get("missing") or [],
             "crypto_live": crypto_live, "crypto_age_s": None if cage is None else round(cage, 1),
-            "crypto_source": "CoinDCX USDT futures (public data, no API key)",
+            "crypto_source": "CoinDCX USDT markets (public data, no API key)",
             "crypto_missing": cdoc.get("missing") or []}

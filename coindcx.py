@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-coindcx.py - CoinDCX USDT futures as a PUBLIC price source for the crypto paper account. Data only.
+coindcx.py - CoinDCX USDT markets as a PUBLIC price source for the crypto paper account. Data only.
 
 No API key, by design (owner, 11 Nov 2026: "no real money trading"). CoinDCX has no read-only API keys (its docs:
 "No, we currently don't have Read Only APIs"): any key could trade. Market data needs no key, so this module never
@@ -8,19 +8,20 @@ reads, stores or sends one, and every request goes through _get(), which only al
 ALLOWED. Nothing here can place, modify or cancel an order; tests/test_coindcx.py checks it.
 
 What it does
-  instruments()             the active USDT futures pairs ("B-BTC_USDT", ...), cached for 6 hours
-  pair_of("PEPE")           ("B-1000PEPE_USDT", 1000): the futures pair of a coin and its contract multiplier
-  current_prices()          every futures pair's latest price in one call (CoinDCX "current prices RT")
-  prices(["BTC", ...])      {"BTC": (price, time)} per coin, in the coin's own units (1000PEPE / 1000)
-  candles("BTC", 15, a, b)  [(utc open time, o, h, l, c, volume)]; 1 / 5 / 60 minutes from CoinDCX, 15 from 5
+  current_prices()          every CoinDCX market's last price in one call (api.coindcx.com/exchange/ticker)
+  market_of("PEPE", m)      ("PEPEUSDT", 1), or ("1000PEPEUSDT", 1000) when only the 1000x market exists
+  prices(["BTC", ...])      {"BTC": (price, time)} per coin, from its USDT market, in the coin's own units
   tick_price("BTC")         (price, time) from coindcx_ticker.py's file if it wrote in the last 5 seconds
+  instruments() / pair_of() / candles()   USDT futures pairs and candles (public.coindcx.com; see below)
 
-Prices are USDT futures (perpetual) prices: within a few hundredths of a percent of the USD spot prices the
-crypto backtests used (Yahoo / Coinbase), and the market the CRYPTO account's fees model (CoinDCX USDT futures).
+Prices are CoinDCX USDT spot prices: the futures price host (public.coindcx.com) answers 403 Forbidden from the
+VPS (checked 11 Nov 2026, also with a browser user agent), while api.coindcx.com answers. USDT spot and USDT
+perpetual prices differ by a few hundredths of a percent, as do the USD spot prices the crypto backtests used
+(Yahoo / Coinbase). 1-minute candles for stop / target checks stay on Yahoo / Coinbase for the same reason.
 
     python coindcx.py prices BTC ETH PEPE
     python coindcx.py candles BTC 15
-    python coindcx.py check          (prices and the futures pair each coin maps to)
+    python coindcx.py check          (prices and the CoinDCX market each coin maps to)
 """
 import json
 import os
@@ -38,10 +39,12 @@ INSTR_FILE = os.path.join(LIVE_DIR, "coindcx_instruments.json")
 
 # the only requests this module may send: (host, path regex), GET, no credentials. Nothing that trades is here.
 ALLOWED = [
+    ("api.coindcx.com", r"/exchange/ticker"),
     ("public.coindcx.com", r"/market_data/v3/current_prices/futures/rt"),
     ("public.coindcx.com", r"/market_data/candlesticks"),
     ("api.coindcx.com", r"/exchange/v1/derivatives/futures/data/active_instruments"),
 ]
+TICKER_URL = "https://api.coindcx.com/exchange/ticker"
 RT_URL = "https://public.coindcx.com/market_data/v3/current_prices/futures/rt"
 CANDLES_URL = "https://public.coindcx.com/market_data/candlesticks"
 INSTR_URL = ("https://api.coindcx.com/exchange/v1/derivatives/futures/data/active_instruments"
@@ -133,36 +136,52 @@ def _num(x):
 
 
 def last_price(d):
-    """The last traded price of one entry of current_prices(): "ls" (last), else "mp" (mark)."""
-    return _num(d.get("ls")) or _num(d.get("mp"))
+    """The last traded price of one entry of current_prices()."""
+    return _num(d.get("last_price")) or _num(d.get("ls")) or _num(d.get("mp"))
 
 
 def current_prices():
-    """({pair: entry}, time) for every USDT future, one request. Entry keys: ls (last), mp (mark), h, l, v, pc (%)."""
-    doc = _get(RT_URL)
-    prices = (doc or {}).get("prices") or {}
-    ts = doc.get("ts")
-    t = datetime.fromtimestamp(ts / 1000 if ts and ts > 1e12 else (ts or time.time()), timezone.utc)
-    return prices, t
+    """({market: entry}, time) for every CoinDCX market, one request (the public ticker). Entry keys: last_price,
+    high, low, volume, change_24_hour (%), bid, ask, timestamp."""
+    rows = _get(TICKER_URL)
+    out, ts = {}, 0
+    for r in rows if isinstance(rows, list) else []:
+        if isinstance(r, dict) and r.get("market"):
+            out[r["market"]] = r
+            try:
+                ts = max(ts, float(r.get("timestamp") or 0))
+            except (TypeError, ValueError):
+                pass
+    if not out:
+        raise CoinDCXError("CoinDCX ticker returned no markets")
+    ts = ts / 1000 if ts > 1e12 else ts
+    return out, datetime.fromtimestamp(ts or time.time(), timezone.utc)
 
 
-def prices(symbols, rt=None, pairs=None):
-    """{"BTC": (price, time)} for the coins CoinDCX has, in the coin's own units."""
+def market_of(sym, markets):
+    """("BTCUSDT", 1) for "BTC"; ("1000PEPEUSDT", 1000) when only the 1000x market exists; None if no USDT market."""
+    s = sym.upper().replace("-USD", "").replace("USDT", "")
+    for m in MULTS:
+        name = "%s%sUSDT" % ("" if m == 1 else m, s)
+        if name in markets:
+            return name, m
+    return None
+
+
+def prices(symbols, rt=None):
+    """{"BTC": (price, time)} for the coins CoinDCX has a USDT market for, in the coin's own units."""
     allp, t = rt if rt is not None else current_prices()
     out = {}
     for s in symbols:
-        po = pair_of(s, pairs)
-        if not po:
-            continue
-        d = allp.get(po[0])
-        px = last_price(d) if isinstance(d, dict) else None
+        mo = market_of(s, allp)
+        px = last_price(allp[mo[0]]) if mo else None
         if px:
-            out[s.upper()] = (px / po[1], t)
+            out[s.upper()] = (px / mo[1], t)
     return out
 
 
 def price(sym):
-    """(price, time) for one coin, or None (no future on CoinDCX, or no answer)."""
+    """(price, time) for one coin, or None (no USDT market on CoinDCX, or no answer)."""
     try:
         return prices([sym]).get(sym.upper())
     except CoinDCXError:
@@ -246,9 +265,11 @@ def main(argv=None):
         for s, (p, t) in sorted(prices(a[1:] or ["BTC", "ETH"]).items()):
             print("%-8s %14s  %s" % (s, ("%.8g" % p), t.isoformat()))
     elif a and a[0] == "check":
+        allp, t = current_prices()
         for s in a[1:] or ["BTC", "ETH", "SOL", "PEPE"]:
-            po, c = pair_of(s), price(s)
-            print("%-6s pair %-18s price %s" % (s, po[0] if po else "none", "%.8g" % c[0] if c else "none"))
+            mo = market_of(s, allp)
+            c = prices([s], (allp, t)).get(s.upper())
+            print("%-6s market %-14s price %s" % (s, mo[0] if mo else "none", "%.8g" % c[0] if c else "none"))
     elif a and a[0] == "candles":
         sym, m = a[1], int(a[2]) if len(a) > 2 else 15
         end = datetime.now(timezone.utc)

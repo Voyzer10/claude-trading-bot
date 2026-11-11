@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-coindcx_ticker.py - live crypto prices from CoinDCX USDT futures, written every second to
+coindcx_ticker.py - live crypto prices from CoinDCX USDT markets, written every second to
 trader/live/crypto_ticks.json for the dashboard (prices changing every second) and paper.py (stops / targets on
 the freshest price).
 
-Public data only: one GET of CoinDCX's "current prices RT" a second (all futures in one answer). No API key, no
+Public data only: one GET of CoinDCX's public ticker a second (every market in one answer). No API key, no
 private endpoint, nothing that can place an order (coindcx.py refuses anything else before it is sent).
 
 Watches: the crypto universe (trader/universe_crypto.txt, the dashboard's coin list) and every open CRYPTO paper
-position. The list is re-read every 30 seconds; coins with no USDT future on CoinDCX are listed as "missing".
+position. The list is re-read every 30 seconds; coins with no USDT market on CoinDCX are listed as "missing".
 
 Service: deploy/trader-crypto-ticker.service.   By hand:  python coindcx_ticker.py
 """
@@ -46,12 +46,12 @@ def wanted():
     return list(dict.fromkeys(c for c in coins if c)) or list(DEFAULT_COINS)
 
 
-def build(coins, rt, pairs):
+def build(coins, rt):
     """(ticks, missing) for the file, from one current_prices() answer."""
     allp, t = rt
     ticks, missing = {}, []
     for s in coins:
-        po = C.pair_of(s, pairs)
+        po = C.market_of(s, allp)
         d = allp.get(po[0]) if po else None
         px = C.last_price(d) if isinstance(d, dict) else None
         if not px:
@@ -59,12 +59,12 @@ def build(coins, rt, pairs):
             continue
         m = po[1]
         tick = {"ltp": px / m, "t": t.timestamp(), "pair": po[0]}
-        for src, dst in (("h", "high"), ("l", "low")):
+        for src, dst in (("high", "high"), ("low", "low")):
             v = C._num(d.get(src))
             if v:
                 tick[dst] = v / m
         try:
-            tick["chg_pct"] = round(float(d.get("pc")), 3)
+            tick["chg_pct"] = round(float(d.get("change_24_hour")), 3)
         except (TypeError, ValueError):
             pass
         ticks["CRYPTO:" + s] = tick
@@ -72,7 +72,7 @@ def build(coins, rt, pairs):
 
 
 def write(ticks, missing):
-    doc = {"written": time.time(), "source": "coindcx usdt futures (public)", "ticks": ticks, "missing": missing}
+    doc = {"written": time.time(), "source": "coindcx usdt spot ticker (public)", "ticks": ticks, "missing": missing}
     os.makedirs(os.path.dirname(C.TICKS_FILE), exist_ok=True)
     tmp = C.TICKS_FILE + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
@@ -81,14 +81,13 @@ def write(ticks, missing):
 
 
 def run(every=1.0):
-    coins, coins_at, pairs, fails = [], 0.0, None, 0
+    coins, coins_at, fails = [], 0.0, 0
     while True:
         t0 = time.time()
         try:
             if t0 - coins_at > 30:
                 coins, coins_at = wanted(), t0
-            pairs = C.instruments()
-            ticks, missing = build(coins, C.current_prices(), pairs)
+            ticks, missing = build(coins, C.current_prices())
             write(ticks, missing)
             if fails:
                 log("CoinDCX prices back (%d coins, %d missing)" % (len(ticks), len(missing)))
