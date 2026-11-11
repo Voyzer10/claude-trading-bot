@@ -423,11 +423,28 @@ def us_backup_quote(t):
     return max(got, key=lambda q: q[1]) if got else None
 
 
+def coindcx_price(t, rest=True):
+    """(price, time) for a coin from CoinDCX USDT futures (public data, no key): the live ticker's file first,
+    then one REST call. None when CoinDCX has no future for it or does not answer (Yahoo / Coinbase then)."""
+    try:
+        import coindcx
+    except Exception:
+        return None
+    q = coindcx.tick_price(t)
+    if q:
+        return q
+    return coindcx.price(t) if rest else None
+
+
 def fetch_price(m, t):
     """Return (price, quote_time_utc). Raises PaperError."""
     kq = kite_price(m, t)                # Indian market: Zerodha (live) when connected
     if kq:
         return float(kq[0]), kq[1]
+    if m == "CRYPTO":
+        cq = coindcx_price(t)            # crypto: CoinDCX USDT futures, live (owner, 11 Nov 2026)
+        if cq:
+            return float(cq[0]), cq[1]
     if m == "NFO":
         import fno
         try:
@@ -510,6 +527,15 @@ def fetch_minutes(m, t, days=1):
             pass
     if m == "NFO":
         return []
+    if m == "CRYPTO":                    # CoinDCX USDT futures 1-minute candles (public data)
+        try:
+            import coindcx
+            now = datetime.now(timezone.utc)
+            out = [r[:5] for r in coindcx.candles(t, 1, now - timedelta(days=max(1, min(7, int(days)))), now)]
+            if out:
+                return out
+        except Exception:
+            pass
     ysym = urllib.parse.quote(yahoo_symbol(m, t), safe="")
     rng = "%dd" % max(1, min(7, int(days)))
     for host in ("query2", "query1"):

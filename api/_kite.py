@@ -6,7 +6,8 @@
                                Kite only accepts https:// or http://127.0.0.1 Redirect URLs)
   POST /api/py/kite/token      {"text": the post-login address or the request_token}: connect by pasting it
   POST /api/py/kite/logout     forget today's session
-  GET  /api/py/live/ticks      the latest Indian market ticks (kite_ticker.py), for the dashboard's 1-second view
+  GET  /api/py/live/ticks      the latest Indian market ticks (kite_ticker.py) and crypto prices (coindcx_ticker.py,
+                               CoinDCX public data), for the dashboard's 1-second view
 """
 import json
 import os
@@ -23,12 +24,16 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 import kite as K  # noqa: E402
+import coindcx as CX  # noqa: E402
 
 # the API process may run from anywhere: point kite.py at the bot's own data folder
 K.LIVE_DIR = os.path.join(ROOT, "trader", "live")
 K.SESSION_FILE = os.path.join(K.LIVE_DIR, "kite_session.json")
 K.INSTR_DIR = os.path.join(K.LIVE_DIR, "kite_instruments")
 K.TICKS_FILE = os.path.join(K.LIVE_DIR, "ticks.json")
+CX.LIVE_DIR = K.LIVE_DIR
+CX.TICKS_FILE = os.path.join(K.LIVE_DIR, "crypto_ticks.json")
+CX.INSTR_FILE = os.path.join(K.LIVE_DIR, "coindcx_instruments.json")
 
 router = APIRouter()
 FIELDS = ("ltp", "t", "open", "high", "low", "close", "volume", "oi")
@@ -105,10 +110,28 @@ def kite_logout():
     return K.status()
 
 
+def _crypto():
+    """(doc, age in seconds) of coindcx_ticker.py's file, or ({}, None)."""
+    try:
+        with open(CX.TICKS_FILE, encoding="utf-8") as fh:
+            doc = json.load(fh)
+        return doc, max(0.0, time.time() - float(doc.get("written", 0)))
+    except (FileNotFoundError, ValueError, TypeError):
+        return {}, None
+
+
 @router.get("/api/py/live/ticks")
 def live_ticks():
     doc, age = _ticker()
     ticks = {k: {f: v.get(f) for f in FIELDS if v.get(f) is not None} for k, v in (doc.get("ticks") or {}).items()}
+    cdoc, cage = _crypto()
+    crypto_live = cage is not None and cage < 5
+    if crypto_live:   # CoinDCX USDT futures, public data (coindcx_ticker.py)
+        for k, v in (cdoc.get("ticks") or {}).items():
+            ticks[k] = {f: v.get(f) for f in FIELDS + ("chg_pct",) if v.get(f) is not None}
     return {"age_s": None if age is None else round(age, 1), "live": age is not None and age < 5,
             "connected": K.connected(), "ticks": ticks, "indices": K.WATCH_INDICES,
-            "missing": doc.get("missing") or []}
+            "missing": doc.get("missing") or [],
+            "crypto_live": crypto_live, "crypto_age_s": None if cage is None else round(cage, 1),
+            "crypto_source": "CoinDCX USDT futures (public data, no API key)",
+            "crypto_missing": cdoc.get("missing") or []}

@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-/** One instrument's latest tick from Zerodha (kite_ticker.py -> /api/py/live/ticks). */
-export type Tick = { ltp: number; t?: number; open?: number; high?: number; low?: number; close?: number; volume?: number; oi?: number };
+/** One instrument's latest tick: Zerodha (kite_ticker.py) or CoinDCX (coindcx_ticker.py) -> /api/py/live/ticks. */
+export type Tick = { ltp: number; t?: number; open?: number; high?: number; low?: number; close?: number; volume?: number; oi?: number; chg_pct?: number };
 export type LiveTicks = {
   age_s: number | null;
   live: boolean;
@@ -13,6 +13,11 @@ export type LiveTicks = {
   indices?: [string, string][];
   /** watched keys Zerodha did not recognise */
   missing?: string[];
+  /** crypto: CoinDCX USDT futures public prices ("CRYPTO:BTC" keys in ticks), from coindcx_ticker.py */
+  crypto_live?: boolean;
+  crypto_age_s?: number | null;
+  crypto_source?: string;
+  crypto_missing?: string[];
 };
 
 /** Polls the Indian market ticks every second while the page is visible. Returns null until the first answer,
@@ -51,3 +56,5 @@ export function useLiveTicks(enabled = true): LiveTicks | null {
 }
 
 export const INDIA = (m: string) => m === "NSE" || m === "BSE" || m === "NFO";
+/** markets whose open positions get a live price from the tick feed */
+export const liveFor = (m: string, live: LiveTicks | null) => (INDIA(m) ? !!live?.live : m === "CRYPTO" ? !!live?.crypto_live : false);

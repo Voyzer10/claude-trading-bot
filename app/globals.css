@@ -553,3 +553,4 @@ a { text-underline-offset: 3px; }
 .kite-paste-row .btn { min-height: 44px; }
 .attention { flex-wrap: wrap; }
 .attention > .kite-paste { flex: 1 1 100%; }
+.live-dot.inline:first-child { margin: 0 6px 0 0; }
