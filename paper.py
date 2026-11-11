@@ -929,8 +929,29 @@ TM_KEYS = ("tm_be_r", "tm_lock_at", "tm_lock_keep", "tm_reversal", "tm_rev_min_r
 
 
 def pdf_only(pos):
-    """V4 uses its original stop, target and the account's defined session exit."""
+    """A Scanner v4 trade: its stop, its target, the v4 trailing stop and the session's flat-by only (no other
+    Trade Manager exit, breakeven rule or time stop)."""
     return pos.get("scanner") == "v4"
+
+
+def v4_trail(pos, best, sh, when=None):
+    """Scanner v4's Trade Manager, trailing only (owner, 11 Nov 2026: "1:1 ya 1:2 nikal paye"): at +1R the stop goes
+    to the entry, at +2R to +1R, then 1R higher for every further R. Same rule as scanner_v4._exit_step."""
+    rs = pos.get("risk_stop", pos["stop"])
+    risk = abs(pos["entry"] - rs)
+    if risk <= 0:
+        return
+    steps = int((((pos["entry"] - best) if sh else (best - pos["entry"])) / risk) + 1e-9)
+    if steps < 1:
+        return
+    m = pos["market"]
+    new = round_px(m, pos["entry"] - (steps - 1) * risk if sh else pos["entry"] + (steps - 1) * risk, down=not sh)
+    if (new < pos["stop"]) if sh else (new > pos["stop"]):
+        pos["stop"], pos["breakeven"] = new, True
+        if steps >= 2:
+            pos["trailing"] = True
+        tm_event(pos, "v4 trailing: price reached +%dR, stop moved to %s (%+dR)" % (steps, money(m, new), steps - 1),
+                 when)
 
 
 def tm_cfg(acc):
@@ -1052,6 +1073,7 @@ def step_bar(led, cfg, pos, acc, b, now, sh):
     if strict or pos.get("pdf_only"):
         pos["pdf_only"] = strict           # shown on the dashboard's Trade Manager strip
     if strict:
+        v4_trail(pos, best, sh, when)      # v4: trailing only (owner, 11 Nov 2026), no other Trade Manager exit
         return False
     tm = tm_cfg(acc) if not pos.get("trail_k") else None
     be = acc.get("breakeven_at_r") or (tm["tm_be_r"] if tm else None)
@@ -1443,7 +1465,7 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
             tap = _iso(details.get("tapped_at"))
             if (not closed or closed.get("setup") != "v4_primary_" + s["side"]
                     or primary is None or primary != _iso(closed.get("v4_signal_at"))
-                    or exited is None or tap is None or not exited < tap < signal):
+                    or exited is None or tap is None or not exited < tap <= signal):
                 return done("skipped", "v4: secondary needs a matching closed primary and a later confirmed zone tap")
         v4_fields = {"v4_chart": chart, "v4_signal_at": signal.isoformat()}
     entry, stop, short = s["price"], s.get("stop"), s["side"] == "short"

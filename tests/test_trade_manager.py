@@ -126,23 +126,28 @@ if __name__ == "__main__":
         P.check_once(cfg, led)
         check("6. the backtested crypto trailing exit is left alone (no stale exit at 90 min)", led["open"], led["closed"])
 
-        # Scanner v4 trades: only the PDF's exits (owner, 10 Nov 2026): stop / target, no Trade Manager
+        # Scanner v4 trades (owner, 11 Nov 2026): stop, target and the v4 trailing stop only (+1R -> entry, +2R -> +1R)
         v4 = {"scanner": "v4", "setup": "v4_primary_long"}
         pos, closed = run(P, "long", 102.0, lambda n: minutes(n, 30, up_then_down), 98.8, pos_extra=v4)
-        check("10. a v4 trade ignores the Trade Manager: 95% to the target, then the full stop (-1R), as the PDF says",
-              closed and closed[0]["exit"] == 99.0 and closed[0]["reason"] == "stop" and not closed[0].get("tm_log"),
+        check("10. a v4 trade: +1.9R (95% to the target) then down -> out at the entry by the v4 trailing stop, "
+              "no profit lock or reversal exit",
+              closed and closed[0]["exit"] == 100.0 and closed[0]["reason"] == "breakeven stop"
+              and any("v4 trailing" in e["text"] for e in closed[0].get("tm_log", []))
+              and not any("profit lock" in e["text"] or "reversal" in e["text"] for e in closed[0].get("tm_log", [])),
               closed)
         pos, closed = run(P, "long", 103.0, lambda n: minutes(n, 30, [100.3, 100.7, 101.1, 101.3, 101.2]), 101.2,
                           pos_extra=v4)
-        check("   no breakeven move either: +1.3R and the stop stays at 99", pos and pos["stop"] == 99.0
-              and not pos.get("breakeven"), pos)
+        check("   +1.3R: the stop is at the entry (100)", pos and pos["stop"] == 100.0 and pos.get("breakeven"), pos)
+        pos, closed = run(P, "long", 104.0, lambda n: minutes(n, 30, [100.6, 101.4, 102.1, 102.3, 102.2]), 102.2,
+                          pos_extra=v4)
+        check("   +2.3R: the stop trails to +1R (101)", pos and pos["stop"] == 101.0, pos)
         pos, closed = run(P, "long", 102.0, lambda n: minutes(n, 30, [100.1, 100.2, 100.0, 99.9, 100.1]), 100.1,
                           entry_ago=75, pos_extra=v4)
         check("   no 'went nowhere' exit at 75 min: still open", pos is not None and not closed, closed)
         pos, closed = run(P, "long", 102.0, lambda n: minutes(n, 30, up_then_down), 98.8, pos_extra=v4,
                           extra={"v4_pdf_only": False})
-        check("   an old v4_pdf_only setting cannot enable Trade Manager for v4",
-              closed and closed[0]["reason"] == "stop", closed)
+        check("   an old v4_pdf_only setting changes nothing (no profit lock for v4)",
+              closed and closed[0]["reason"] == "breakeven stop", closed)
         import auto_crypto as AC
         cfg = P.load_config()
         led = P.load_ledger(cfg)
