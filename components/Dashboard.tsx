@@ -14,7 +14,7 @@ import SymbolIcon from "@/components/SymbolIcon";
 import Icon from "@/components/Icon";
 import Zerodha, { ZerodhaBanner } from "@/components/Zerodha";
 import { FnoWatch, NseWatch, UsWatch } from "@/components/Watchlists";
-import { INDIA, useLiveTicks, type LiveTicks } from "@/lib/live";
+import { INDIA, liveFor, useLiveTicks, type LiveTicks } from "@/lib/live";
 import { errText } from "@/lib/api";
 
 const POLL_MS = 30_000;
@@ -118,7 +118,7 @@ export default function Dashboard() {
         <div className="pane" hidden={nav.tab !== "markets"}>
           {snap && <Zerodha live={live} />}
           <Seg value={nav.sub.markets} onChange={(v) => nav.go("markets", v)} items={[["crypto", "Crypto"], ["nse", "NSE"], ["us", "US"], ["fno", "F&O"]]} label="Watch lists" />
-          <div className="pane" hidden={nav.sub.markets !== "crypto"}>{snap && <CoinsSection snap={snap} />}</div>
+          <div className="pane" hidden={nav.sub.markets !== "crypto"}>{snap && <CoinsSection snap={snap} live={live} />}</div>
           <div className="pane" hidden={nav.sub.markets !== "nse"}>{snap && <NseWatch snap={snap} live={live} />}</div>
           <div className="pane" hidden={nav.sub.markets !== "us"}>{snap && <UsWatch snap={snap} />}</div>
           <div className="pane" hidden={nav.sub.markets !== "fno"}>{snap && <FnoWatch snap={snap} live={live} />}</div>
@@ -443,8 +443,9 @@ const STATE_CHIP: Record<string, string> = {
   "no data": "c-off",
 };
 
-function CoinsSection({ snap }: { snap: Snapshot }) {
+function CoinsSection({ snap, live }: { snap: Snapshot; live?: LiveTicks | null }) {
   const c = snap.crypto;
+  const cl = !!live?.crypto_live;
   const counts = c.coins.reduce<Record<string, number>>((a, x) => ((a[x.state] = (a[x.state] ?? 0) + 1), a), {});
   return (
     <section id="coins" className="panel" aria-labelledby="coins-h">
@@ -454,6 +455,14 @@ function CoinsSection({ snap }: { snap: Snapshot }) {
           <p>
             Last 15-minute candle {timeIST(c.scan_as_of, true)} · {c.usable ?? "—"} of {c.scanned ?? "—"} charts usable ·
             daily setups from closes through {c.daily_closes_through ?? "—"} (UTC)
+          </p>
+          <p className="small">
+            {cl ? (
+              <><span className="live-dot inline" aria-hidden="true" /> Prices live from CoinDCX USDT futures, every second (public data, no API key)
+                {live?.crypto_missing?.length ? <span className="muted"> · not on CoinDCX futures: {live.crypto_missing.join(", ")}</span> : null}</>
+            ) : (
+              <span className="muted">Prices from the last 15-minute scan: the CoinDCX live feed is not running{live?.crypto_age_s != null ? ` (last update ${Math.round(live.crypto_age_s)} s ago)` : ""}.</span>
+            )}
           </p>
         </div>
         <div className="filters">
@@ -466,7 +475,7 @@ function CoinsSection({ snap }: { snap: Snapshot }) {
       </div>
       <div className="coins">
         {c.coins.map((x) => (
-          <CoinCard key={x.symbol} c={x} />
+          <CoinCard key={x.symbol} c={x} tick={cl ? live?.ticks["CRYPTO:" + x.symbol] : undefined} />
         ))}
       </div>
       <p className="muted small" style={{ margin: "10px 0 0" }}>
@@ -543,10 +552,11 @@ function CoinBehaviour({ coins, asOf, days }: { coins: Coin[]; asOf: string | nu
   );
 }
 
-function CoinCard({ c }: { c: Coin }) {
+function CoinCard({ c, tick }: { c: Coin; tick?: { ltp: number; chg_pct?: number } }) {
+  const px = tick ? tick.ltp : c.price;
   const pos =
-    c.price !== null && c.range_high !== null && c.range_low !== null && c.range_high > c.range_low
-      ? Math.min(100, Math.max(0, ((c.price - c.range_low) / (c.range_high - c.range_low)) * 100))
+    px !== null && c.range_high !== null && c.range_low !== null && c.range_high > c.range_low
+      ? Math.min(100, Math.max(0, ((px - c.range_low) / (c.range_high - c.range_low)) * 100))
       : null;
   return (
     <div className={`coin st-${c.state.replace(" ", "")}`}>
@@ -555,7 +565,7 @@ function CoinCard({ c }: { c: Coin }) {
         <span className={`chip plain ${STATE_CHIP[c.state] ?? "c-off"}`}>{c.state}</span>
       </div>
       <div className="row">
-        <span className="px">${price(c.price)}</span>
+        <span className="px">${price(px)}{tick && <span className="live-dot inline" aria-label="live" />}</span>
         <span className="meta">RSI {c.rsi_15m ?? "—"}</span>
       </div>
       <div className="range" title="Position inside the last 4 hours' range">
@@ -841,9 +851,9 @@ function SetupCell({ p }: { p: Position }) {
 
 /** India positions with Zerodha's latest tick: price and gross open P&L change every second. */
 function withLive(open: Position[], live: LiveTicks | null): (Position & { live?: boolean })[] {
-  if (!live?.live) return open;
+  if (!live?.live && !live?.crypto_live) return open;
   return open.map((p) => {
-    const t = INDIA(p.market) ? live.ticks[p.key] : undefined;
+    const t = liveFor(p.market, live) ? live.ticks[p.key] : undefined;
     if (!t) return p;
     const dir = p.side === "short" ? -1 : 1;
     return { ...p, last: t.ltp, open_pnl: (t.ltp - p.entry) * p.qty * dir, quote_time: new Date().toISOString(), live: true };

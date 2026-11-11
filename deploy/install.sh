@@ -95,10 +95,10 @@ chown root:trader "$ENVF"
 chmod 640 "$ENVF"
 
 say "Services"
-cp "$APP"/deploy/trader-{runner,api,web,ticker}.service /etc/systemd/system/
+cp "$APP"/deploy/trader-{runner,api,web,ticker,crypto-ticker}.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now trader-api trader-web trader-runner trader-ticker >/dev/null 2>&1
-systemctl restart trader-api trader-web trader-runner trader-ticker
+systemctl enable --now trader-api trader-web trader-runner trader-ticker trader-crypto-ticker >/dev/null 2>&1
+systemctl restart trader-api trader-web trader-runner trader-ticker trader-crypto-ticker
 
 say "Firewall"
 # keep SSH open on whatever port sshd really listens on, before the firewall is switched on
@@ -137,7 +137,7 @@ sudo -u trader "$APP/.venv/bin/python" "$APP/deploy/check_data.py" || true
 
 sleep 3
 say "Status"
-for s in trader-runner trader-api trader-web trader-ticker; do printf '  %-14s %s\n' "$s" "$(systemctl is-active $s)"; done
+for s in trader-runner trader-api trader-web trader-ticker trader-crypto-ticker; do printf '  %-21s %s\n' "$s" "$(systemctl is-active $s)"; done
 IP="$(curl -fsS https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')"
 echo
 case "$MODE" in
