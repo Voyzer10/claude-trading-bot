@@ -952,13 +952,14 @@ def download(name: str):
     return FileResponse(path, filename=name)
 
 
-# Files that never go into the export: secrets (Telegram token) and bulky caches.
-_EXPORT_SKIP = {"alerts.json"}
+# Files that never go into the export: secrets (Telegram token, the day's Zerodha access token) and bulky caches.
+_EXPORT_SKIP = {"alerts.json", "kite_session.json", "kite_session.json.tmp"}
 
 
 def _download_all():
     """Everything the bot knows, in one zip, for review: ledger, trades, decisions, logs, rules, state,
-    coin profiles, backtest reports. No secrets: alerts.json (Telegram token) is left out, and the dashboard
+    coin profiles, backtest reports. No secrets: alerts.json (Telegram token) and kite_session.json (Zerodha access
+    token) are left out, and the dashboard
     password lives outside the app folder (/etc/trader/trader.env) and is never read here."""
     import zipfile
     now = _now()

@@ -66,6 +66,9 @@ check("nse shorts on", r.status_code == 200 and json.load(open("trader/live/auto
 r = c.get("/api/py/ops/download/trades.csv"); check("trades csv", r.status_code == 200)
 with open("trader/alerts.json", "w") as fh:
     json.dump({"telegram_token": "123456:SECRET", "enabled": False}, fh)
+os.makedirs("trader/live", exist_ok=True)
+with open("trader/live/kite_session.json", "w") as fh:     # the day's Zerodha access token: never exported
+    json.dump({"access_token": "KITESECRET", "user": "AB1234"}, fh)
 os.makedirs("trader/paper", exist_ok=True)
 with open("trader/paper/ledger.json", "w") as fh:
     json.dump({"accounts": {}, "open": [], "closed": [{"market": "CRYPTO", "symbol": "SOL", "pnl": 5.0, "r": 0.5,
@@ -75,7 +78,7 @@ import io as _io, zipfile as _zf
 names = _zf.ZipFile(_io.BytesIO(r.content)).namelist() if r.status_code == 200 else []
 blob = b"".join(_zf.ZipFile(_io.BytesIO(r.content)).read(n) for n in names) if names else b""
 check("export zip", r.status_code == 200 and {"README.txt", "summary.json", "trades.csv", "paper/ledger.json"} <= set(names)
-      and b"SECRET" not in blob and not any(n.endswith("alerts.json") for n in names), str(names)[:120])
+      and b"SECRET" not in blob and not any(n.endswith(("alerts.json", "kite_session.json")) for n in names), str(names)[:120])
 if names:
     _z = _zf.ZipFile(_io.BytesIO(r.content))
     _hdr = _z.read("trades.csv").decode().splitlines()[0]
