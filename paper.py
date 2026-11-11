@@ -423,17 +423,17 @@ def us_backup_quote(t):
     return max(got, key=lambda q: q[1]) if got else None
 
 
-def coindcx_price(t, rest=True):
-    """(price, time) for a coin from CoinDCX's USDT market (public data, no key): the live ticker's file first,
-    then one REST call. None when CoinDCX has no future for it or does not answer (Yahoo / Coinbase then)."""
+def crypto_live_price(t, rest=True):
+    """(price, time) for a coin from Coinbase (public data, no key): the live ticker's file (crypto_ticker.py)
+    first, then one REST request. None when Coinbase does not list the coin or does not answer (Yahoo then)."""
     try:
-        import coindcx
+        import coinbase
     except Exception:
         return None
-    q = coindcx.tick_price(t)
+    q = coinbase.tick_price(t)
     if q:
         return q
-    return coindcx.price(t) if rest else None
+    return coinbase.price(t) if rest else None
 
 
 def fetch_price(m, t):
@@ -442,7 +442,7 @@ def fetch_price(m, t):
     if kq:
         return float(kq[0]), kq[1]
     if m == "CRYPTO":
-        cq = coindcx_price(t)            # crypto: CoinDCX USDT market, live (owner, 11 Nov 2026)
+        cq = crypto_live_price(t)        # crypto: Coinbase live (CoinDCX blocks the VPS; 11 Nov 2026)
         if cq:
             return float(cq[0]), cq[1]
     if m == "NFO":

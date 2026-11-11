@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-/** One instrument's latest tick: Zerodha (kite_ticker.py) or CoinDCX (coindcx_ticker.py) -> /api/py/live/ticks. */
+/** One instrument's latest tick: Zerodha (kite_ticker.py) or Coinbase (crypto_ticker.py) -> /api/py/live/ticks. */
 export type Tick = { ltp: number; t?: number; open?: number; high?: number; low?: number; close?: number; volume?: number; oi?: number; chg_pct?: number };
 export type LiveTicks = {
   age_s: number | null;
@@ -13,7 +13,7 @@ export type LiveTicks = {
   indices?: [string, string][];
   /** watched keys Zerodha did not recognise */
   missing?: string[];
-  /** crypto: CoinDCX USDT futures public prices ("CRYPTO:BTC" keys in ticks), from coindcx_ticker.py */
+  /** crypto: Coinbase public prices ("CRYPTO:BTC" keys in ticks), from crypto_ticker.py */
   crypto_live?: boolean;
   crypto_age_s?: number | null;
   crypto_source?: string;

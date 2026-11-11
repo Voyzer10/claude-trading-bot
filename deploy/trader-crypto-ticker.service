@@ -1,12 +1,12 @@
 [Unit]
-Description=Trader bot crypto ticker (CoinDCX USDT futures public prices -> trader/live/crypto_ticks.json; no API key, no orders)
+Description=Trader bot crypto ticker (Coinbase public prices -> trader/live/crypto_ticks.json; no API key, no orders)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 User=trader
 WorkingDirectory=/opt/trader
-ExecStart=/opt/trader/.venv/bin/python -u coindcx_ticker.py /opt/trader
+ExecStart=/opt/trader/.venv/bin/python -u crypto_ticker.py /opt/trader
 Restart=always
 RestartSec=10
 Nice=5

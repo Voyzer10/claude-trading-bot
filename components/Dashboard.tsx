@@ -458,10 +458,10 @@ function CoinsSection({ snap, live }: { snap: Snapshot; live?: LiveTicks | null 
           </p>
           <p className="small">
             {cl ? (
-              <><span className="live-dot inline" aria-hidden="true" /> Prices live from CoinDCX (USDT markets), every second (public data, no API key)
-                {live?.crypto_missing?.length ? <span className="muted"> · not on CoinDCX: {live.crypto_missing.join(", ")}</span> : null}</>
+              <><span className="live-dot inline" aria-hidden="true" /> Prices live from Coinbase (USD), every trade (public data, no API key)
+                {live?.crypto_missing?.length ? <span className="muted"> · not on Coinbase (Yahoo prices): {live.crypto_missing.join(", ")}</span> : null}</>
             ) : (
-              <span className="muted">Prices from the last 15-minute scan: the CoinDCX live feed is not running{live?.crypto_age_s != null ? ` (last update ${Math.round(live.crypto_age_s)} s ago)` : ""}.</span>
+              <span className="muted">Prices from the last 15-minute scan: the live crypto feed is not running{live?.crypto_age_s != null ? ` (last update ${Math.round(live.crypto_age_s)} s ago)` : ""}.</span>
             )}
           </p>
         </div>
