@@ -99,7 +99,7 @@ DEFAULT_CONFIG = {
         # max trades per day and the rulebook guards below block new entries. Turn it on before real money.
         # trade_setups: the Scanner's setups (v4, v3 or v2, per scanner_version) are paper traded (True) or
         # only recorded (False).
-        # scanner_version: "v4" (the owner's 7 Nov final workflow: primary, then a sequential OB/FVG secondary), "v3"
+        # scanner_version: "v4" (the owner's revised v4 PDF, 11 Nov: primary, then a sequential OB/FVG secondary), "v3"
         # (the 5 Nov workflow: sweep reversal + FVG/OB retest) or "v2" (A-B-C-D, playbook, FVG/OB). Never mixed: the
         # scanner looks for one version's setups and the broker skips the others'.
         # Switch it per account from Settings > Risk limits; the next candle uses it.
