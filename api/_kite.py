@@ -7,7 +7,7 @@
   POST /api/py/kite/token      {"text": the post-login address or the request_token}: connect by pasting it
   POST /api/py/kite/logout     forget today's session
   GET  /api/py/live/ticks      the latest Indian market ticks (kite_ticker.py) and crypto prices (crypto_ticker.py,
-                               Coinbase public data), for the dashboard's 1-second view
+                               Coinbase public data) and US prices (us_ticker.py, Alpaca IEX), for the dashboard's 1-second view
 """
 import json
 import os
@@ -25,6 +25,7 @@ if ROOT not in sys.path:
 
 import kite as K  # noqa: E402
 import coinbase as CX  # noqa: E402
+import alpaca as AL  # noqa: E402
 
 # the API process may run from anywhere: point kite.py at the bot's own data folder
 K.LIVE_DIR = os.path.join(ROOT, "trader", "live")
@@ -32,6 +33,7 @@ K.SESSION_FILE = os.path.join(K.LIVE_DIR, "kite_session.json")
 K.INSTR_DIR = os.path.join(K.LIVE_DIR, "kite_instruments")
 K.TICKS_FILE = os.path.join(K.LIVE_DIR, "ticks.json")
 CX.LIVE_DIR = K.LIVE_DIR
+AL.TICKS_FILE = os.path.join(K.LIVE_DIR, "us_ticks.json")
 CX.TICKS_FILE = os.path.join(K.LIVE_DIR, "crypto_ticks.json")
 
 router = APIRouter()
@@ -109,14 +111,18 @@ def kite_logout():
     return K.status()
 
 
-def _crypto():
-    """(doc, age in seconds) of crypto_ticker.py's file, or ({}, None)."""
+def _file(path):
+    """(doc, age in seconds) of a ticker's file, or ({}, None)."""
     try:
-        with open(CX.TICKS_FILE, encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             doc = json.load(fh)
         return doc, max(0.0, time.time() - float(doc.get("written", 0)))
     except (FileNotFoundError, ValueError, TypeError):
         return {}, None
+
+
+def _crypto():
+    return _file(CX.TICKS_FILE)
 
 
 @router.get("/api/py/live/ticks")
@@ -128,9 +134,17 @@ def live_ticks():
     if crypto_live:   # Coinbase public ticker (crypto_ticker.py)
         for k, v in (cdoc.get("ticks") or {}).items():
             ticks[k] = {f: v.get(f) for f in FIELDS + ("chg_pct",) if v.get(f) is not None}
+    udoc, uage = _file(AL.TICKS_FILE)
+    us_live = uage is not None and uage < 10
+    if us_live:       # Alpaca IEX (us_ticker.py)
+        for k, v in (udoc.get("ticks") or {}).items():
+            ticks[k] = {f: v.get(f) for f in FIELDS + ("chg_pct",) if v.get(f) is not None}
     return {"age_s": None if age is None else round(age, 1), "live": age is not None and age < 5,
             "connected": K.connected(), "ticks": ticks, "indices": K.WATCH_INDICES,
             "missing": doc.get("missing") or [],
             "crypto_live": crypto_live, "crypto_age_s": None if cage is None else round(cage, 1),
             "crypto_source": "Coinbase (public data, no API key)",
-            "crypto_missing": cdoc.get("missing") or []}
+            "crypto_missing": cdoc.get("missing") or [],
+            "us_live": us_live, "us_age_s": None if uage is None else round(uage, 1),
+            "us_configured": AL.configured(), "us_source": "Alpaca IEX (paper key, data only)",
+            "us_missing": udoc.get("missing") or []}

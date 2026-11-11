@@ -1,0 +1,16 @@
+[Unit]
+Description=Trader bot US ticker (Alpaca IEX prices -> trader/live/us_ticks.json; paper key, data only, no orders)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=trader
+WorkingDirectory=/opt/trader
+EnvironmentFile=/etc/trader/trader.env
+ExecStart=/opt/trader/.venv/bin/python -u us_ticker.py /opt/trader
+Restart=always
+RestartSec=10
+Nice=5
+
+[Install]
+WantedBy=multi-user.target
