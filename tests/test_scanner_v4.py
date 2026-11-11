@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Scanner v4 (scanner_v4.py) against the owner's "Final Trading Workflow" PDF (7 Nov 2026). Offline.
+"""Scanner v4 (scanner_v4.py) against the owner's rules of 11 Nov 2026 (Final Trading Workflow + his answers).
+Offline.
 
     python tests/test_scanner_v4.py
 """
@@ -23,10 +24,9 @@ def check(name, ok, extra=""):
         FAILS.append(name)
 
 
-def build(tail, bos_vol=300, drop_low=100.0):
+def build(tail, bos_vol=300):
     """Zigzag base (swing highs 100.6, lows 99.8), a decisive BOS candle closing 101.3 above 100.6 on 3x volume, a
-    pullback, a run to 103 (the liquidity above), a drop, then `tail` (o, h, l, c). The BOS move started from the
-    99.8 low. drop_low=100.5 leaves a bearish FVG right above the entry (an opposing zone)."""
+    run to 103 (liquidity), a drop to 100.6, then `tail` (o, h, l, c). The BOS move started from the 99.8 low."""
     t, rows = [datetime(2026, 11, 3, tzinfo=timezone.utc)], []
 
     def add(o, h, l, c, v=100):
@@ -38,113 +38,111 @@ def build(tail, bos_vol=300, drop_low=100.0):
     add(100.4, 101.4, 100.3, 101.3, bos_vol)        # BOS: closes above the 100.6 swing high
     for c in [(101.3, 101.6, 101.0, 101.5), (101.5, 101.6, 100.9, 101.0),
               (101.0, 103.0, 100.95, 102.9),         # the move's high 103 = liquidity for the target
-              (102.9, 102.95, drop_low, 100.6)]:     # a drop (does not trade below 99.8)
+              (102.9, 102.95, 100.6, 100.6)]:        # a drop (no close below 99.8 yet)
         add(*c)
     for c in tail:
         add(*c)
     return rows
 
 
-SWEEP = (100.6, 101.0, 99.6, 99.9)       # trades below 99.8 and closes back above it (sweep + reclaim, one candle)
-INV = (99.68, 100.05, 99.62, 99.76)      # inverted hammer at the low (revised PDF: doji / inverted hammer for a BUY)
-HAMMER = (99.9, 100.05, 99.62, 100.0)    # hammer at the low: NOT a primary BUY trigger in the revised PDF
-TRIG = (100.0, 100.4, 99.95, 100.3)      # breaks and CLOSES above the signal high 100.05 -> primary BUY
-TRIG_WICK = (100.0, 100.4, 99.95, 100.04)
-LEG = [(100.3, 100.9, 100.25, 100.85), (100.85, 101.45, 100.8, 101.4), (101.4, 101.55, 101.2, 101.5)]  # FVG 100.9-101.2
-TP = (101.5, 103.1, 101.45, 103.0)       # primary target 103 hit -> primary CLOSED
-PULL = [(103.0, 103.05, 101.4, 102.1), (102.1, 102.15, 101.3, 101.35)]
-TAP = (101.35, 101.4, 101.1, 101.15)     # taps the FVG (top 101.2) and closes inside
-NEAR = (101.35, 101.4, 101.25, 101.3)    # comes near (101.25) but does not touch 101.2
-CONF = (101.15, 101.6, 101.1, 101.5)     # closes above the tap candle's high 101.4 -> secondary BUY
+SWEEP = (100.6, 100.7, 99.5, 99.6)        # CLOSES below the 99.8 low: the sweep
+WICK = (100.6, 100.7, 99.5, 99.9)         # only a wick below 99.8, close above: not a sweep
+INV = (99.62, 100.0, 99.58, 99.70)        # inverted hammer after the sweep (high 100.0)
+HAMMER = (99.65, 99.9, 99.3, 99.85)       # hammer at the low: not a BUY signal
+TRIG = (99.7, 100.2, 99.65, 100.1)        # closes above the signal high 100.0 -> BUY at the next open
+UP1 = (100.1, 100.5, 100.0, 100.4)
+TP = (100.4, 103.1, 100.3, 103.0)         # target 103 hit
 DAY = lambda x: x.date()  # noqa: E731
 
 
-def seq(rows):
-    return V4.sequence(rows, DAY)
+def seq(rows, **kw):
+    return V4.sequence(rows, DAY, **kw)
+
+
+def longs(rows, **kw):
+    return [t for t in seq(rows, **kw) if t["side"] == "long"]
 
 
 if __name__ == "__main__":
-    full = build([SWEEP, INV, TRIG] + LEG + [TP] + PULL + [TAP, CONF])
-    s = seq(full)
-    prim = [t for t in s if t["kind"] == "primary"]
-    sec = [t for t in s if t["kind"] == "secondary"]
-    check("1. primary BUY: BOS -> sweep + reclaim -> inverted hammer -> break + close, entry at the next open",
-          len(prim) == 1 and prim[0]["side"] == "long" and prim[0]["signal_close"] == 100.3
-          and prim[0]["entry"] == LEG[0][0] and prim[0]["signal_pattern"] == "inverted hammer", s)
-    check("   revised PDF: a HAMMER at the low is not a primary BUY trigger",
-          not [t for t in seq(build([SWEEP, HAMMER, TRIG] + LEG)) if t["side"] == "long"])
-    doji_low = (99.7, 100.05, 99.62, 99.72)
-    check("   a DOJI at the low is one",
-          [t["signal_pattern"] for t in seq(build([SWEEP, doji_low, TRIG] + LEG)) if t["side"] == "long"] == ["doji"])
-    nxt = seq(build([SWEEP, INV, TRIG, (100.45, 100.9, 100.4, 100.85)]))
-    check("   the entry is the NEXT candle's open (100.45), not the trigger close (100.3)",
-          nxt and nxt[0]["entry"] == 100.45 and nxt[0]["signal_close"] == 100.3, nxt)
-    pend = seq(build([SWEEP, INV, TRIG]))
-    check("   trigger on the last candle: reported (live), entry pending the next open",
-          pend and pend[0]["exit_reason"] == "open" and pend[0]["entry"] == 100.3, pend)
-    check("   the next candle opens below the stop: no trade",
-          not [t for t in seq(build([SWEEP, INV, TRIG, (99.3, 99.4, 99.0, 99.2)])) if t["side"] == "long"])
-    if prim:
-        p = prim[0]
-        check("   SL below the sweep low 99.6, TP the next liquidity 103", p["stop"] < 99.6 and p["target"] == 103.0, p)
-        check("   the primary closes at its target before anything else", p["exit_reason"] == "target", p)
-    check("2. secondary BUY only after the primary closed: FVG tapped + close above the tap high",
-          len(sec) == 1 and sec[0]["zone"] == "FVG" and sec[0]["entry"] == 101.5 and sec[0]["i"] > prim[0]["exit_i"], s)
-    if sec:
-        check("   secondary SL below the zone (100.9), target above", sec[0]["stop"] < 100.9 and sec[0]["target"] > 101.5, sec[0])
+    full = build([SWEEP, INV, TRIG, UP1, TP])
+    s = longs(full)
+    p1 = s[0] if s else {}
+    check("1. primary BUY: BOS -> close below the old low -> inverted hammer -> next candle closes above its high",
+          len(s) == 1 and p1["kind"] == "primary" and p1["signal_pattern"] == "inverted hammer"
+          and p1["level"] == 99.8 and p1["level_name"] == "bos_origin", s)
+    check("   entry at the next candle's open (100.1); stop below the sweep low 99.5 (0.1 ATR); target the 103 liquidity",
+          p1.get("entry") == UP1[0] and p1.get("signal_close") == TRIG[3] and 99.3 < p1.get("stop", 0) < 99.5
+          and p1.get("target") == 103.0 and p1.get("exit_reason") == "target", p1)
+    check("2. a wick below the old low (close back above) is not a sweep: no trade",
+          not longs(build([WICK, INV, TRIG, UP1, TP])))
+    check("3. a hammer at the low is not a BUY signal", not longs(build([SWEEP, HAMMER, TRIG, UP1, TP])))
+    x1, x2 = (99.7, 99.95, 99.6, 99.9), (99.9, 99.98, 99.8, 99.95)
+    check("4. the break-and-close on the 3rd candle after the signal: no trade",
+          not longs(build([SWEEP, INV, x1, x2, TRIG, UP1, TP])))
+    inv2, trig2 = (99.92, 100.25, 99.88, 99.96), (99.96, 100.5, 99.9, 100.35)
+    s4 = longs(build([SWEEP, INV, x1, x2, inv2, trig2, UP1, TP]))
+    check("   but a later doji / inverted hammer gives a new chance (same sweep): BUY above its high",
+          len(s4) == 1 and s4[0]["trigger_px"] == 100.25, s4)
+    deep = build([(100.6, 100.7, 99.0, 99.1), (99.12, 99.5, 99.05, 99.18), (99.2, 99.7, 99.15, 99.6), UP1, TP])
+    s5 = longs(deep)
+    check("5. the trigger close may stay below the swept low (99.6 < 99.8): still a BUY",
+          len(s5) == 1 and s5[0]["signal_close"] == 99.6, s5)
+    s6 = longs(build([(100.6, 100.7, 99.7, 99.75), (99.5, 99.85, 99.4, 99.55), (99.55, 100.0, 99.5, 99.95), UP1, TP]))
+    check("6. the signal's low (99.4) under the sweep candle's low (99.7): stop below the signal low",
+          len(s6) == 1 and 99.2 < s6[0]["stop"] < 99.4, s6)
+    s7 = longs(build([SWEEP, (99.6, 99.65, 99.2, 99.3), (99.3, 99.35, 98.9, 99.0), (98.95, 99.3, 98.9, 99.0),
+                      (99.0, 99.5, 98.95, 99.4), UP1, TP]))
+    check("7. no cancel: closes lower only deepen the sweep; the trade comes with the stop under the lowest low (98.9)",
+          len(s7) == 1 and 98.7 < s7[0]["stop"] < 98.9, s7)
+    check("8. weak BOS (volume 1.0x < 1.2x): no setup", not longs(build([SWEEP, INV, TRIG, UP1, TP], bos_vol=100)))
+    check("   ... the same chart with the weak-BOS rule off trades (the rule is what skipped it)",
+          longs(build([SWEEP, INV, TRIG, UP1, TP], bos_vol=100), bos_body_atr=0, bos_vol_x=0))
+    check("9. no minimum R:R by default; min_rr=5 (backtest setting) skips this 4R trade",
+          longs(full) and not longs(full, min_rr=5))
 
-    no_reclaim = build([(100.6, 100.7, 99.5, 99.55), (99.55, 99.7, 99.4, 99.5), (99.5, 99.7, 99.45, 99.6),
-                        (99.6, 99.75, 99.5, 99.65), (99.65, 99.78, 99.5, 99.7), INV, TRIG])
-    check("3. price accepts below the old low (no reclaim within 3 candles): no trade",
-          not [t for t in seq(no_reclaim) if t["side"] == "long"], seq(no_reclaim))
-    check("4. trigger wick above the hammer high, close below: no trade",
-          not [t for t in seq(build([SWEEP, INV, TRIG_WICK])) if t["side"] == "long"])
-    check("5. confirmation on the 3rd candle: no trade",
-          not [t for t in seq(build([SWEEP, INV, (100.0, 100.05, 99.9, 100.0), (100.0, 100.05, 99.9, 99.98), TRIG]))
-               if t["side"] == "long"])
-    open_prim = build([SWEEP, INV, TRIG] + LEG + [(101.5, 101.6, 101.1, 101.15), CONF])
-    s5 = seq(open_prim)
-    check("6. no OB/FVG trade while the primary is still open (tap + confirmation ignored)",
-          len(s5) == 1 and s5[0]["kind"] == "primary" and s5[0]["exit_i"] is None, s5)
-    near = seq(build([SWEEP, INV, TRIG] + LEG + [TP] + PULL + [NEAR, CONF]))
-    check("7. near the zone is not a tap: no secondary", not [t for t in near if t["kind"] == "secondary"], near)
-    no_conf = seq(build([SWEEP, INV, TRIG] + LEG + [TP] + PULL + [TAP, (101.15, 101.38, 101.1, 101.3),
-                                                                     (101.3, 101.39, 101.2, 101.35)]))
-    check("8. tap without a break-and-close: no secondary", not [t for t in no_conf if t["kind"] == "secondary"], no_conf)
-    gap_pull = [(103.0, 103.05, 102.0, 102.1), PULL[1]]
-    opposing = seq(build([SWEEP, INV, TRIG] + LEG + [TP] + gap_pull + [TAP, CONF]))
-    check("   an opposing FVG ahead of the secondary blocks entry",
-          opposing[0]["secondary_note"] == "nearby opposing zone", opposing)
-    stopped = seq(build([SWEEP, INV, TRIG] + LEG + [(101.5, 101.55, 99.0, 99.2), (99.2, 99.6, 99.1, 99.5),
-                                                       (99.5, 101.0, 99.4, 100.95)]))
-    check("9. primary stopped out (closed through the zones): no secondary",
-          stopped and stopped[0]["exit_reason"] == "stop" and not [t for t in stopped if t["kind"] == "secondary"], stopped)
+    # 10. the v4 trailing stop: +1R -> the entry, +2R -> +1R
+    risk = p1["entry"] - p1["stop"] if p1 else 0.7
+    up_1r = (100.1, 100.1 + 1.2 * risk, 100.05, 100.6)
+    s10 = longs(build([SWEEP, INV, TRIG, up_1r, (100.6, 100.65, 99.2, 99.3)]))
+    check("10. +1.2R then down: out at the entry (breakeven stop), not the full stop",
+          s10 and s10[0]["exit"] == s10[0]["entry"] and s10[0]["exit_reason"] == "breakeven stop", s10)
+    up_2r = (100.1, 100.1 + 2.3 * risk, 100.05, 101.2)
+    s10b = longs(build([SWEEP, INV, TRIG, up_2r, (101.2, 101.25, 99.2, 99.3)]))
+    check("    +2.3R then down: out at +1R (trailing stop)",
+          s10b and abs(s10b[0]["exit"] - (s10b[0]["entry"] + risk)) < 1e-9 and s10b[0]["exit_reason"] == "trailing stop",
+          s10b)
+    check("    with trailing off (backtest setting) the same chart takes the full stop",
+          longs(build([SWEEP, INV, TRIG, up_2r, (101.2, 101.25, 99.2, 99.3)]), trail=False)[0]["exit_reason"] == "stop")
+
+    # 11. the secondary: only after the primary closed, a reversal candle tapping the move's OB / FVG
+    pull = [(103.0, 103.05, 101.5, 101.6), (101.6, 101.65, 100.9, 101.0)]
+    tap_rev = (100.6, 101.0, 100.25, 100.65)           # taps the zones, a doji: the reversal candle
+    nxt = (100.66, 101.0, 100.6, 100.9)
+    sec_rows = build([SWEEP, INV, TRIG, UP1, TP] + pull + [tap_rev, nxt])
+    s11 = longs(sec_rows)
+    sec = [t for t in s11 if t["kind"] == "secondary"]
+    check("11. after the primary hit its target, a doji tapping the move's zone: secondary BUY at the next open",
+          len(sec) == 1 and sec[0]["zone"] in ("OB", "FVG") and sec[0]["entry"] == nxt[0]
+          and sec[0]["i"] > s11[0]["exit_i"] and sec[0]["stop"] < sec[0]["zone_bottom"], s11)
+    tap_plain = (101.0, 101.05, 100.25, 100.3)
+    check("    a tap by an ordinary candle (not a reversal candle): no secondary",
+          not [t for t in longs(build([SWEEP, INV, TRIG, UP1, TP] + pull + [tap_plain, nxt])) if t["kind"] == "secondary"])
+    open_rows = build([SWEEP, INV, TRIG, UP1, (100.4, 100.6, 100.25, 100.5), tap_rev, nxt])
+    s11c = longs(open_rows)
+    check("    while the primary is still open the zone tap is ignored (one trade at a time, secondary only after)",
+          len(s11c) == 1 and s11c[0]["kind"] == "primary" and s11c[0]["exit_i"] is None, s11c)
+
+    # 12. the mirror: SELL with a hammer at the top; an inverted hammer at the top is not a SELL signal
     sh = V4.sequence(V4.mirror(full), DAY)
-    check("10. mirror: the same picture upside down is a primary SELL then a secondary SELL",
-          [(t["kind"], t["side"]) for t in sh] == [("primary", "short"), ("secondary", "short")], sh)
-    check("    the SELL's signal is a HAMMER at the top (the mirror of the inverted hammer at the low)",
-          sh and sh[0]["signal_pattern"] == "hammer", sh[:1])
-    check("    an INVERTED HAMMER at the top is not a primary SELL trigger",
-          not [t for t in V4.sequence(V4.mirror(build([SWEEP, HAMMER, TRIG] + LEG)), DAY) if t["side"] == "short"])
+    check("12. mirror: the same picture upside down is a primary SELL whose signal is a hammer at the top",
+          len(sh) == 1 and sh[0]["side"] == "short" and sh[0]["signal_pattern"] == "hammer"
+          and sh[0]["stop"] > sh[0]["entry"] > sh[0]["target"], sh)
+    check("    an inverted hammer at the top (mirror of the hammer at the low) gives no SELL",
+          not [t for t in V4.sequence(V4.mirror(build([SWEEP, HAMMER, TRIG, UP1, TP])), DAY) if t["side"] == "short"])
 
-    # the PDF's skip rules (pages 1, 2, 4)
-    base_tail = [SWEEP, INV, TRIG]
-    check("13. weak break: BOS on ordinary volume (1.0x < 1.2x) -> no trade",
-          not [t for t in seq(build(base_tail, bos_vol=100)) if t["side"] == "long"])
-    check("14. nearby opposing zone: an unfilled bearish FVG inside the first 1R -> no trade",
-          not [t for t in seq(build([(100.6, 100.7, 99.6, 99.9), INV, TRIG], drop_low=100.5)) if t["side"] == "long"])
-    check("    ... the same picture with that rule off trades (the rule is what skipped it)",
-          [t for t in V4.sequence(build([(100.6, 100.7, 99.6, 99.9), INV, TRIG], drop_low=100.5), DAY, opp_zone=False)
-           if t["side"] == "long"])
-    weak = build(base_tail)
-    weak[40] = (weak[40][0], 100.4, 101.4, 100.3, 100.65, 300)          # BOS closes just above: tiny body
-    check("15. weak BOS candle body (under 0.8 ATR) -> no trade", not [t for t in seq(weak) if t["side"] == "long"])
-    zig = [(datetime(2026, 11, 3, tzinfo=timezone.utc) + timedelta(minutes=5 * k), 100, 101, 99, 100 + (0.5 if k % 2 else -0.5), 1)
-           for k in range(30)]
-    check("16. choppy market: efficiency ratio of a zigzag is under 0.30", V4.efficiency(zig, 29, 20) < 0.30)
+    # 13. the 1-hour trend skip
     h0 = datetime(2026, 11, 3, tzinfo=timezone.utc)
-    down = []
-    legs = []
+    down, legs = [], []
     for w in range(8):                       # an hourly downtrend: 3 hours down, 2 hours up, lower each time
         top = 200 - 3 * w
         legs += [top, top - 2, top - 4, top - 2, top - 1]
@@ -152,83 +150,59 @@ if __name__ == "__main__":
         for q in range(12):
             down.append((h0 + timedelta(minutes=60 * hr + 5 * q), base, base + 0.6, base - 0.6, base, 1))
     dirs = V4.htf_dirs(down, DAY)
-    check("17. higher timeframe: an hourly downtrend reads 'down' (longs skipped there)", dirs[-1] == "down", dirs[-12:])
+    check("13. higher timeframe: an hourly downtrend reads 'down' (longs skipped there)", dirs[-1] == "down", dirs[-12:])
     check("    and the mirror of it reads 'up' for shorts' (src) terms", V4.htf_dirs(V4.mirror(down), DAY)[-1] == "up")
 
-    # the scanner: only v4 setups for a v4 account, named; v2 / v3 never return them
-    i_prim = prim[0]["i"] if prim else -1
-    got = PB.owner_setups(full[:i_prim + 1], DAY, version="v4")
-    check("11. Scanner v4 names the primary on its candle ('v4 primary long', liquidity in words)",
+    # 14. the scanner: the trigger on the last candle is reported (live), named; v2 / v3 never return v4
+    upto = full[:full.index(full[-3]) + 1]           # ends with the trigger candle
+    got = PB.owner_setups(upto, DAY, version="v4")
+    check("14. Scanner v4 names the primary on its trigger candle ('v4 primary long', the sweep in words)",
           [g["setup"] for g in got] == ["v4_primary_long"] and got[0]["name"] == "v4 primary long"
-          and "reclaimed" in got[0]["liquidity"] and got[0]["scanner"] == "v4", got)
-    got2 = PB.owner_setups(full, DAY, version="v4")
-    check("    and the secondary on its candle ('v4 OB/FVG secondary long')",
-          [g["setup"] for g in got2] == ["v4_secondary_long"] and "FVG tap" in got2[0]["liquidity"], got2)
+          and "below the swing low" in got[0]["liquidity"] and got[0]["scanner"] == "v4"
+          and got[0]["price"] == TRIG[3], got)
     for v in ("v2", "v3"):
         check("    Scanner %s never returns v4 setups" % v,
-              not [g for g in PB.owner_setups(full[:i_prim + 1], DAY, version=v) if g["setup"].startswith("v4_")])
+              not [g for g in PB.owner_setups(upto, DAY, version=v) if g["setup"].startswith("v4_")])
 
     tmp, old = tempfile.mkdtemp(), os.getcwd()
     os.chdir(tmp)
     try:
         import paper as P
-        P.fetch_price = lambda m, t: (100.3, datetime.now(timezone.utc))
+        P.fetch_price = lambda m, t: (100.1, datetime.now(timezone.utc))
         cfg = P.load_config()
         cfg["accounts"]["CRYPTO"]["scanner_version"] = "v4"
         P.save_json(P.CONFIG, cfg)
-        check("12. the switch accepts v4", PB.scanner_version("CRYPTO") == "v4")
-        rec = P.setup_decision("CRYPTO", "TST", got[0], news=[])
-        check("    a v4 account paper trades the v4 primary with its liquidity target",
-              rec["result"] == "PAPER BUY" and rec["steps"]["1_scanner"]["scanner"] == "v4"
-              and rec["steps"]["4_exit"]["target"] == got[0]["target"], rec)
         chart = {"version": "v4", "market": "CRYPTO", "symbol": "TST"}
         empty = {"open": [], "closed": []}
-        check("   a simulated primary exit never enables a live secondary",
-              not PB.owner_setups(full, DAY, ledger=empty, **chart))
+        live = PB.owner_setups(upto, DAY, ledger=empty, **chart)
+        check("15. the live path (ledger given) reports the same primary", [g["setup"] for g in live] == ["v4_primary_long"], live)
+        rec = P.setup_decision("CRYPTO", "TST", live[0], news=[])
+        check("    a v4 account paper trades it with its liquidity target",
+              rec["result"] == "PAPER BUY" and rec["steps"]["1_scanner"]["scanner"] == "v4"
+              and rec["steps"]["4_exit"]["target"] == 103.0, rec)
         led = P.load_ledger(cfg)
-        check("   the open primary blocks the scanner and the paper entry",
-              not PB.owner_setups(full, DAY, ledger=led, **chart)
-              and P.setup_decision("CRYPTO", "TST", got2[0])["result"] == "skipped")
-        check("   a primary on another chart cannot unlock a secondary",
-              P.setup_decision("CRYPTO", "OTHER", got2[0])["result"] == "skipped")
-        exit_at = full[prim[0]["exit_i"]][0] + timedelta(minutes=1)
+        check("    the open v4 trade blocks the scanner and the paper entry on that chart",
+              not PB.owner_setups(upto, DAY, ledger=led, **chart)
+              and P.setup_decision("CRYPTO", "TST", live[0])["result"] == "skipped")
+        # the primary closes at its target; the secondary comes on the zone tap
+        exit_at = sec_rows[s11[0]["exit_i"]][0] + timedelta(minutes=1)
         P.close_position(led, cfg, led["open"][0], 103, "target", exit_at)
         P.save_json(P.LEDGER, led)
-        live = PB.owner_setups(full, DAY, ledger=led, **chart)
-        check("   a real primary close enables the later FVG tap and confirmation",
-              [s["setup"] for s in live] == ["v4_secondary_long"], live)
-        no_target_hit = build([SWEEP, INV, TRIG] + LEG
-                              + [(101.5, 102.9, 101.45, 102.8), (102.8, 102.95, 101.4, 102.1), PULL[1], TAP, CONF])
-        check("   a recorded exit can unlock the secondary even if the chart target was never hit",
-              seq(no_target_hit)[0]["exit_i"] is None
-              and bool(PB.owner_setups(no_target_hit, DAY, ledger=led, **chart)))
-        import scan_crypto as C
-        C.set_timeframe("5m")
-        data = {"t": [int(row[0].timestamp()) for row in full]}
-        data.update({k: [row[i] for row in full] for i, k in enumerate("ohlcv", start=1)})
-        C.S.fetch_many = lambda *args, **kwargs: ({"TST": data}, [])
-        scanned = C.intraday_scan(["TST"], full[-1][0] + timedelta(minutes=5 + C.SETTLE_MIN))
-        check("   the normal crypto scan uses the recorded close",
-              [s["setup"] for s in scanned["setups"]] == ["v4_secondary_long"], scanned["setups"])
-        late = dict(led["closed"][0], exit_time=(full[-2][0] + timedelta(minutes=1)).isoformat())
-        check("   a tap in the primary's exit candle is too early",
-              not PB.owner_setups(full, DAY, ledger=dict(led, closed=[late]), **chart))
-        if live:
-            P.fetch_price = lambda m, t: (101.5, datetime.now(timezone.utc))
-            second = P.setup_decision("CRYPTO", "TST", live[0])
-            check("   a matching secondary fills once", second["result"] == "PAPER BUY", second)
-            if second["result"] == "PAPER BUY":
-                led = P.load_ledger(cfg)
-                P.close_position(led, cfg, led["open"][0], 103, "target", full[-1][0] + timedelta(minutes=6))
-                P.save_json(P.LEDGER, led)
-                check("   closing the secondary resets the sequence and blocks a replay",
-                      P.setup_decision("CRYPTO", "TST", live[0])["result"] == "skipped"
-                      and not PB.owner_setups(full, DAY, ledger=led, **chart))
+        sec_upto = sec_rows[:-1]                     # ends with the reversal candle in the zone
+        live2 = PB.owner_setups(sec_upto, DAY, ledger=led, **chart)
+        check("16. after the real primary close, the reversal candle in the zone is a live secondary",
+              [g["setup"] for g in live2] == ["v4_secondary_long"], live2)
+        if live2:
+            P.fetch_price = lambda m, t: (100.66, datetime.now(timezone.utc))
+            second = P.setup_decision("CRYPTO", "TST", live2[0])
+            check("    the matching secondary fills (the tap is the signal candle)", second["result"] == "PAPER BUY", second)
+            check("    a secondary on another chart cannot use this primary",
+                  P.setup_decision("CRYPTO", "OTHER", live2[0])["result"] == "skipped")
         v2rec = P.setup_decision("CRYPTO", "ABC", {"setup": "abcd_long", "name": "A-B-C-D long", "side": "long",
                                                    "price": 100.3, "stop": 99.0, "target_2r": 102.9}, news=[])
         v3rec = P.setup_decision("CRYPTO", "XYZ", {"setup": "v3_sweep_long", "name": "v3 sweep long", "side": "long",
                                                    "price": 100.3, "stop": 99.0, "target": 103.0}, news=[])
-        check("    a v4 account skips v2 and v3 setups",
+        check("17. a v4 account skips v2 and v3 setups",
               v2rec["result"] == "skipped" and v3rec["result"] == "skipped" and "Scanner v4" in v3rec["why"], (v2rec, v3rec))
     finally:
         os.chdir(old)

@@ -424,7 +424,7 @@ def v5_params(market):
 
 
 def scanner_version(market):
-    """Which Scanner a market runs: "v4" (the revised v4 PDF, 11 Nov: primary sweep reversal, then a sequential OB/FVG
+    """Which Scanner a market runs: "v4" (the owner's v4 rules of 11 Nov, Final Trading Workflow + his answers: primary sweep reversal, then a sequential OB/FVG
     secondary), "v3" (the 5 Nov workflow: sweep reversal + FVG/OB retest) or "v2" (A-B-C-D, playbook doji / star /
     hammer, FVG / order-block retests). Versions never mix (owner, 5 and 7 Nov 2026).
     One switch per paper account (paper_config.json accounts.<X>.scanner_version, Settings > Risk limits). Defaults
@@ -597,7 +597,7 @@ def v4_setups(rows, day_of, i, intraday=False, ledger=None, chart=None):
     """Format the current v4 signal from the live ledger or from a chart-only simulation."""
     import scanner_v4 as V4
     try:
-        seq = (V4.live_candidate(rows, day_of, ledger, chart) if ledger is not None
+        seq = (V4.live_candidate(rows, day_of, ledger, chart, intraday=intraday) if ledger is not None
                else V4.sequence(rows, day_of, intraday=intraday))
     except Exception:
         return []
@@ -608,12 +608,14 @@ def v4_setups(rows, day_of, i, intraday=False, ledger=None, chart=None):
         short, prim = t["side"] == "short", t["kind"] == "primary"
         risk = abs(t["entry"] - t["stop"])
         if prim:
-            liq = "swept %s %s %s, reclaimed" % ("swing high" if short else "swing low",
+            liq = "closed %s %s %s %s, then a %s" % ("above" if short else "below",
+                                                 "the swing high" if short else "the swing low",
                                                  "(BOS start)" if t["level_name"] == "bos_origin" else "(after BOS)",
-                                                 _r(t["level"]))
+                                                 _r(t["level"]), t["signal_pattern"])
             det = {"swept": t["level_name"], "swept_px": _r(t["level"]), "BOS_at": rows[t["bos"]][0].isoformat(),
-                   "reclaimed_on_candle": t["reclaim"] - t["sweep"], "signal": t["signal_pattern"],
-                   "trigger_px": _r(t["trigger_px"]), "rr": round(V4.rr(t), 2)}
+                   "sweep_at": rows[t["sweep"]][0].isoformat(), "signal": t["signal_pattern"],
+                   "signal_at": rows[t["signal"]][0].isoformat(), "trigger_px": _r(t["trigger_px"]),
+                   "rr": round(V4.rr(t), 2)}
         else:
             lo, hi = sorted((t["zone_top"], t["zone_bottom"]))
             liq = "%s tap %s-%s after the primary closed" % (t["zone"], _r(lo), _r(hi))

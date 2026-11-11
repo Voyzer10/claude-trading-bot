@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-research_scanner_v4.py - backtest of Scanner v4 (scanner_v4.py, the owner's 7 Nov final workflow), walk-forward 70/30,
-R after costs. The engine's own sequence is replayed on every chart: a primary trade, and only after it closed an
-OB / FVG secondary, then reset - exactly what the live scanner does.
+research_scanner_v4.py - backtest of Scanner v4 (scanner_v4.py, the owner's rules of 11 Nov 2026), walk-forward 70/30,
+R after costs. The engine's own sequence is replayed on every chart (the same code the live scanner runs): every
+BOS keeps its setup until traded, one trade at a time, an OB / FVG secondary only after a primary closed, the v4
+trailing stop (+1R -> entry, +2R -> +1R, ...).
 
     python research.py crypto-sv4       # crypto, 15-minute candles (12h max hold)
     python research.py crypto-sv4-5m    # crypto, 5-minute candles
@@ -10,9 +11,9 @@ OB / FVG secondary, then reset - exactly what the live scanner does.
     python research.py nse-sv4          # NSE stocks, 5m, intraday
 
 Grid (small on purpose): side (long, short, both) x trades (primary only, primary + secondary, secondary only) x
-min R:R (1, 2) x the PDF's skip rules (all on = live, all off, or one of them off: higher-timeframe trend, chop,
-BOS body + volume, nearby opposing zone) [x hours for crypto]. "Live" = what Scanner v4 paper trades: both sides,
-primary + secondary, R:R >= 1, every skip rule on.
+min R:R (0 = the owner's rule, 1, 2) x skip rules (both on = live, both off, one off: 1-hour trend, weak BOS) and the
+trailing stop off [x hours for crypto]. "Live" = what Scanner v4 paper trades: both sides, primary + secondary, no
+minimum R:R, both skip rules on, trailing on. Exits: stop, target, trailing stop, the session's end (no time stop).
 """
 import itertools
 import os
@@ -22,11 +23,12 @@ import research_abcd as RA
 import scanner_v4 as V4
 
 UTC = timezone.utc
-FILTERS = {"all": {}, "none": {"htf": False, "chop_er": 0, "bos_body_atr": 0, "bos_vol_x": 0, "opp_zone": False},
-           "no_htf": {"htf": False}, "no_chop": {"chop_er": 0}, "no_bos_quality": {"bos_body_atr": 0, "bos_vol_x": 0},
-           "no_opp_zone": {"opp_zone": False}}
-VARIANTS = [(rr, f) for rr in (1.0, 2.0) for f in FILTERS]
-LIVE = {"side": "both", "trades": "both", "min_rr": 1.0, "filters": "all", "session": "all"}
+FILTERS = {"all": {}, "none": {"htf": False, "bos_body_atr": 0, "bos_vol_x": 0},
+           "no_htf": {"htf": False}, "no_bos_quality": {"bos_body_atr": 0, "bos_vol_x": 0},
+           "no_trailing": {"trail": False}}
+RRS = (0.0, 1.0, 2.0)
+VARIANTS = [(rr, f) for rr in RRS for f in FILTERS]
+LIVE = {"side": "both", "trades": "both", "min_rr": 0.0, "filters": "all", "session": "all"}
 
 
 def events_v4(data, day_of, cost_fn, intraday=False, max_hold=48, entry_ok=None):
@@ -36,9 +38,14 @@ def events_v4(data, day_of, cost_fn, intraday=False, max_hold=48, entry_ok=None)
                 zip(d["t"], d["o"], d["h"], d["l"], d["c"], d["v"]) if None not in (o, h, l, c)]
         if len(rows) < 250:
             continue
+        try:
+            cx = V4.contexts(rows, day_of)           # once per chart, shared by every setting
+        except Exception:
+            continue
         for rr, fname in VARIANTS:
             try:
-                seq = V4.sequence(rows, day_of, intraday=intraday, min_rr=rr, max_hold=max_hold, **FILTERS[fname])
+                seq = V4.sequence(rows, day_of, intraday=intraday, ctxs=cx, min_rr=rr, max_hold=max_hold,
+                                  **FILTERS[fname])
             except Exception:
                 continue
             for t in seq:
@@ -56,6 +63,7 @@ def events_v4(data, day_of, cost_fn, intraday=False, max_hold=48, entry_ok=None)
                 evs.append({"sym": sym, "day": rows[t["i"]][0].date().isoformat(), "i": t["i"],
                             "hour": rows[t["i"]][0].hour, "side": t["side"], "kind": t["kind"], "min_rr": rr,
                             "filters": fname, "r": (t["exit"] - t["entry"]) * sg / risk - cost,
+                            "r_gross": (t["exit"] - t["entry"]) * sg / risk,
                             "exit_reason": t["exit_reason"]})
     evs.sort(key=lambda e: (e["day"], e["sym"], e["i"]))
     return evs
@@ -130,7 +138,7 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
         def entry_ok(t):
             lt = t.astimezone(tz_local)
             return (9, 30) <= (lt.hour, lt.minute) <= (14, 30)
-        events = events_v4(data, lambda t: t.astimezone(tz_local).date(), cost_fn, intraday=True, max_hold=75,
+        events = events_v4(data, lambda t: t.astimezone(tz_local).date(), cost_fn, intraday=True, max_hold=None,
                            entry_ok=entry_ok)
         mode, what = "nse-sv4", "%d NSE stocks, 5m candles, intraday" % len(data)
         costs, grid_extra = "paper.py India charges (STT, brokerage, ...)", {}
@@ -147,7 +155,7 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
         def entry_ok(t):
             lt = t.astimezone(et)
             return (9, 45) <= (lt.hour, lt.minute) <= (15, 30)
-        events = events_v4(data, lambda t: t.astimezone(et).date(), cost_fn, intraday=True, max_hold=78,
+        events = events_v4(data, lambda t: t.astimezone(et).date(), cost_fn, intraday=True, max_hold=None,
                            entry_ok=entry_ok)
         mode, what = "us-sv4", "%d US stocks/ETFs, 5m candles, intraday" % len(data)
         costs = "%.3f%% a side (paper fee + 0.02%% assumed spread/slippage)" % (fee * 100)
@@ -156,7 +164,7 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
     if not events:
         print("No Scanner v4 trades found: no data came back (check the internet / Yahoo).")
         return 1
-    grid = {"side": ["long", "short", "both"], "trades": ["primary", "secondary", "both"], "min_rr": [1.0, 2.0],
+    grid = {"side": ["long", "short", "both"], "trades": ["primary", "secondary", "both"], "min_rr": list(RRS),
             "filters": list(FILTERS), **grid_extra}
     live = dict(LIVE) if market == "crypto" else {k: v for k, v in LIVE.items() if k != "session"}
     days = sorted({e["day"] for e in events})
@@ -173,24 +181,28 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
     ok.sort(key=lambda r: -r["in_sample"]["avg_r"])
     stable = sorted([r for r in ok if r["in_sample"]["avg_r"] > 0 and r["out_of_sample"]["avg_r"] > 0],
                     key=lambda r: -min(r["in_sample"]["avg_r"], r["out_of_sample"]["avg_r"]))
-    base = [e for e in events if e["min_rr"] == 1.0 and e["filters"] == "all"]
+    base = [e for e in events if e["min_rr"] == LIVE["min_rr"] and e["filters"] == "all"]
     n_p = sum(1 for e in base if e["kind"] == "primary")
     exits = {}
     for e in base:
         exits[e["exit_reason"]] = exits.get(e["exit_reason"], 0) + 1
     lines = ["research.py %s  %s" % (mode, datetime.now(tz_local).strftime("%Y-%m-%d %H:%M %Z")),
-             "Scanner v4 (scanner_v4.py, the owner's 7 Nov final workflow): PRIMARY = BOS -> sweep of an old low/high that "
-             "is reclaimed -> doji / hammer / inverted hammer -> break-and-close; SECONDARY = only after the primary "
-             "closed: OB / FVG of that move tapped, then break-and-close. One sequence per chart. Shorts = mirror.",
+             "Scanner v4 (scanner_v4.py, the owner's rules of 11 Nov 2026): PRIMARY BUY = bullish BOS (close) -> a close "
+             "below an old low -> doji / inverted hammer -> the next or next-to-next candle closes above its high "
+             "(SELL: mirror, doji / hammer); every BOS setup stays active until traded; stop below the sweep-to-signal "
+             "low; target = next liquidity; trailing stop +1R -> entry, +2R -> +1R. SECONDARY = only after the primary "
+             "closed: a reversal candle tapping the move's OB / FVG. One trade at a time per chart. Shorts = mirror.",
              "%s, %d days (%s..%s). Live-reading trades: %d primary, %d secondary; exits %s. R after costs (%s). "
              "Out-of-sample = days from %s." % (what, len(days), days[0], days[-1], n_p, len(base) - n_p, exits, costs,
                                                 split), "",
              row(score(events, live, split, stats), "LIVE (what Scanner v4 paper trades):  "),
+             row(score([dict(e, r=e["r_gross"]) for e in events], live, split, stats),
+                 "LIVE, the same trades BEFORE costs:  "),
              row(score(events, dict(live, trades="primary"), split, stats), "LIVE, primary trades only:  "),
              row(score(events, dict(live, trades="secondary"), split, stats), "LIVE, secondary (OB/FVG) only:  "),
              row(score(events, dict(live, side="long"), split, stats), "LIVE, longs only:  "),
              row(score(events, dict(live, side="short"), split, stats), "LIVE, shorts only:  "), "",
-             "THE PDF'S SKIP RULES (live setting, one rule switched off at a time; trades/day shows how much each cuts):"]
+             "SKIP RULES AND TRAILING (live setting, one switched off at a time; trades/day shows how much each cuts):"]
     for fname in FILTERS:
         if fname != "all":
             lines.append(row(score(events, dict(live, filters=fname), split, stats), "  skip_rules=%s -> " % fname))

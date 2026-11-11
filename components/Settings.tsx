@@ -99,7 +99,7 @@ const RISK_LABELS: Record<string, string> = {
   tm_rev_min_r: "Trade Manager: reversal exit only after this many R in profit",
   tm_stale_min: "Trade Manager: close a trade that went nowhere after (minutes, 0 = off)",
   tm_candle_min: "Trade Manager: candle size for the reversal check (minutes)",
-  scanner_version: "Scanner version: only the selected one's rules run (rules = only the older rules: crypto 4h breakout / SMC / playbook hits, NSE / US / F&O opening-range breakouts; v5 = the 0.146 level; v4 = revised v4 PDF (11 Nov): primary, then sequential OB/FVG; v3 = 5 Nov sweep reversal + FVG/OB retest; v2 = A-B-C-D, playbook, FVG / OB)",
+  scanner_version: "Scanner version: only the selected one's rules run (rules = only the older rules: crypto 4h breakout / SMC / playbook hits, NSE / US / F&O opening-range breakouts; v5 = the 0.146 level; v4 = your 11 Nov rules (Final Trading Workflow + your answers): primary, then sequential OB/FVG; v3 = 5 Nov sweep reversal + FVG/OB retest; v2 = A-B-C-D, playbook, FVG / OB)",
   v5_constant: "Scanner v5: the constant C, from the move's start (reel 0.146; Fibonacci 0.236 / 0.382 / 0.5 / 0.618 and 1 - r: 0.854 / 0.764 / 0.214 / 0.114; ICT OTE 0.38 / 0.295 / 0.21; Gann 0.125 / 0.25 / 0.375). Above 0.5 only target 2R trades",
   v5_move: "Scanner v5: the move (swing = last swing low -> high; day = today's low -> high)",
   v5_target: "Scanner v5: target (leg = the other end of the move; 2R)",
@@ -162,8 +162,8 @@ type MarketKey = "CRYPTO" | "NSE" | "US" | "FNO";
 const MARKET_TABS: [MarketKey, string][] = [["CRYPTO", "Crypto"], ["NSE", "NSE stocks"], ["US", "US stocks"], ["FNO", "F&O"]];
 const ACCOUNT_OF: Record<MarketKey, string> = { CRYPTO: "CRYPTO", NSE: "INDIA", US: "US", FNO: "INDIA" };
 const V4_NAMES: Record<string, string> = {
-  v4_primary_long: "v4 primary long (sweep of a low, reclaimed, doji / inverted hammer, break-and-close, next-open entry)",
-  v4_primary_short: "v4 primary short (sweep of a high, reclaimed, doji / hammer, break-and-close, next-open entry)",
+  v4_primary_long: "v4 primary long (bullish BOS, a close below an old low, doji / inverted hammer, the next 1-2 candles close above its high)",
+  v4_primary_short: "v4 primary short (bearish BOS, a close above an old high, doji / hammer, the next 1-2 candles close below its low)",
   v4_secondary_long: "v4 OB / FVG secondary long (only after the primary closed)",
   v4_secondary_short: "v4 OB / FVG secondary short (only after the primary closed)",
 };

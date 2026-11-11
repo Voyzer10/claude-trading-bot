@@ -1,56 +1,43 @@
 #!/usr/bin/env python3
 """
-scanner_v4.py - Scanner v4, the owner's revised v4 PDF (11 Nov 2026, "v4_revised_updated.pdf"; first version 7 Nov).
-Only these concepts run for a v4 account; no rule of Scanner v2 / v3 / v5 or the older rules. Completed candles only;
-shorts are the same rules on prices turned upside down (so a real hammer at a top is the mirror of an inverted hammer
-at a low).
+scanner_v4.py - Scanner v4: the owner's rules of 11 Nov 2026, from "Final Trading Workflow (complete, merged pages
+2 to 5)" and his answers to five rounds of questions (every open point of the PDF decided by him, not by the code).
+Completed candles only; shorts are the same rules on prices turned upside down (a real hammer at a top is the
+mirror of an inverted hammer at a low). No rule of Scanner v2 / v3 / v5 or the older rules.
 
-PRIMARY BUY (PDF 7: primary_buy_allowed)
-  1. Structure / BOS: a completed candle CLOSES above the latest confirmed swing high (a wick through is not a BOS).
-     Swings are confirmed causally: a pivot is known only once 2 candles have closed after it (smc_playbook.Context,
-     k=2). That is the bot's documented confirmation method, not a picture to match: the BOS itself may be one big
-     candle, several small ones or a gap.
-  2. Liquidity sweep: price trades BELOW an old low (the low the BOS move started from, or a confirmed swing low
-     formed after the BOS) and RECLAIMS it: a close back above it within reclaim_max candles. Acceptance below cancels.
-  3. Signal at the low: a DOJI or an INVERTED HAMMER (prominent upper wick), any colour, within sig_max candles of
-     the sweep, its low near the sweep extreme. A hammer is NOT a primary buy trigger (revised PDF 3). The candle
-     alone is never an entry.
-  4. Trigger: one of the next conf_max candles BREAKS and CLOSES above the signal candle's high (the level reclaimed
-     by then). A close below the sweep extreme first cancels it. Extended moves are skipped (no chasing).
-  5. Entry at the NEXT candle's open (revised PDF 3 / 4). Live: the paper buy happens just after the trigger candle
-     closes, at the live price, and R:R is checked again at that price. Backtest: the next candle's open; skipped if
-     it opens past the stop or the target, or R:R there is under min_rr.
-  6. Stop beyond the swept low (+ buffer); target = the next liquidity known at entry (the BOS move's high or an
-     untaken confirmed swing high). No usable target or R:R under min_rr -> skip.
-PRIMARY SELL (PDF 7: primary_sell_allowed): the mirror: high swept and reclaimed, then a DOJI or a HAMMER (prominent
-  lower wick) at the top, then a close below the signal candle's low; an inverted hammer at a top is NOT a trigger.
+PRIMARY BUY (SELL is the mirror)
+  1. BOS: a completed candle CLOSES above the latest confirmed swing high (a wick through it is not a BOS). A
+     reversal also needs this bullish BOS (the CHoCH) first. Swings are confirmed causally: a pivot is known once
+     2 candles have closed after it (smc_playbook.Context, k=2), whatever the shape of the move.
+     Every BOS starts its own setup. Setups are never cancelled: all stay active, buy and sell, old and new, until
+     one is traded (owner: "jitne bhi bane saare active ho"). Only the candles the scanner holds limit them.
+  2. Sweep: after that BOS, a completed candle CLOSES BELOW an old low: the low the BOS move started from, or a
+     confirmed swing low formed after the BOS. A wick below is not a sweep. Further closes lower only deepen it.
+  3. Signal: after the sweep, at any time, a DOJI (body <= 15% of the range) or an INVERTED HAMMER (prominent upper
+     wick). A hammer is not a BUY signal.
+  4. Trigger: the 1st or 2nd candle after the signal CLOSES ABOVE THE SIGNAL CANDLE'S HIGH (that close may still be
+     below the swept low). No trigger in 2 candles: a later doji / inverted hammer gives a new chance.
+  5. Entry: right after the trigger candle closes, at the current price (backtest: the next candle's open).
+  6. Stop: below the lowest low from the sweep candle to the signal candle, minus 0.1 ATR.
+  7. Target: the nearest untaken liquidity above the entry (a confirmed swing high, or the BOS move's high). The
+     target must be above the entry; there is no minimum reward:risk (min_rr = 0; the backtest also tries 1 and 2).
+  8. Trade Manager, trailing only: at +1R the stop goes to the entry, at +2R to +1R, then up 1R per R. No other
+     exit (intraday charts still close at the session's end).
+  One trade at a time per chart. A setup that triggers while a trade is open is skipped but stays active; when two
+  trigger on the same candle, the oldest BOS is taken. One trade per setup.
 
-SECONDARY (OB / FVG), strictly in sequence - the PDF's bot hard gate:
-     secondary_scan_enabled  = primary_trade_closed AND flat
-     secondary_entry_allowed = secondary_scan_enabled AND valid_OB_or_FVG_exists AND zone_tapped
-                               AND directional_reaction_confirmed AND break_close_confirmed AND risk_valid
-  7. Only after the primary trade is CLOSED (TP, SL or the session's defined exit) - never overlapping it.
-  8. A real zone of the primary move: the bullish order block (the last bearish candle between the sweep and the
-     trigger) or a completed 3-candle bullish FVG (candle 1 high below candle 3 low). Closed through = invalid.
-     No zone -> stay flat; zones are never invented.
-  9. Price must TAP the actual zone (trade into it; near is not enough) after the primary closed.
- 10. Reaction + confirmation: within conf_max candles of the tap, a candle CLOSES above the tap candle's high.
-     Entry at the next candle's open; stop beyond the zone's far edge; target the next liquidity; R:R >= min_rr.
- 11. At most one secondary per completed primary; then the sequence resets and waits for a fresh primary.
+SECONDARY (OB / FVG), strictly after the primary trade CLOSED:
+  9. A real zone of the primary move must exist and be unbroken (not closed through): the order block (the last
+     bearish candle between the sweep and the trigger) or a 3-candle FVG (candle 1 high below candle 3 low).
+ 10. Entry when a candle TAPS the zone and is itself a reversal candle (doji / inverted hammer for a buy; mirrored
+     for a sell), closing inside or above the zone: entry right after it closes. Stop below the zone (or that
+     candle's low, if lower) minus 0.1 ATR; target and Trade Manager as above. At most one secondary per primary;
+     a new primary trade ends the search.
 
-SKIPS (the PDF's pages 1, 2 and 4, and section 4 of the revision; on by default, each can be switched off for the
-backtest): against the higher-timeframe trend (htf: the last BOS on completed 1-hour candles), BOS out of a choppy
-market (chop_er), a weak BOS (bos_body_atr, bos_vol_x), a nearby opposing zone (opp_zone), extended moves
-(ext_range_atr / ext_dist_atr), no usable target, poor R:R. Costs are charged in the backtest and checked again by
-paper.py before every paper trade.
-
-Frozen numbers (revised PDF 8: agreed and frozen before testing): see DEFAULTS. Exits: stop, target and the session's
-flat-by only (no Trade Manager, breakeven or time stop). Research walks candles to simulate exits (stop first when a
-candle touches both; a gap through the stop fills at the open). The runner uses the paper ledger for the sequence.
+SKIPS (owner's choice of the PDF's skip rules): against the 1-hour trend (htf: the last BOS on completed 1-hour
+candles), and a weak BOS (bos_body_atr: BOS body >= 0.8 ATR; bos_vol_x: volume >= 1.2x the 20-candle average,
+skipped when the feed has no volume). The chop filter and the opposing-zone filter are off.
 """
-from bisect import bisect_right
-from datetime import datetime
-
 import smc_playbook as PB
 
 
@@ -58,16 +45,14 @@ def mirror(rows):
     return [(r[0], -r[1], -r[3], -r[2], -r[4], r[5]) for r in rows]
 
 
-DEFAULTS = {"bos_max": 48, "reclaim_max": 3, "sig_max": 3, "conf_max": 2, "near_atr": 0.5, "ext_range_atr": 2.0,
-            "ext_dist_atr": 3.0, "buffer_atr": 0.1, "min_rr": 1.0, "zone_window": 48, "leg_max": 24,
-            "max_hold": None, "doji_pct": 0.15,   # max_hold None: the PDF exits at TP / SL only (10 Nov 2026)
-            # the PDF's skip rules (fixed numbers, 7 Nov 2026; 0 / False switches one off)
-            "htf": True, "chop_er": 0.30, "er_n": 20, "bos_body_atr": 0.8, "bos_vol_x": 1.2, "vol_n": 20,
-            "opp_zone": True, "opp_lookback": 48}
+DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15, "conf_max": 2, "max_hold": None, "trail": True,
+            # the skip rules the owner kept (11 Nov 2026); 0 / False switches one off for the backtest
+            "htf": True, "bos_body_atr": 0.8, "bos_vol_x": 1.2, "vol_n": 20,
+            # off by the owner's choice (kept so older backtest settings still run)
+            "chop_er": 0, "er_n": 20, "opp_zone": False, "opp_lookback": 48}
 
-# Revised PDF (11 Nov 2026), section 3: the primary trigger candle. In src terms (prices mirrored for shorts) both
-# sides use the same set: a doji, or a candle with a prominent upper wick ("star" in smc_playbook.patterns). For a
-# BUY that is an inverted hammer at the low; mirrored for a SELL it is a real hammer at the top.
+# the signal candle, src terms: a doji, or a prominent upper wick ("star" in smc_playbook.patterns). For a BUY that
+# is an inverted hammer at the low; mirrored for a SELL it is a real hammer at the top.
 TRIGGERS = {"doji", "star"}
 
 
@@ -162,97 +147,6 @@ def bos_quality(bars, ctx, j, p):
     return True, None
 
 
-def primaries(src, ctx, p, htf=None):
-    """Every primary entry on src (normal prices for longs, mirrored for shorts). Stateless: the sequence decides
-    which ones are taken. htf: per-candle higher-timeframe trend in src terms (htf_dirs), used when p["htf"]."""
-    bars, n, out, taken = src, len(src), [], set()
-    bos, used = None, set()
-    for j in range(30, n):
-        if ctx.bull[j]:
-            ok, _ = bos_quality(bars, ctx, j, p)
-            if not ok:
-                bos = None                          # a weak / choppy break is not a BOS to trade from
-                continue
-            sh_i, sh_px = ctx.sh_known[j - 1][-1]
-            bos = {"i": j, "level": sh_px, "origin": min(bars[k][3] for k in range(sh_i, j + 1))}
-            continue
-        if bos is None or j - bos["i"] > p["bos_max"]:
-            continue
-        lv = [("bos_origin", bos["origin"])] + [("post_bos", px) for idx, px in ctx.sl_known[j - 1] if idx > bos["i"]]
-        hit = [(nm, px) for nm, px in lv if bars[j][3] < px and (nm, px) not in used
-               and all(bars[k][3] >= px for k in range(bos["i"], j))]        # the first trade below it since the BOS
-        if not hit:
-            continue
-        lname, lvl = max(hit, key=lambda x: x[1])
-        used.add((lname, lvl))
-        # reclaim: a close back above the level within reclaim_max candles (the sweep candle itself counts)
-        rec = next((k for k in range(j, min(n, j + p["reclaim_max"] + 1)) if bars[k][4] > lvl), None)
-        if rec is None:
-            continue                                                         # accepted below: no reversal idea
-        # signal candle at the low
-        s_i = None
-        for s in range(j, min(n, j + p["sig_max"] + 1)):
-            a = ctx.atr[s]
-            if not a:
-                break
-            low = min(bars[k][3] for k in range(j, s + 1))
-            pats = PB.patterns(bars[s], p["doji_pct"])
-            if pats & TRIGGERS and bars[s][3] <= low + p["near_atr"] * a:
-                s_i = s
-                break
-        if s_i is None:
-            continue
-        extreme = min(bars[k][3] for k in range(j, s_i + 1))
-        trig = bars[s_i][2]
-        for i in range(s_i + 1, min(n, s_i + p["conf_max"] + 1)):
-            c = bars[i][4]
-            if c < extreme:
-                break
-            if c > trig and c > lvl and rec <= i:
-                a = ctx.atr[i]
-                if not a or i in taken:
-                    break
-                extreme = min(bars[k][3] for k in range(j, i + 1))
-                if (bars[i][2] - bars[i][3]) > p["ext_range_atr"] * a or (c - extreme) > p["ext_dist_atr"] * a:
-                    break                                                    # extended: no chasing
-                stop = extreme - p["buffer_atr"] * a
-                move_hi = max(bars[k][2] for k in range(bos["i"], j + 1))
-                tgt = _targets(ctx, bars, i, c, (move_hi,))
-                if tgt is None or (tgt - c) < p["min_rr"] * (c - stop):
-                    break                                                    # poor R:R
-                if p.get("htf") and htf is not None and htf[i] == "down":
-                    break                                                    # against the higher timeframe
-                if p.get("opp_zone") and opposing_zone(bars, i, c, c - stop, p["opp_lookback"]):
-                    break                                                    # supply right above the entry
-                taken.add(i)
-                pats = PB.patterns(bars[s_i], p["doji_pct"])
-                out.append({"i": i, "kind": "primary", "bos": bos["i"], "sweep": j, "reclaim": rec, "signal": s_i,
-                            "level_name": lname, "level": lvl, "extreme": extreme, "entry": c, "stop": stop,
-                            "target": tgt, "atr": a, "trigger_px": trig,
-                            "signal_pattern": "doji" if "doji" in pats else "wick"})
-                break
-    return out
-
-
-def _walk(bars, day, i, entry, stop, target, p, intraday):
-    """Walk a long (src terms) from candle i+1: stop first, then target, intraday day end, max_hold.
-    Returns (exit index, exit price, reason) or (None, None, 'open') if the data ends first."""
-    n = len(bars)
-    for k in range(i + 1, n):
-        o, h, l, c = bars[k][1], bars[k][2], bars[k][3], bars[k][4]
-        if l <= stop:
-            return k, (o if o < stop else stop), "stop"
-        if h >= target:
-            return k, (o if o > target else target), "target"
-        if intraday and (k + 1 >= n or day[k + 1] != day[k]):
-            if k + 1 < n:
-                return k, c, "day end"
-            return None, None, "open"
-        if p.get("max_hold") and k - i >= p["max_hold"]:
-            return k, c, "time"
-    return None, None, "open"
-
-
 def _zones(bars, prim, upto):
     """Bullish OB and FVGs of the primary move (src terms), formed up to candle `upto`."""
     j, i, s = prim["sweep"], prim["i"], prim["signal"]
@@ -267,124 +161,235 @@ def _zones(bars, prim, upto):
     return zones
 
 
-def secondary(bars, ctx, prim, closed_at, stop_at, p, htf=None):
-    """The OB / FVG secondary after a primary closed at candle closed_at; looked for until stop_at (exclusive):
-    zone must exist, be tapped, then confirmed by a close above the tap candle's high. None if there is none."""
-    n = len(bars)
-    zones = [z for z in _zones(bars, prim, min(closed_at, prim["i"] + p["leg_max"])) if z["born"] <= closed_at]
-    for z in zones:              # closed through before the scan starts -> invalid
-        z["dead"] = any(bars[k][4] < z["bot"] for k in range(z["born"] + 1, closed_at + 1))
-    zones = [z for z in zones if not z["dead"]]
-    if not zones:
-        return None, "no valid zone"
-    end = min(n, closed_at + 1 + p["zone_window"], stop_at)
-    t = closed_at + 1
-    while t < end:
-        o, h, l, c = bars[t][1], bars[t][2], bars[t][3], bars[t][4]
+
+class _Range:
+    """O(1) min / max of a list over [a, b] (sparse table), for the never-cancelled setups' long look-backs."""
+
+    def __init__(self, xs, fn):
+        self.fn, self.t = fn, [list(xs)]
+        k = 1
+        while (1 << k) <= len(xs):
+            prev, half = self.t[-1], 1 << (k - 1)
+            self.t.append([fn(prev[i], prev[i + half]) for i in range(len(xs) - (1 << k) + 1)])
+            k += 1
+
+    def q(self, a, b):
+        k = (b - a + 1).bit_length() - 1
+        return self.fn(self.t[k][a], self.t[k][b - (1 << k) + 1])
+
+
+class _Side:
+    """The setups of one side of a chart (src terms), advanced candle by candle."""
+
+    def __init__(self, src, ctx, htf, p):
+        self.b, self.ctx, self.htf, self.p = src, ctx, htf, p
+        self.setups = []          # every BOS setup, oldest first: {"bos", "level", "origin", "sweep", "lvl", "used"}
+        self.waiting = []         # not swept yet
+        self.pats = {}
+        self.lows = _Range([r[3] for r in src], min)
+        self.highs = _Range([r[2] for r in src], max)
+
+    def pat(self, k):
+        if k not in self.pats:
+            self.pats[k] = PB.patterns(self.b[k], self.p["doji_pct"]) & TRIGGERS
+        return self.pats[k]
+
+    def step(self, j):
+        """Advance to candle j; return the primary trigger of candle j or None:
+        {"setup", "i", "signal", "entry" (close), "stop", "target", "atr", ...} (the oldest active setup)."""
+        b, ctx, p = self.b, self.ctx, self.p
+        c = b[j][4]
+        # sweeps first: a close below the setup's BOS-start low or a swing low confirmed after its BOS
+        still = []
+        for st in self.waiting:
+            if j <= st["bos"]:
+                still.append(st)
+                continue
+            lv = [("bos_origin", st["origin"])] + [("post_bos", px) for idx, px in ctx.sl_known[j - 1]
+                                                  if idx > st["bos"]]
+            broken = [(nm, px) for nm, px in lv if c < px]
+            if broken:
+                st["lvl_name"], st["lvl"] = max(broken, key=lambda x: x[1])
+                st["sweep"] = j
+            else:
+                still.append(st)
+        self.waiting = still
+        if ctx.bull[j] and ctx.sh_known[j - 1]:
+            ok, _ = bos_quality(b, ctx, j, p)
+            if ok:
+                sh_i, sh_px = ctx.sh_known[j - 1][-1]
+                st = {"bos": j, "level": sh_px, "origin": self.lows.q(sh_i, j), "sweep": None, "used": False}
+                self.setups.append(st)
+                self.waiting.append(st)
+        # trigger: candle j closes above the high of a signal 1 or 2 candles back
+        for s in range(j - 1, max(j - p["conf_max"], 0) - 1, -1):
+            if not self.pat(s) or c <= b[s][2]:
+                continue
+            a = ctx.atr[j]
+            if not a or (p.get("htf") and self.htf is not None and self.htf[j] == "down"):
+                return None
+            liq = _targets(ctx, b, j, c)          # the swing-high liquidity, the same for every setup
+            self.setups = [st for st in self.setups if not st["used"]]
+            for st in self.setups:              # oldest BOS first
+                if st["used"] or st["sweep"] is None or st["sweep"] >= s:
+                    continue
+                t = self._trade(st, s, j, a, liq)
+                if t:
+                    return t
+            break
+        return None
+
+    def _trade(self, st, s, j, a, liq):
+        b, p = self.b, self.p
+        c = b[j][4]
+        stop = self.lows.q(st["sweep"], s) - p["buffer_atr"] * a
+        move_hi = self.highs.q(st["bos"], st["sweep"])
+        tgt = min([x for x in (liq, move_hi if move_hi > c else None) if x is not None], default=None)
+        if tgt is None or stop >= c or (tgt - c) < p["min_rr"] * (c - stop):
+            return None
+        pats = self.pat(s)
+        return {"i": j, "kind": "primary", "setup": st, "bos": st["bos"], "sweep": st["sweep"], "reclaim": st["sweep"],
+                "signal": s, "level_name": st["lvl_name"], "level": st["lvl"], "entry": c, "stop": stop,
+                "target": tgt, "atr": a, "trigger_px": b[s][2], "signal_pattern": "doji" if "doji" in pats else "wick"}
+
+    def secondary_at(self, prim, k_exit, m):
+        """The OB / FVG secondary on candle m after the primary closed at candle k_exit, or None; "dead" when no
+        valid zone is left. Zones: the primary move's, born by k_exit, never closed through since."""
+        b, ctx, p = self.b, self.ctx, self.p
+        zones = prim.setdefault("_zones", None)
+        if zones is None:
+            zones = [z for z in _zones(b, prim, k_exit) if z["born"] <= k_exit]
+            for z in zones:
+                z["dead"] = any(b[k][4] < z["bot"] for k in range(z["born"] + 1, k_exit + 1))
+            prim["_zones"] = zones
+        o, h, l, c = b[m][1], b[m][2], b[m][3], b[m][4]
         for z in zones:
-            if c < z["bot"]:
+            if not z["dead"] and c < z["bot"]:
                 z["dead"] = True
         live = [z for z in zones if not z["dead"]]
         if not live:
-            return None, "zone invalidated"
+            return "dead"
         tapped = [z for z in live if l <= z["top"] and h >= z["bot"]]
-        if tapped:
-            z = max(tapped, key=lambda x: x["top"])
-            for i in range(t + 1, min(n, t + p["conf_max"] + 1, stop_at)):
-                ci = bars[i][4]
-                if ci < z["bot"]:
-                    break
-                if ci > bars[t][2]:
-                    a = ctx.atr[i]
-                    if not a:
-                        break
-                    stop = z["bot"] - p["buffer_atr"] * a
-                    move_hi = max(bars[k][2] for k in range(prim["i"], i + 1))
-                    tgt = _targets(ctx, bars, i, ci, (move_hi,))
-                    if tgt is None or (tgt - ci) < p["min_rr"] * (ci - stop):
-                        return None, "poor R:R"
-                    if htf is not None and htf[i] == "down":
-                        return None, "against the higher timeframe"
-                    if p["opp_zone"] and opposing_zone(bars, i, ci, ci - stop, p["opp_lookback"]):
-                        return None, "nearby opposing zone"
-                    return {"i": i, "kind": "secondary", "zone": z["name"], "zone_top": z["top"],
-                            "zone_bottom": z["bot"], "tap": t, "entry": ci, "stop": stop, "target": tgt, "atr": a,
-                            "primary_at": prim["i"], "primary_closed_at": closed_at}, "entry"
-            t += 1
-            continue
-        t += 1
-    return None, "no tap / no confirmation"
+        if not tapped or not self.pat(m):
+            return None
+        z = max(tapped, key=lambda x: x["top"])
+        a = ctx.atr[m]
+        if not a:
+            return None
+        stop = min(z["bot"], l) - p["buffer_atr"] * a
+        tgt = _targets(ctx, b, m, c, (self.highs.q(prim["i"], m),))
+        if tgt is None or stop >= c or (tgt - c) < p["min_rr"] * (c - stop):
+            return None
+        if p.get("htf") and self.htf is not None and self.htf[m] == "down":
+            return None
+        return {"i": m, "kind": "secondary", "zone": z["name"], "zone_top": z["top"], "zone_bottom": z["bot"],
+                "tap": m, "entry": c, "stop": stop, "target": tgt, "atr": a, "primary_at": prim["i"],
+                "primary_closed_at": k_exit, "signal_pattern": "doji" if "doji" in self.pat(m) else "wick"}
 
 
-def _fill(src, day, t, p, intraday):
-    """The entry of a confirmed v4 signal (src terms): the NEXT candle's open (revised PDF 3 / 4).
-    (price, None), or (None, why): "pending" when that candle has not opened yet (the live scan), or a skip."""
-    i, n = t["i"], len(src)
+def _exit_step(bars, k, tr, p, day, intraday):
+    """One candle of an open trade (src terms, long): stop first, then target, then the trailing stop for the next
+    candle, then the session's end. Returns (exit price, reason) or None."""
+    o, h, l, c = bars[k][1], bars[k][2], bars[k][3], bars[k][4]
+    if l <= tr["cur_stop"]:
+        why = tr.get("stop_kind", "stop")
+        return (o if o < tr["cur_stop"] else tr["cur_stop"]), why
+    if h >= tr["target"]:
+        return (o if o > tr["target"] else tr["target"]), "target"
+    if p.get("trail"):
+        risk = tr["entry"] - tr["stop"]
+        steps = int((h - tr["entry"]) / risk + 1e-9) if risk > 0 else 0
+        if steps >= 1:
+            ns = tr["entry"] + (steps - 1) * risk
+            if ns > tr["cur_stop"]:
+                tr["cur_stop"] = ns
+                tr["stop_kind"] = "breakeven stop" if steps == 1 else "trailing stop"
+    if intraday and k + 1 < len(bars) and day[k + 1] != day[k]:
+        return c, "day end"
+    if p.get("max_hold") and k - tr["i"] >= p["max_hold"]:
+        return c, "time"
+    return None
+
+
+def _fill(bars, day, t, intraday):
+    """The entry of a signal on candle t["i"]: the next candle's open. (price, None), or (None, why): "pending" when
+    that candle has not opened yet (the live scan), or a skip."""
+    i, n = t["i"], len(bars)
     if i + 1 >= n:
         return None, "pending"
     if intraday and day[i + 1] != day[i]:
         return None, "the session ended before the next open"
-    o = src[i + 1][1]
+    o = bars[i + 1][1]
     if o <= t["stop"] or o >= t["target"]:
         return None, "opened past the stop / target"
-    if (t["target"] - o) < p["min_rr"] * (o - t["stop"]):
-        return None, "poor R:R at the next open"
     return o, None
 
 
-def sequence(rows, day_of, intraday=False, **kw):
-    """Scanner v4 on one chart: every primary and secondary trade, in order, each with its simulated exit.
-    Prices are normal (shorts un-mirrored). Returns a list of dicts sorted by entry candle."""
+def contexts(rows, day_of, htf=True):
+    """Everything sequence() needs that does not depend on the settings: build once per chart, pass as ctxs=."""
+    m = mirror(rows)
+    cl, cs = PB.Context(rows, day_of), PB.Context(m, day_of)
+    return {"rows": rows, "mirror": m, "ctx": (cl, cs), "day": [day_of(r[0]) for r in rows],
+            "htf": (htf_dirs(rows, day_of), htf_dirs(m, day_of)) if htf else (None, None)}
+
+
+def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
+    """Scanner v4 on one chart: every primary and secondary trade in order, each with its simulated exit, prices
+    normal (shorts un-mirrored). A trigger on the last candle comes back with exit_reason "open" and pending=True
+    (entry = that candle's close; live, the paper trade fills at the current price)."""
     p = dict(DEFAULTS, **kw)
-    mrows = mirror(rows)
-    sides = {}
-    for short in (False, True):
-        src = mrows if short else rows
-        ctx = PB.Context(src, day_of)
-        htf = htf_dirs(src, day_of) if p.get("htf") else None
-        sides[short] = (src, ctx, htf, primaries(src, ctx, p, htf))
-    day = [day_of(r[0]) for r in rows]
-    cands = sorted([(c["i"], short, c) for short in (False, True) for c in sides[short][3]], key=lambda x: (x[0], x[1]))
-    out, free = [], 0
-    for idx, (i, short, prim) in enumerate(cands):
-        if i < free:
+    cx = ctxs or contexts(rows, day_of, bool(p.get("htf")))
+    srcs = (rows, cx["mirror"])
+    sides = [_Side(srcs[s], cx["ctx"][s], cx["htf"][s] if p.get("htf") else None, p) for s in (0, 1)]
+    day, n = cx["day"], len(rows)
+    out, open_tr, sec = [], None, None       # sec: (side, primary trade, exit candle) while a secondary is looked for
+    for k in range(31, n):
+        if open_tr is not None and k > open_tr["i"]:
+            src = srcs[open_tr["_side"]]
+            got = _exit_step(src, k, open_tr, p, day, intraday)
+            if got:
+                open_tr.update(exit_i=k, exit=got[0], exit_reason=got[1])
+                out.append(_real(open_tr, open_tr["_side"] == 1))
+                if open_tr["kind"] == "primary":
+                    sec = (open_tr["_side"], open_tr, k)
+                else:
+                    sec = None
+                open_tr = None
+        cands = [(s, sides[s].step(k)) for s in (0, 1)]
+        if open_tr is not None:
             continue
-        src, ctx, htf, _ = sides[short]
-        fill, why_not = _fill(src, day, prim, p, intraday)
+        pick = None
+        if sec is not None and k > sec[2]:
+            s, prim, kx = sec
+            got = sides[s].secondary_at(prim, kx, k)
+            if got == "dead":
+                sec = None
+            elif got:
+                pick = (s, got)
+        if pick is None:
+            prims = [(s, t) for s, t in cands if t]
+            if prims:
+                pick = min(prims, key=lambda x: x[1]["bos"])
+        if pick is None:
+            continue
+        s, t = pick
+        src = srcs[s]
+        fill, why = _fill(src, day, t, intraday)
         if fill is None:
-            if why_not == "pending":             # the trigger is the last candle: entry at the next open (live)
-                out.append(_real(dict(prim, signal_close=prim["entry"], exit_i=None, exit=None, exit_reason="open"),
-                                 short))
-                break
-            free = i + 1                         # not filled: the sequence waits for a fresh primary
+            if why == "pending":
+                pend = dict(t, signal_close=t["entry"], exit_i=None, exit=None, exit_reason="open", pending=True,
+                            _side=s)
+                out.append(_real(pend, s == 1))
             continue
-        prim = dict(prim, signal_close=prim["entry"], entry=fill)
-        k, px, why = _walk(src, day, i, prim["entry"], prim["stop"], prim["target"], p, intraday)
-        out.append(_real(dict(prim, exit_i=k, exit=px, exit_reason=why), short))
-        if k is None:
-            break                                            # primary still open: nothing else on this chart
-        nxt = next((c[0] for c in cands[idx + 1:] if c[0] > k), len(rows))
-        sec, note = secondary(src, ctx, prim, k, nxt, p, htf)
-        out[-1]["secondary_note"] = note
-        if sec is None:
-            free = k + 1
-            continue
-        fill, why_not = _fill(src, day, sec, p, intraday)
-        if fill is None:
-            if why_not == "pending":
-                out.append(_real(dict(sec, signal_close=sec["entry"], exit_i=None, exit=None, exit_reason="open"),
-                                 short))
-                break
-            out[-1]["secondary_note"] = "secondary not filled: " + why_not
-            free = sec["i"] + 1
-            continue
-        sec = dict(sec, signal_close=sec["entry"], entry=fill)
-        k2, px2, why2 = _walk(src, day, sec["i"], sec["entry"], sec["stop"], sec["target"], p, intraday)
-        out.append(_real(dict(sec, exit_i=k2, exit=px2, exit_reason=why2), short))
-        if k2 is None:
-            break
-        free = k2 + 1
-    return out
+        if t["kind"] == "primary":
+            t["setup"]["used"] = True
+            sec = None
+        else:
+            sec = None
+        open_tr = dict(t, signal_close=t["entry"], entry=fill, cur_stop=t["stop"], _side=s)
+    if open_tr is not None:
+        out.append(_real(dict(open_tr, exit_i=None, exit=None, exit_reason="open"), open_tr["_side"] == 1))
+    return sorted(out, key=lambda t: (t["i"], t["kind"]))
 
 
 def chart_state(ledger, chart):
@@ -408,44 +413,21 @@ def chart_state(ledger, chart):
     return opened, closed
 
 
-def live_candidate(rows, day_of, ledger, chart):
-    """Evaluate the last closed candle using only filled trades to advance the live sequence."""
-    opened, closed = chart_state(ledger, chart)
+
+def live_candidate(rows, day_of, ledger, chart, intraday=False):
+    """The v4 entry on the last closed candle, if any: the chart's own simulated sequence (the same code as the
+    backtest) gives the signal; the paper ledger blocks it while a v4 trade is open on this chart. paper.py's
+    setup_decision checks the rest (fresh signal, a secondary's primary really closed)."""
+    opened, _ = chart_state(ledger, chart)
     if opened:
         return []
-    starts = [row[0] for row in rows]
-    closed_at = datetime.fromisoformat(closed["exit_time"]) if closed else None
-    previous_at = closed.get("v4_signal_at") if closed else None
     last = len(rows) - 1
-    if closed_at is not None and starts[last] <= closed_at:
-        return []
-    p = DEFAULTS
-    secondary_candidate = None
-    for short in (False, True):
-        src = mirror(rows) if short else rows
-        ctx = PB.Context(src, day_of)
-        htf = htf_dirs(src, day_of)
-        candidates = primaries(src, ctx, p, htf)
-        if candidates and candidates[-1]["i"] == last:
-            return [_real(candidates[-1], short)]
-        if not previous_at or closed["setup"] != ("v4_primary_short" if short else "v4_primary_long"):
-            continue
-        previous = datetime.fromisoformat(previous_at)
-        primary = next((c for c in candidates if starts[c["i"]] == previous), None)
-        if primary is None:
-            continue
-        k = bisect_right(starts, closed_at) - 1
-        if k <= primary["i"]:
-            continue
-        candidate, _ = secondary(src, ctx, primary, k, len(rows), p, htf)
-        if candidate and candidate["i"] == last:
-            secondary_candidate = _real(dict(candidate, primary_exit_time=closed_at.isoformat()), short)
-    return [secondary_candidate] if secondary_candidate else []
+    return [t for t in sequence(rows, day_of, intraday=intraday) if t.get("pending") and t["i"] == last]
 
 
 def _real(t, short):
     """src-terms trade -> normal prices and a side."""
-    t = dict(t)
+    t = {k: v for k, v in t.items() if k not in ("setup", "_zones", "cur_stop", "stop_kind", "_side")}
     t["side"] = "short" if short else "long"
     if t.get("signal_pattern") == "wick":          # upper wick in src terms: inverted hammer (buy) / hammer (sell)
         t["signal_pattern"] = "hammer" if short else "inverted hammer"

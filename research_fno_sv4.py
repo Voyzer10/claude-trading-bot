@@ -108,10 +108,10 @@ def events(data, tz_local, cfg, acc, entry_ok):
                 zip(d["t"], d["o"], d["h"], d["l"], d["c"], d["v"]) if None not in (o, h, l, c)]
         if len(rows) < 250:
             continue
-        for rr in (1.0, 2.0):
+        for rr in (0.0, 1.0, 2.0):
             try:
                 seq = V4.sequence(rows, lambda x: x.astimezone(tz_local).date(), intraday=True, min_rr=rr,
-                                  max_hold=75)
+                                  max_hold=None)
             except Exception:
                 continue
             for t in seq:
@@ -119,7 +119,7 @@ def events(data, tz_local, cfg, acc, entry_ok):
                     continue
                 o = option_trade(t, rows, tz_local, cfg, acc)
                 if isinstance(o, str):
-                    if rr == 1.0:
+                    if rr == 0.0:
                         skipped[o] = skipped.get(o, 0) + 1
                     continue
                 o.update(sym=sym, day=rows[t["i"]][0].astimezone(tz_local).date().isoformat(), i=t["i"],
@@ -193,7 +193,7 @@ def main(a, syms, src, fetch_all, stats, out_dir, tz_local):
     mpd = int(acc.get("max_trades_per_day") or 5)
     days = sorted({e["day"] for e in evs})
     split = days[int(len(days) * 0.7)]
-    live = {"side": "both", "trades": "both", "min_rr": 1.0}
+    live = {"side": "both", "trades": "both", "min_rr": 0.0}
     base = pick(evs, live, 10 ** 6)
     lines = ["research.py fno-sv4  %s" % datetime.now(tz_local).strftime("%Y-%m-%d %H:%M %Z"),
              "Scanner v4 setups on %d F&O stocks (%s), traded by BUYING the ATM option (call for long, put for short), "
@@ -211,9 +211,9 @@ def main(a, syms, src, fetch_all, stats, out_dir, tz_local):
              row(score(evs, live, split, stats, mpd, "stock_r"), "the same trades in the CASH STOCK (no costs):  "),
              "  money: " + money_line(evs, live, split, mpd, acc["capital"]), ""]
     for f in (dict(live, side="long"), dict(live, side="short"), dict(live, trades="primary"),
-              dict(live, trades="secondary"), dict(live, min_rr=2.0)):
+              dict(live, trades="secondary"), dict(live, min_rr=1.0), dict(live, min_rr=2.0)):
         lines.append(row(score(evs, f, split, stats, mpd), "  "))
-    grid = {"side": ["long", "short", "both"], "trades": ["primary", "secondary", "both"], "min_rr": [1.0, 2.0]}
+    grid = {"side": ["long", "short", "both"], "trades": ["primary", "secondary", "both"], "min_rr": [0.0, 1.0, 2.0]}
     res = [score(evs, dict(zip(grid, c)), split, stats, mpd) for c in itertools.product(*grid.values())]
     res = [r for r in res if r["in_sample"].get("trades", 0) >= 20 and r["out_of_sample"].get("trades", 0) >= 10]
     good = [r for r in res if r["in_sample"]["avg_r"] > 0 and r["out_of_sample"]["avg_r"] > 0]
