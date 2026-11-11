@@ -46,8 +46,9 @@ def build(tail, bos_vol=300, drop_low=100.0):
 
 
 SWEEP = (100.6, 101.0, 99.6, 99.9)       # trades below 99.8 and closes back above it (sweep + reclaim, one candle)
-HAMMER = (99.9, 100.05, 99.62, 100.0)    # hammer at the low
-TRIG = (100.0, 100.4, 99.95, 100.3)      # breaks and CLOSES above the hammer high 100.05 -> primary BUY
+INV = (99.68, 100.05, 99.62, 99.76)      # inverted hammer at the low (revised PDF: doji / inverted hammer for a BUY)
+HAMMER = (99.9, 100.05, 99.62, 100.0)    # hammer at the low: NOT a primary BUY trigger in the revised PDF
+TRIG = (100.0, 100.4, 99.95, 100.3)      # breaks and CLOSES above the signal high 100.05 -> primary BUY
 TRIG_WICK = (100.0, 100.4, 99.95, 100.04)
 LEG = [(100.3, 100.9, 100.25, 100.85), (100.85, 101.45, 100.8, 101.4), (101.4, 101.55, 101.2, 101.5)]  # FVG 100.9-101.2
 TP = (101.5, 103.1, 101.45, 103.0)       # primary target 103 hit -> primary CLOSED
@@ -63,12 +64,26 @@ def seq(rows):
 
 
 if __name__ == "__main__":
-    full = build([SWEEP, HAMMER, TRIG] + LEG + [TP] + PULL + [TAP, CONF])
+    full = build([SWEEP, INV, TRIG] + LEG + [TP] + PULL + [TAP, CONF])
     s = seq(full)
     prim = [t for t in s if t["kind"] == "primary"]
     sec = [t for t in s if t["kind"] == "secondary"]
-    check("1. primary BUY: BOS -> sweep + reclaim -> hammer -> break + close", len(prim) == 1 and prim[0]["side"] == "long"
-          and prim[0]["entry"] == 100.3 and prim[0]["signal_pattern"] == "hammer", s)
+    check("1. primary BUY: BOS -> sweep + reclaim -> inverted hammer -> break + close, entry at the next open",
+          len(prim) == 1 and prim[0]["side"] == "long" and prim[0]["signal_close"] == 100.3
+          and prim[0]["entry"] == LEG[0][0] and prim[0]["signal_pattern"] == "inverted hammer", s)
+    check("   revised PDF: a HAMMER at the low is not a primary BUY trigger",
+          not [t for t in seq(build([SWEEP, HAMMER, TRIG] + LEG)) if t["side"] == "long"])
+    doji_low = (99.7, 100.05, 99.62, 99.72)
+    check("   a DOJI at the low is one",
+          [t["signal_pattern"] for t in seq(build([SWEEP, doji_low, TRIG] + LEG)) if t["side"] == "long"] == ["doji"])
+    nxt = seq(build([SWEEP, INV, TRIG, (100.45, 100.9, 100.4, 100.85)]))
+    check("   the entry is the NEXT candle's open (100.45), not the trigger close (100.3)",
+          nxt and nxt[0]["entry"] == 100.45 and nxt[0]["signal_close"] == 100.3, nxt)
+    pend = seq(build([SWEEP, INV, TRIG]))
+    check("   trigger on the last candle: reported (live), entry pending the next open",
+          pend and pend[0]["exit_reason"] == "open" and pend[0]["entry"] == 100.3, pend)
+    check("   the next candle opens below the stop: no trade",
+          not [t for t in seq(build([SWEEP, INV, TRIG, (99.3, 99.4, 99.0, 99.2)])) if t["side"] == "long"])
     if prim:
         p = prim[0]
         check("   SL below the sweep low 99.6, TP the next liquidity 103", p["stop"] < 99.6 and p["target"] == 103.0, p)
@@ -79,43 +94,47 @@ if __name__ == "__main__":
         check("   secondary SL below the zone (100.9), target above", sec[0]["stop"] < 100.9 and sec[0]["target"] > 101.5, sec[0])
 
     no_reclaim = build([(100.6, 100.7, 99.5, 99.55), (99.55, 99.7, 99.4, 99.5), (99.5, 99.7, 99.45, 99.6),
-                        (99.6, 99.75, 99.5, 99.65), (99.65, 99.78, 99.5, 99.7), HAMMER, TRIG])
+                        (99.6, 99.75, 99.5, 99.65), (99.65, 99.78, 99.5, 99.7), INV, TRIG])
     check("3. price accepts below the old low (no reclaim within 3 candles): no trade",
           not [t for t in seq(no_reclaim) if t["side"] == "long"], seq(no_reclaim))
     check("4. trigger wick above the hammer high, close below: no trade",
-          not [t for t in seq(build([SWEEP, HAMMER, TRIG_WICK])) if t["side"] == "long"])
+          not [t for t in seq(build([SWEEP, INV, TRIG_WICK])) if t["side"] == "long"])
     check("5. confirmation on the 3rd candle: no trade",
-          not [t for t in seq(build([SWEEP, HAMMER, (100.0, 100.05, 99.9, 100.0), (100.0, 100.05, 99.9, 99.98), TRIG]))
+          not [t for t in seq(build([SWEEP, INV, (100.0, 100.05, 99.9, 100.0), (100.0, 100.05, 99.9, 99.98), TRIG]))
                if t["side"] == "long"])
-    open_prim = build([SWEEP, HAMMER, TRIG] + LEG + [(101.5, 101.6, 101.1, 101.15), CONF])
+    open_prim = build([SWEEP, INV, TRIG] + LEG + [(101.5, 101.6, 101.1, 101.15), CONF])
     s5 = seq(open_prim)
     check("6. no OB/FVG trade while the primary is still open (tap + confirmation ignored)",
           len(s5) == 1 and s5[0]["kind"] == "primary" and s5[0]["exit_i"] is None, s5)
-    near = seq(build([SWEEP, HAMMER, TRIG] + LEG + [TP] + PULL + [NEAR, CONF]))
+    near = seq(build([SWEEP, INV, TRIG] + LEG + [TP] + PULL + [NEAR, CONF]))
     check("7. near the zone is not a tap: no secondary", not [t for t in near if t["kind"] == "secondary"], near)
-    no_conf = seq(build([SWEEP, HAMMER, TRIG] + LEG + [TP] + PULL + [TAP, (101.15, 101.38, 101.1, 101.3),
+    no_conf = seq(build([SWEEP, INV, TRIG] + LEG + [TP] + PULL + [TAP, (101.15, 101.38, 101.1, 101.3),
                                                                      (101.3, 101.39, 101.2, 101.35)]))
     check("8. tap without a break-and-close: no secondary", not [t for t in no_conf if t["kind"] == "secondary"], no_conf)
     gap_pull = [(103.0, 103.05, 102.0, 102.1), PULL[1]]
-    opposing = seq(build([SWEEP, HAMMER, TRIG] + LEG + [TP] + gap_pull + [TAP, CONF]))
+    opposing = seq(build([SWEEP, INV, TRIG] + LEG + [TP] + gap_pull + [TAP, CONF]))
     check("   an opposing FVG ahead of the secondary blocks entry",
           opposing[0]["secondary_note"] == "nearby opposing zone", opposing)
-    stopped = seq(build([SWEEP, HAMMER, TRIG] + LEG + [(101.5, 101.55, 99.0, 99.2), (99.2, 99.6, 99.1, 99.5),
+    stopped = seq(build([SWEEP, INV, TRIG] + LEG + [(101.5, 101.55, 99.0, 99.2), (99.2, 99.6, 99.1, 99.5),
                                                        (99.5, 101.0, 99.4, 100.95)]))
     check("9. primary stopped out (closed through the zones): no secondary",
           stopped and stopped[0]["exit_reason"] == "stop" and not [t for t in stopped if t["kind"] == "secondary"], stopped)
     sh = V4.sequence(V4.mirror(full), DAY)
     check("10. mirror: the same picture upside down is a primary SELL then a secondary SELL",
           [(t["kind"], t["side"]) for t in sh] == [("primary", "short"), ("secondary", "short")], sh)
+    check("    the SELL's signal is a HAMMER at the top (the mirror of the inverted hammer at the low)",
+          sh and sh[0]["signal_pattern"] == "hammer", sh[:1])
+    check("    an INVERTED HAMMER at the top is not a primary SELL trigger",
+          not [t for t in V4.sequence(V4.mirror(build([SWEEP, HAMMER, TRIG] + LEG)), DAY) if t["side"] == "short"])
 
     # the PDF's skip rules (pages 1, 2, 4)
-    base_tail = [SWEEP, HAMMER, TRIG]
+    base_tail = [SWEEP, INV, TRIG]
     check("13. weak break: BOS on ordinary volume (1.0x < 1.2x) -> no trade",
           not [t for t in seq(build(base_tail, bos_vol=100)) if t["side"] == "long"])
     check("14. nearby opposing zone: an unfilled bearish FVG inside the first 1R -> no trade",
-          not [t for t in seq(build([(100.6, 100.7, 99.6, 99.9), HAMMER, TRIG], drop_low=100.5)) if t["side"] == "long"])
+          not [t for t in seq(build([(100.6, 100.7, 99.6, 99.9), INV, TRIG], drop_low=100.5)) if t["side"] == "long"])
     check("    ... the same picture with that rule off trades (the rule is what skipped it)",
-          [t for t in V4.sequence(build([(100.6, 100.7, 99.6, 99.9), HAMMER, TRIG], drop_low=100.5), DAY, opp_zone=False)
+          [t for t in V4.sequence(build([(100.6, 100.7, 99.6, 99.9), INV, TRIG], drop_low=100.5), DAY, opp_zone=False)
            if t["side"] == "long"])
     weak = build(base_tail)
     weak[40] = (weak[40][0], 100.4, 101.4, 100.3, 100.65, 300)          # BOS closes just above: tiny body
@@ -178,7 +197,7 @@ if __name__ == "__main__":
         live = PB.owner_setups(full, DAY, ledger=led, **chart)
         check("   a real primary close enables the later FVG tap and confirmation",
               [s["setup"] for s in live] == ["v4_secondary_long"], live)
-        no_target_hit = build([SWEEP, HAMMER, TRIG] + LEG
+        no_target_hit = build([SWEEP, INV, TRIG] + LEG
                               + [(101.5, 102.9, 101.45, 102.8), (102.8, 102.95, 101.4, 102.1), PULL[1], TAP, CONF])
         check("   a recorded exit can unlock the secondary even if the chart target was never hit",
               seq(no_target_hit)[0]["exit_i"] is None

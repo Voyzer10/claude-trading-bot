@@ -1,44 +1,52 @@
 #!/usr/bin/env python3
 """
-scanner_v4.py - Scanner v4, the owner's "Final Trading Workflow" PDF (7 Nov 2026). No rule of Scanner v2 or v3.
-Closed candles only; shorts are the same rules on prices turned upside down.
+scanner_v4.py - Scanner v4, the owner's revised v4 PDF (11 Nov 2026, "v4_revised_updated.pdf"; first version 7 Nov).
+Only these concepts run for a v4 account; no rule of Scanner v2 / v3 / v5 or the older rules. Completed candles only;
+shorts are the same rules on prices turned upside down (so a real hammer at a top is the mirror of an inverted hammer
+at a low).
 
-PRIMARY (BUY; SELL is the mirror)
-  1. BOS: a candle CLOSES above the latest confirmed swing high (a wick through it is not a BOS).
-  2. Liquidity sweep: price trades BELOW an old low (the low the BOS move started from, or a swing low formed after
-     the BOS) - by a wick or a whole candle - and then RECLAIMS it: a close back above the level within
-     reclaim_max candles. Price that stays below (accepts) cancels the idea.
-  3. Signal at the low: a doji, hammer or inverted hammer (any colour) within sig_max candles of the sweep, its low
-     near the sweep extreme. The candle alone is not an entry.
-  4. Trigger: one of the next conf_max candles BREAKS and CLOSES above the signal candle's high, with the level
-     reclaimed by then. A close below the sweep extreme first cancels it. Extended moves are skipped (no chasing).
-  5. Stop beyond the sweep extreme (+ buffer); target = the next liquidity (the BOS move's high or an untaken
-     swing high). Poor R:R (under min_rr) -> skip.
+PRIMARY BUY (PDF 7: primary_buy_allowed)
+  1. Structure / BOS: a completed candle CLOSES above the latest confirmed swing high (a wick through is not a BOS).
+     Swings are confirmed causally: a pivot is known only once 2 candles have closed after it (smc_playbook.Context,
+     k=2). That is the bot's documented confirmation method, not a picture to match: the BOS itself may be one big
+     candle, several small ones or a gap.
+  2. Liquidity sweep: price trades BELOW an old low (the low the BOS move started from, or a confirmed swing low
+     formed after the BOS) and RECLAIMS it: a close back above it within reclaim_max candles. Acceptance below cancels.
+  3. Signal at the low: a DOJI or an INVERTED HAMMER (prominent upper wick), any colour, within sig_max candles of
+     the sweep, its low near the sweep extreme. A hammer is NOT a primary buy trigger (revised PDF 3). The candle
+     alone is never an entry.
+  4. Trigger: one of the next conf_max candles BREAKS and CLOSES above the signal candle's high (the level reclaimed
+     by then). A close below the sweep extreme first cancels it. Extended moves are skipped (no chasing).
+  5. Entry at the NEXT candle's open (revised PDF 3 / 4). Live: the paper buy happens just after the trigger candle
+     closes, at the live price, and R:R is checked again at that price. Backtest: the next candle's open; skipped if
+     it opens past the stop or the target, or R:R there is under min_rr.
+  6. Stop beyond the swept low (+ buffer); target = the next liquidity known at entry (the BOS move's high or an
+     untaken confirmed swing high). No usable target or R:R under min_rr -> skip.
+PRIMARY SELL (PDF 7: primary_sell_allowed): the mirror: high swept and reclaimed, then a DOJI or a HAMMER (prominent
+  lower wick) at the top, then a close below the signal candle's low; an inverted hammer at a top is NOT a trigger.
 
 SECONDARY (OB / FVG), strictly in sequence - the PDF's bot hard gate:
-     secondary_enabled = primary_trade_closed AND valid_zone_exists
-     entry_allowed     = secondary_enabled AND zone_tapped AND confirmation_closed
-  6. Only after the primary trade is CLOSED (target, stop or time exit) - never overlapping it.
-  7. A real zone from the primary move must exist: the bullish order block (the last bearish candle between the
-     sweep and the trigger) or a bullish FVG in the move (candle 1 high .. candle 3 low). A zone closed through is
-     invalid. No zone -> stay flat.
-  8. Price must TAP the zone (trade into it; near is not enough) after the primary closed, without closing through.
-  9. Confirmation: within conf_max candles of the tap, a candle CLOSES above the tap candle's high. Then the
-     secondary entry, stop beyond the zone, target the next liquidity, R:R >= min_rr.
- 10. After the secondary (or when there is no zone / no tap / a fresh primary appears) the sequence resets.
+     secondary_scan_enabled  = primary_trade_closed AND flat
+     secondary_entry_allowed = secondary_scan_enabled AND valid_OB_or_FVG_exists AND zone_tapped
+                               AND directional_reaction_confirmed AND break_close_confirmed AND risk_valid
+  7. Only after the primary trade is CLOSED (TP, SL or the session's defined exit) - never overlapping it.
+  8. A real zone of the primary move: the bullish order block (the last bearish candle between the sweep and the
+     trigger) or a completed 3-candle bullish FVG (candle 1 high below candle 3 low). Closed through = invalid.
+     No zone -> stay flat; zones are never invented.
+  9. Price must TAP the actual zone (trade into it; near is not enough) after the primary closed.
+ 10. Reaction + confirmation: within conf_max candles of the tap, a candle CLOSES above the tap candle's high.
+     Entry at the next candle's open; stop beyond the zone's far edge; target the next liquidity; R:R >= min_rr.
+ 11. At most one secondary per completed primary; then the sequence resets and waits for a fresh primary.
 
-SKIP RULES (the PDF's pages 1, 2 and 4; on by default, each can be switched off for the backtest):
-  - htf:       no trade against the higher-timeframe trend: the last BOS on 1-hour candles (built from these
-               candles, completed hours only) must not point the other way (page 4).
-  - chop_er:   no BOS out of a sideways / choppy market: the efficiency ratio of the 20 closes up to the BOS
-               candle (net move / sum of moves) must be at least 0.30 (page 1).
-  - bos_body_atr / bos_vol_x: the break must be decisive: the BOS candle's body >= 0.8 ATR and its volume >= 1.2x
-               the 20-candle average (page 1: displacement and volume; skipped when the feed has no volume).
-  - opp_zone:  no nearby opposing zone: no unfilled bearish FVG (bullish for shorts) overlapping the space from the
-               entry to 1R beyond it (page 2).
+SKIPS (the PDF's pages 1, 2 and 4, and section 4 of the revision; on by default, each can be switched off for the
+backtest): against the higher-timeframe trend (htf: the last BOS on completed 1-hour candles), BOS out of a choppy
+market (chop_er), a weak BOS (bos_body_atr, bos_vol_x), a nearby opposing zone (opp_zone), extended moves
+(ext_range_atr / ext_dist_atr), no usable target, poor R:R. Costs are charged in the backtest and checked again by
+paper.py before every paper trade.
 
-One sequence per chart: a fresh primary can reset a search for an unfilled secondary. Open trades block new entries.
-Research walks candles to simulate exits (stop first when a candle touches both). The runner uses the paper ledger.
+Frozen numbers (revised PDF 8: agreed and frozen before testing): see DEFAULTS. Exits: stop, target and the session's
+flat-by only (no Trade Manager, breakeven or time stop). Research walks candles to simulate exits (stop first when a
+candle touches both; a gap through the stop fills at the open). The runner uses the paper ledger for the sequence.
 """
 from bisect import bisect_right
 from datetime import datetime
@@ -56,6 +64,11 @@ DEFAULTS = {"bos_max": 48, "reclaim_max": 3, "sig_max": 3, "conf_max": 2, "near_
             # the PDF's skip rules (fixed numbers, 7 Nov 2026; 0 / False switches one off)
             "htf": True, "chop_er": 0.30, "er_n": 20, "bos_body_atr": 0.8, "bos_vol_x": 1.2, "vol_n": 20,
             "opp_zone": True, "opp_lookback": 48}
+
+# Revised PDF (11 Nov 2026), section 3: the primary trigger candle. In src terms (prices mirrored for shorts) both
+# sides use the same set: a doji, or a candle with a prominent upper wick ("star" in smc_playbook.patterns). For a
+# BUY that is an inverted hammer at the low; mirrored for a SELL it is a real hammer at the top.
+TRIGGERS = {"doji", "star"}
 
 
 def efficiency(bars, j, n):
@@ -184,7 +197,7 @@ def primaries(src, ctx, p, htf=None):
                 break
             low = min(bars[k][3] for k in range(j, s + 1))
             pats = PB.patterns(bars[s], p["doji_pct"])
-            if pats & {"doji", "hammer", "star"} and bars[s][3] <= low + p["near_atr"] * a:
+            if pats & TRIGGERS and bars[s][3] <= low + p["near_atr"] * a:
                 s_i = s
                 break
         if s_i is None:
@@ -216,7 +229,7 @@ def primaries(src, ctx, p, htf=None):
                 out.append({"i": i, "kind": "primary", "bos": bos["i"], "sweep": j, "reclaim": rec, "signal": s_i,
                             "level_name": lname, "level": lvl, "extreme": extreme, "entry": c, "stop": stop,
                             "target": tgt, "atr": a, "trigger_px": trig,
-                            "signal_pattern": "doji" if "doji" in pats else ("hammer" if "hammer" in pats else "star")})
+                            "signal_pattern": "doji" if "doji" in pats else "wick"})
                 break
     return out
 
@@ -303,6 +316,22 @@ def secondary(bars, ctx, prim, closed_at, stop_at, p, htf=None):
     return None, "no tap / no confirmation"
 
 
+def _fill(src, day, t, p, intraday):
+    """The entry of a confirmed v4 signal (src terms): the NEXT candle's open (revised PDF 3 / 4).
+    (price, None), or (None, why): "pending" when that candle has not opened yet (the live scan), or a skip."""
+    i, n = t["i"], len(src)
+    if i + 1 >= n:
+        return None, "pending"
+    if intraday and day[i + 1] != day[i]:
+        return None, "the session ended before the next open"
+    o = src[i + 1][1]
+    if o <= t["stop"] or o >= t["target"]:
+        return None, "opened past the stop / target"
+    if (t["target"] - o) < p["min_rr"] * (o - t["stop"]):
+        return None, "poor R:R at the next open"
+    return o, None
+
+
 def sequence(rows, day_of, intraday=False, **kw):
     """Scanner v4 on one chart: every primary and secondary trade, in order, each with its simulated exit.
     Prices are normal (shorts un-mirrored). Returns a list of dicts sorted by entry candle."""
@@ -321,6 +350,15 @@ def sequence(rows, day_of, intraday=False, **kw):
         if i < free:
             continue
         src, ctx, htf, _ = sides[short]
+        fill, why_not = _fill(src, day, prim, p, intraday)
+        if fill is None:
+            if why_not == "pending":             # the trigger is the last candle: entry at the next open (live)
+                out.append(_real(dict(prim, signal_close=prim["entry"], exit_i=None, exit=None, exit_reason="open"),
+                                 short))
+                break
+            free = i + 1                         # not filled: the sequence waits for a fresh primary
+            continue
+        prim = dict(prim, signal_close=prim["entry"], entry=fill)
         k, px, why = _walk(src, day, i, prim["entry"], prim["stop"], prim["target"], p, intraday)
         out.append(_real(dict(prim, exit_i=k, exit=px, exit_reason=why), short))
         if k is None:
@@ -331,6 +369,16 @@ def sequence(rows, day_of, intraday=False, **kw):
         if sec is None:
             free = k + 1
             continue
+        fill, why_not = _fill(src, day, sec, p, intraday)
+        if fill is None:
+            if why_not == "pending":
+                out.append(_real(dict(sec, signal_close=sec["entry"], exit_i=None, exit=None, exit_reason="open"),
+                                 short))
+                break
+            out[-1]["secondary_note"] = "secondary not filled: " + why_not
+            free = sec["i"] + 1
+            continue
+        sec = dict(sec, signal_close=sec["entry"], entry=fill)
         k2, px2, why2 = _walk(src, day, sec["i"], sec["entry"], sec["stop"], sec["target"], p, intraday)
         out.append(_real(dict(sec, exit_i=k2, exit=px2, exit_reason=why2), short))
         if k2 is None:
@@ -399,8 +447,11 @@ def _real(t, short):
     """src-terms trade -> normal prices and a side."""
     t = dict(t)
     t["side"] = "short" if short else "long"
+    if t.get("signal_pattern") == "wick":          # upper wick in src terms: inverted hammer (buy) / hammer (sell)
+        t["signal_pattern"] = "hammer" if short else "inverted hammer"
     if short:
-        for f in ("level", "extreme", "entry", "stop", "target", "trigger_px", "zone_top", "zone_bottom", "exit"):
+        for f in ("level", "extreme", "entry", "stop", "target", "trigger_px", "zone_top", "zone_bottom", "exit",
+                  "signal_close"):
             if t.get(f) is not None:
                 t[f] = -t[f]
         if t.get("zone_top") is not None:

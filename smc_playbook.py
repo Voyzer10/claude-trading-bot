@@ -424,7 +424,7 @@ def v5_params(market):
 
 
 def scanner_version(market):
-    """Which Scanner a market runs: "v4" (the 7 Nov final workflow: primary sweep reversal, then a sequential OB/FVG
+    """Which Scanner a market runs: "v4" (the revised v4 PDF, 11 Nov: primary sweep reversal, then a sequential OB/FVG
     secondary), "v3" (the 5 Nov workflow: sweep reversal + FVG/OB retest) or "v2" (A-B-C-D, playbook doji / star /
     hammer, FVG / order-block retests). Versions never mix (owner, 5 and 7 Nov 2026).
     One switch per paper account (paper_config.json accounts.<X>.scanner_version, Settings > Risk limits). Defaults
