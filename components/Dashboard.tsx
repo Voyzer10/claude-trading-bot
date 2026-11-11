@@ -120,7 +120,7 @@ export default function Dashboard() {
           <Seg value={nav.sub.markets} onChange={(v) => nav.go("markets", v)} items={[["crypto", "Crypto"], ["nse", "NSE"], ["us", "US"], ["fno", "F&O"]]} label="Watch lists" />
           <div className="pane" hidden={nav.sub.markets !== "crypto"}>{snap && <CoinsSection snap={snap} live={live} />}</div>
           <div className="pane" hidden={nav.sub.markets !== "nse"}>{snap && <NseWatch snap={snap} live={live} />}</div>
-          <div className="pane" hidden={nav.sub.markets !== "us"}>{snap && <UsWatch snap={snap} />}</div>
+          <div className="pane" hidden={nav.sub.markets !== "us"}>{snap && <UsWatch snap={snap} live={live} />}</div>
           <div className="pane" hidden={nav.sub.markets !== "fno"}>{snap && <FnoWatch snap={snap} live={live} />}</div>
           {snap && <MarketsStrip snap={snap} />}
         </div>
@@ -851,7 +851,7 @@ function SetupCell({ p }: { p: Position }) {
 
 /** India positions with Zerodha's latest tick: price and gross open P&L change every second. */
 function withLive(open: Position[], live: LiveTicks | null): (Position & { live?: boolean })[] {
-  if (!live?.live && !live?.crypto_live) return open;
+  if (!live?.live && !live?.crypto_live && !live?.us_live) return open;
   return open.map((p) => {
     const t = liveFor(p.market, live) ? live.ticks[p.key] : undefined;
     if (!t) return p;

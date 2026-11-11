@@ -436,11 +436,28 @@ def crypto_live_price(t, rest=True):
     return coinbase.price(t) if rest else None
 
 
+def us_live_price(t, rest=True):
+    """(price, time) for a US stock from Alpaca's IEX feed (paper key, data only): the live ticker's file
+    (us_ticker.py) first, then one REST request. None without Alpaca keys or an IEX price (Yahoo then)."""
+    try:
+        import alpaca
+    except Exception:
+        return None
+    q = alpaca.tick_price(t)
+    if q:
+        return q
+    return alpaca.price(t) if (rest and alpaca.configured()) else None
+
+
 def fetch_price(m, t):
     """Return (price, quote_time_utc). Raises PaperError."""
     kq = kite_price(m, t)                # Indian market: Zerodha (live) when connected
     if kq:
         return float(kq[0]), kq[1]
+    if m == "US":
+        uq = us_live_price(t)            # US: Alpaca IEX, live (owner, 11 Nov 2026)
+        if uq:
+            return float(uq[0]), uq[1]
     if m == "CRYPTO":
         cq = crypto_live_price(t)        # crypto: Coinbase live (CoinDCX blocks the VPS; 11 Nov 2026)
         if cq:
@@ -527,6 +544,16 @@ def fetch_minutes(m, t, days=1):
             pass
     if m == "NFO":
         return []
+    if m == "US":                        # Alpaca IEX 1-minute bars (paper key, data only)
+        try:
+            import alpaca
+            if alpaca.configured():
+                now = datetime.now(timezone.utc)
+                out = alpaca.minutes(t, now - timedelta(days=max(1, min(7, int(days)))), now)
+                if out:
+                    return out
+        except Exception:
+            pass
     ysym = urllib.parse.quote(yahoo_symbol(m, t), safe="")
     rng = "%dd" % max(1, min(7, int(days)))
     for host in ("query2", "query1"):

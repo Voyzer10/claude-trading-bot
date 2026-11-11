@@ -68,6 +68,8 @@ jobs:
         run: python tests/test_v4_only.py
       - name: Live crypto prices (Coinbase public data only) - no key, private / order endpoints refused, ticks (offline)
         run: python tests/test_crypto_live.py
+      - name: Live US prices (Alpaca market data) - paper key only, trading API refused, snapshots, ticks (offline)
+        run: python tests/test_alpaca.py
       - name: Scanner v5 - the 0.146 level, cancels, mirror, naming, account gating (offline)
         run: python tests/test_scanner_v5.py
       - name: Dashboard watch lists (NSE / US quotes and breaks) (offline)

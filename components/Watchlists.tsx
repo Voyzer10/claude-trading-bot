@@ -42,19 +42,26 @@ export function NseWatch({ snap, live }: { snap: Snapshot; live: LiveTicks | nul
   );
 }
 
-export function UsWatch({ snap }: { snap: Snapshot }) {
+export function UsWatch({ snap, live }: { snap: Snapshot; live?: LiveTicks | null }) {
   const w = (snap.markets.US?.watch ?? {}) as Watch;
   const hits = (w.hits ?? []).map((h) => ({ ...h, time: h.time ?? h.at }));
   const byHit = Object.fromEntries(hits.map((h) => [h.symbol, h]));
   const symbols = w.symbols ?? [];
+  const ul = !!live?.us_live;
   const rows: Row[] = [...symbols, ...hits.map((h) => h.symbol).filter((s) => !symbols.includes(s))].map((s) => {
+    const t = ul ? live?.ticks["US:" + s] : undefined;
     const q = w.quotes?.[s];
-    return { sym: s, key: "US:" + s, price: q?.price ?? byHit[s]?.price ?? null, chg: q?.chg_pct ?? null, live: false, hit: byHit[s] };
+    const chg = t ? (t.chg_pct ?? (t.close ? ((t.ltp - t.close) / t.close) * 100 : null)) : q?.chg_pct ?? null;
+    return { sym: s, key: "US:" + s, price: t?.ltp ?? q?.price ?? byHit[s]?.price ?? null, chg, live: !!t, hit: byHit[s] };
   });
+  const sub = ul
+    ? "Prices live from Alpaca (IEX exchange), every 2 seconds."
+    : w.as_of
+      ? `Last 5-minute close ${timeIST(w.as_of, true)} IST${live?.us_configured === false ? "; add the Alpaca paper key on the server for live prices" : ""}.`
+      : "Filled from the first 5-minute candle of the US session.";
   return (
     <WatchList id="watch-us" title={`US watch list: ${symbols.length || "—"} liquid names${hits.length ? ` + breaks` : ""}`}
-               sub={w.as_of ? `Last 5-minute close ${timeIST(w.as_of, true)} IST; updated every candle while the US market is open.` : "Filled from the first 5-minute candle of the US session."}
-               rows={rows} cur="$" />
+               sub={sub} rows={rows} cur="$" />
   );
 }
 
