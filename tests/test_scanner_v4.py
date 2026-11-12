@@ -110,9 +110,14 @@ if __name__ == "__main__":
                       (99.0, 99.5, 98.95, 99.4), UP1, TP]))
     check("7. no cancel: closes lower only deepen the sweep; the trade comes with the stop under the lowest low (98.9)",
           len(s7) == 1 and 98.7 < s7[0]["stop"] < 98.9, s7)
-    check("8. weak BOS (volume 1.0x < 1.2x): no setup", not longs(build([SWEEP, INV, TRIG, UP1, TP], bos_vol=100)))
-    check("   ... the same chart with the weak-BOS rule off trades (the rule is what skipped it)",
-          longs(build([SWEEP, INV, TRIG, UP1, TP], bos_vol=100), bos_body_atr=0, bos_vol_x=0))
+    check("8. BOS by close only (owner, 12 Nov): a low-volume BOS candle still makes the setup",
+          longs(build([SWEEP, INV, TRIG, UP1, TP], bos_vol=100)))
+    check("   ... the old weak-BOS check (backtest variant) would have skipped it",
+          not longs(build([SWEEP, INV, TRIG, UP1, TP], bos_vol=100), bos_body_atr=0.8, bos_vol_x=1.2))
+    wick = build([SWEEP, INV, TRIG, UP1, TP])
+    wick[40] = (wick[40][0], 100.4, 101.4, 100.3, 100.55, 300)   # pokes above the 100.6 high, closes under it
+    check("   a wick above the swing high without a close above it is not a BOS: no setup from it",
+          not [t for t in longs(wick) if t["bos"] == 40])
     check("9. no minimum R:R by default; min_rr=5 (backtest setting) skips this 4R trade",
           longs(full) and not longs(full, min_rr=5))
 
@@ -131,12 +136,13 @@ if __name__ == "__main__":
     check("9b. intraday: yesterday's unswept BOS setup trades today (sweep, signal, break-close on the next day)",
           [t["kind"] for t in longs(d2, intraday=True)] == ["primary"], longs(d2, intraday=True))
     d3 = next_days(build([]), [quiet, [SWEEP, INV, TRIG, UP1, TP]])
-    check("    but only for one day: unswept for two days, it is gone on the third (intraday)",
-          not longs(d3, intraday=True), longs(d3, intraday=True))
-    check("    crypto (not intraday) keeps every setup: the same chart trades on the third day",
-          [t["kind"] for t in longs(d3)] == ["primary"], longs(d3))
+    first = lambda ts: [t for t in ts if t["bos"] == 40]   # noqa: E731  (day 1's BOS; later days may make their own)
+    check("    but only for one day: unswept for two days, day 1's BOS is gone on the third (intraday)",
+          not first(longs(d3, intraday=True)), longs(d3, intraday=True))
+    check("    crypto (not intraday) keeps every setup: day 1's BOS trades on the third day",
+          [t["kind"] for t in first(longs(d3))] == ["primary"], longs(d3))
     swept = next_days(build([SWEEP]), [[INV, TRIG, UP1, TP]])
-    check("    swept yesterday but not traded: gone today (intraday)", not longs(swept, intraday=True),
+    check("    swept yesterday but not traded: gone today (intraday)", not first(longs(swept, intraday=True)),
           longs(swept, intraday=True))
 
     # 10. the v4 trailing stop: +1R -> the entry, +2R -> +1R
@@ -191,15 +197,16 @@ if __name__ == "__main__":
     dirs = V4.htf_dirs(down, DAY)
     check("13. higher timeframe: an hourly downtrend reads 'down' (longs skipped there)", dirs[-1] == "down", dirs[-12:])
     check("    and the mirror of it reads 'up' for shorts' (src) terms", V4.htf_dirs(V4.mirror(down), DAY)[-1] == "up")
-    check("    the owner's skip rules (12 Nov): weak BOS on, the 1-hour trend skip off by default",
-          V4.DEFAULTS["htf"] is False and V4.DEFAULTS["bos_vol_x"] == 1.2 and V4.DEFAULTS["bos_body_atr"] == 0.8)
+    check("    no skip rules by default (12 Nov): weak-BOS check and the 1-hour trend skip off",
+          V4.DEFAULTS["htf"] is False and not V4.DEFAULTS["bos_vol_x"] and not V4.DEFAULTS["bos_body_atr"])
     weak = build([SWEEP, INV, TRIG], bos_vol=100)
     strong = build([SWEEP, INV, TRIG])
     per = {m: (PB.owner_setups(weak, DAY, version="v4", market=m, symbol="TST", intraday=m != "CRYPTO"),
                PB.owner_setups(strong, DAY, version="v4", market=m, symbol="TST", intraday=m != "CRYPTO"))
            for m in ("NSE", "US", "CRYPTO")}
-    check("    the weak-BOS skip works the same in all three markets (NSE, US, crypto)",
-          all(not w and [g["setup"] for g in st] == ["v4_primary_long"] for w, st in per.values()), per)
+    check("    BOS by close works the same in all three markets (NSE, US, crypto): low and high volume both count",
+          all([g["setup"] for g in w] == ["v4_primary_long"] and [g["setup"] for g in st] == ["v4_primary_long"]
+              for w, st in per.values()), per)
 
     # 14. the scanner: the trigger on the last candle is reported (live), named; v2 / v3 never return v4
     upto = full[:full.index(full[-3]) + 1]           # ends with the trigger candle
