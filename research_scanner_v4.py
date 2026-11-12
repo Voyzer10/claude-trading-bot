@@ -26,7 +26,7 @@ import scanner_v4 as V4
 UTC = timezone.utc
 FILTERS = {"all": {}, "with_weak_bos": {"bos_body_atr": 0.8, "bos_vol_x": 1.2},
            "with_htf": {"htf": True}, "no_trailing": {"trail": False},
-           "no_day_rule": {"day_carry": False}}
+           "no_day_rule": {"day_carry": False}, "hammer_2x": {"hammer_x": 2.0}}
 RRS = (0.0, 1.0, 2.0)
 VARIANTS = [(rr, f) for rr in RRS for f in FILTERS]
 LIVE = {"side": "both", "trades": "both", "min_rr": 0.0, "filters": "all", "session": "all"}

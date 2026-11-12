@@ -76,6 +76,17 @@ if __name__ == "__main__":
     check("2. a wick below the old low (close back above) is not a sweep: no trade",
           not longs(build([WICK, INV, TRIG, UP1, TP])))
     check("3. a hammer at the low is not a BUY signal", not longs(build([SWEEP, HAMMER, TRIG, UP1, TP])))
+    # hammer wick >= 1x the body (owner, 13 Nov 2026). The real QCOM 5m candle of 12 Nov 21:55 IST (o h l c):
+    # a red candle at the top, lower wick 0.57 = 1.27x its 0.45 body -> a SELL hammer now (2x said no)
+    qcom = (183.10, 183.10, 182.08, 182.65)
+    sell_name = V4.signal_kind(V4.mirror([(None,) + qcom + (0,)])[0])
+    check("3b. hammer = wick >= 1x the body: the QCOM 12 Nov 21:55 candle is a SELL hammer (inverted hammer in src)",
+          sell_name == "inverted hammer" and V4.DEFAULTS["hammer_x"] == 1.0, sell_name)
+    check("    with the old 2x rule (backtest variant hammer_2x) it was not",
+          V4.signal_kind(V4.mirror([(None,) + qcom + (0,)])[0], hammer_x=2.0) is None)
+    check("    still needs the wick >= half the range and a short other wick (a plain red candle is no hammer)",
+          V4.signal_kind(V4.mirror([(None, 183.1, 183.3, 182.6, 182.7, 0)])[0]) is None
+          and V4.signal_kind(V4.mirror([(None, 183.1, 183.1, 182.5, 182.6, 0)])[0]) is None)
     # the owner's buying / selling candles (12 Nov 2026)
     kinds = {"classic": (99.7, 100.0, 99.6, 99.72), "gravestone": (99.62, 100.0, 99.6, 99.63),
              "long-legged": (99.8, 100.0, 99.6, 99.81), "dragonfly": (99.98, 100.0, 99.6, 99.99)}
