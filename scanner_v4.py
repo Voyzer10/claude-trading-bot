@@ -24,7 +24,8 @@ PRIMARY BUY (SELL is the mirror)
   7. Target: the nearest untaken liquidity above the entry (a confirmed swing high, or the BOS move's high). The
      target must be above the entry; there is no minimum reward:risk (min_rr = 0; the backtest also tries 1 and 2).
   8. Trade Manager, trailing only: at +1R the stop goes to the entry, at +2R to +1R, then up 1R per R. No other
-     exit (intraday charts still close at the session's end).
+     exit (intraday charts still close at the session's end). Settable per account (Settings > Trade Manager:
+     v4_trail, v4_be_r, v4_trail_step, v4_trail_gap; trail_lock_r()).
   Day rule (owner, 12 Nov 2026): at a new day only the previous day's BOS setups whose sweep has not happened stay
   active, and for that day only; today's BOS add up as they form. Setups that were swept but not traded, and older
   ones, end with their day. NSE / US 5-minute: the day = the trading session. Crypto (24h): the day starts at
@@ -55,7 +56,11 @@ def mirror(rows):
     return [(r[0], -r[1], -r[3], -r[2], -r[4], r[5]) for r in rows]
 
 
-DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15, "hammer_x": 1.0, "conf_max": 2, "max_hold": None, "trail": True,
+# the v4 Trade Manager (trailing only), per account in Settings > Trade Manager (owner, 13 Nov 2026); defaults =
+# the owner's 11 Nov rule: +1R -> the entry, +2R -> +1R, then 1R higher per R
+TRAIL_KEYS = ("trail", "v4_be_r", "v4_trail_step", "v4_trail_gap")
+DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "v4_be_r": 1.0, "v4_trail_step": 1.0, "v4_trail_gap": 1.0, "doji_pct": 0.15,
+            "hammer_x": 1.0, "conf_max": 2, "max_hold": None, "trail": True,
             # BOS by close only (owner, 12 Nov 2026): the weak-BOS check is off (0); the backtest can set 0.8 / 1.2
             "htf": False, "bos_body_atr": 0, "bos_vol_x": 0, "vol_n": 20,
             # off by the owner's choice (kept so older backtest settings still run)
@@ -335,6 +340,22 @@ class _Side:
                 "primary_closed_at": k_exit, "signal_pattern": self.pat(m)}
 
 
+def trail_lock_r(gain_r, p):
+    """Where the v4 trailing stop goes, in R from the entry (0 = the entry), for a best price gain_r R in profit, or
+    None (not moved yet). Breakeven at +v4_be_r R (0 = no breakeven move); then for every whole v4_trail_step R the
+    stop sits v4_trail_gap R behind it (step 1, gap 1: +2R -> +1R, +3R -> +2R)."""
+    lock = None
+    be = float(p.get("v4_be_r", 1.0) or 0)
+    if be > 0 and gain_r + 1e-9 >= be:
+        lock = 0.0
+    step, gap = float(p.get("v4_trail_step", 1.0) or 0), float(p.get("v4_trail_gap", 1.0) or 0)
+    if step > 0:
+        k = int(gain_r / step + 1e-9)
+        if k >= 1 and k * step - gap > 1e-9:
+            lock = max(lock or 0.0, k * step - gap)
+    return lock
+
+
 def _exit_step(bars, k, tr, p, day, intraday):
     """One candle of an open trade (src terms, long): stop first, then target, then the trailing stop for the next
     candle, then the session's end. Returns (exit price, reason) or None."""
@@ -346,12 +367,12 @@ def _exit_step(bars, k, tr, p, day, intraday):
         return (o if o > tr["target"] else tr["target"]), "target"
     if p.get("trail"):
         risk = tr["entry"] - tr["stop"]
-        steps = int((h - tr["entry"]) / risk + 1e-9) if risk > 0 else 0
-        if steps >= 1:
-            ns = tr["entry"] + (steps - 1) * risk
+        lock = trail_lock_r((h - tr["entry"]) / risk, p) if risk > 0 else None
+        if lock is not None:
+            ns = tr["entry"] + lock * risk
             if ns > tr["cur_stop"]:
                 tr["cur_stop"] = ns
-                tr["stop_kind"] = "breakeven stop" if steps == 1 else "trailing stop"
+                tr["stop_kind"] = "breakeven stop" if lock == 0 else "trailing stop"
     if intraday and k + 1 < len(bars) and day[k + 1] != day[k]:
         return c, "day end"
     if p.get("max_hold") and k - tr["i"] >= p["max_hold"]:

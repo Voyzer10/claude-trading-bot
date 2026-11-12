@@ -33,7 +33,28 @@ VARIANTS = [(rr, f) for rr in RRS for f in FILTERS]
 LIVE = {"side": "both", "trades": "both", "min_rr": 0.0, "filters": "all", "session": "all"}
 
 
-def events_v4(data, day_of, cost_fn, intraday=False, max_hold=48, entry_ok=None):
+def trail_settings(account):
+    """The account's v4 Trade Manager settings (Settings > Trade Manager) as sequence() arguments: the backtest
+    trails the way the paper account does."""
+    import paper as P
+    acc = P.load_config()["accounts"].get(account, {})
+    out = {"trail": bool(acc.get("v4_trail", True))}
+    for k in ("v4_be_r", "v4_trail_step", "v4_trail_gap"):
+        out[k] = float(acc.get(k, V4.DEFAULTS[k]))
+    return out
+
+
+def trail_text(tm):
+    if not tm.get("trail", True):
+        return "trailing off: stop / target only"
+    be, st, gp = tm["v4_be_r"], tm["v4_trail_step"], tm["v4_trail_gap"]
+    first = next((k * st for k in range(1, 50) if k * st - gp > 1e-9), None)
+    return "%s; then every %gR the stop sits %gR behind%s" % (
+        ("+%gR -> entry" % be) if be else "no breakeven move", st, gp,
+        (" (first at +%gR -> +%gR)" % (first, first - gp)) if first else "")
+
+
+def events_v4(data, day_of, cost_fn, intraday=False, max_hold=48, entry_ok=None, tm=None):
     evs = []
     for sym, d in data.items():
         rows = [(datetime.fromtimestamp(t, UTC), o, h, l, c, v or 0) for t, o, h, l, c, v in
@@ -47,7 +68,7 @@ def events_v4(data, day_of, cost_fn, intraday=False, max_hold=48, entry_ok=None)
         for rr, fname in VARIANTS:
             try:
                 seq = V4.sequence(rows, day_of, intraday=intraday, ctxs=cx, min_rr=rr, max_hold=max_hold,
-                                  **FILTERS[fname])
+                                  **dict(tm or {}, **FILTERS[fname]))
             except Exception:
                 continue
             for t in seq:
@@ -118,7 +139,8 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
 
         def cost_fn(sym, entry, stop, exit_px, side):
             return (entry + exit_px) * fee / abs(entry - stop)
-        events = events_v4(data, lambda t: t.date(), cost_fn, max_hold=None)   # PDF: TP / SL only, no time stop
+        tm = trail_settings("CRYPTO")
+        events = events_v4(data, lambda t: t.date(), cost_fn, max_hold=None, tm=tm)   # TP / SL / trailing only
         mode = "crypto-sv4" + ("" if step == 15 else "-%dm" % step)
         what, costs = "%d coins, %s candles, exits at TP / SL only (the PDF)" % (len(data), iv), \
             "%.3f%% fee a side" % (fee * 100)
@@ -140,8 +162,9 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
         def entry_ok(t):
             lt = t.astimezone(tz_local)
             return (9, 30) <= (lt.hour, lt.minute) <= (14, 30)
+        tm = trail_settings("INDIA")
         events = events_v4(data, lambda t: t.astimezone(tz_local).date(), cost_fn, intraday=True, max_hold=None,
-                           entry_ok=entry_ok)
+                           entry_ok=entry_ok, tm=tm)
         mode, what = "nse-sv4", "%d NSE stocks, 5m candles, intraday" % len(data)
         costs, grid_extra = "paper.py India charges (STT, brokerage, ...)", {}
     else:
@@ -157,8 +180,9 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
         def entry_ok(t):
             lt = t.astimezone(et)
             return (9, 45) <= (lt.hour, lt.minute) <= (15, 30)
+        tm = trail_settings("US")
         events = events_v4(data, lambda t: t.astimezone(et).date(), cost_fn, intraday=True, max_hold=None,
-                           entry_ok=entry_ok)
+                           entry_ok=entry_ok, tm=tm)
         mode, what = "us-sv4", "%d US stocks/ETFs, 5m candles, intraday" % len(data)
         costs = "%.3f%% a side (paper fee + 0.02%% assumed spread/slippage)" % (fee * 100)
         grid_extra = {}
@@ -192,8 +216,8 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
              "Scanner v4 (scanner_v4.py, the owner's rules of 11 Nov 2026): PRIMARY BUY = bullish BOS (close) -> a close "
              "below an old low -> classic / gravestone / long-legged doji or inverted hammer -> the next or next-to-next "
              "candle closes above its high (SELL: mirror, classic / dragonfly / long-legged doji or hammer); every BOS setup stays active until traded; stop below the sweep-to-signal "
-             "low; target = next liquidity; trailing stop +1R -> entry, +2R -> +1R. SECONDARY = only after the primary "
-             "closed: a reversal candle tapping the move's OB / FVG. One trade at a time per chart. Shorts = mirror.",
+             "low; target = next liquidity; trailing stop per the account's Trade Manager settings (%s). SECONDARY = only after the primary "
+             "closed: a reversal candle tapping the move's OB / FVG. One trade at a time per chart. Shorts = mirror." % trail_text(tm),
              "%s, %d days (%s..%s). Live-reading trades: %d primary, %d secondary; exits %s. R after costs (%s). "
              "Out-of-sample = days from %s." % (what, len(days), days[0], days[-1], n_p, len(base) - n_p, exits, costs,
                                                 split), "",
