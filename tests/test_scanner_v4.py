@@ -154,6 +154,13 @@ if __name__ == "__main__":
     check("    and the mirror of it reads 'up' for shorts' (src) terms", V4.htf_dirs(V4.mirror(down), DAY)[-1] == "up")
     check("    the owner's skip rules (12 Nov): weak BOS on, the 1-hour trend skip off by default",
           V4.DEFAULTS["htf"] is False and V4.DEFAULTS["bos_vol_x"] == 1.2 and V4.DEFAULTS["bos_body_atr"] == 0.8)
+    weak = build([SWEEP, INV, TRIG], bos_vol=100)
+    strong = build([SWEEP, INV, TRIG])
+    per = {m: (PB.owner_setups(weak, DAY, version="v4", market=m, symbol="TST", intraday=m != "CRYPTO"),
+               PB.owner_setups(strong, DAY, version="v4", market=m, symbol="TST", intraday=m != "CRYPTO"))
+           for m in ("NSE", "US", "CRYPTO")}
+    check("    the weak-BOS skip works the same in all three markets (NSE, US, crypto)",
+          all(not w and [g["setup"] for g in st] == ["v4_primary_long"] for w, st in per.values()), per)
 
     # 14. the scanner: the trigger on the last candle is reported (live), named; v2 / v3 never return v4
     upto = full[:full.index(full[-3]) + 1]           # ends with the trigger candle
