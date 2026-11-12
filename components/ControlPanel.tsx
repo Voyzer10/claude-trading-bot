@@ -87,7 +87,7 @@ export default function ControlPanel() {
           <h2 id="ctl-h">Automation control</h2>
           <p>
             Which markets the runner scans and trades on paper. Open paper positions are always watched, even when paused.
-            {data.mode === "local" && " A market only runs if the runner was started with it (start_all.bat on the PC, RUNNER_MARKETS on the VPS)."}
+            {data.mode === "local" && " A market only runs if the runner was started with it (RUNNER_MARKETS on the VPS)."}
           </p>
         </div>
         <label className="switch-row">

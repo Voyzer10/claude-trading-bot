@@ -5,7 +5,7 @@ so it continues from where the PC left off instead of starting a fresh paper acc
 
     python cloud_seed.py https://your-app.vercel.app <INGEST_TOKEN>
 
-Stop the PC runner first (close the start_all.bat window), or both will trade the same paper account.
+Stop the PC runner first (python live.py), or both will trade the same paper account.
 """
 import json
 import os

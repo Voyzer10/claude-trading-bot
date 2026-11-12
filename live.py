@@ -2,7 +2,7 @@
 """
 live.py - hands-off live scanner for NSE, BSE and crypto.
 
-Start it once (start_live.bat) and leave the window open. During NSE/BSE hours
+Runs as the trader-runner service on the VPS (on a PC: python live.py). During NSE/BSE hours
 it re-scans every few minutes; crypto is scanned around the clock (a new
 15-minute candle = a new scan). Every cycle also checks your paper trades.
 Everything lands in trader/live/:
@@ -72,7 +72,7 @@ def push_dashboard(state):
             log("Dashboard: pushed (%s bytes, storage %s)." % (res.get("bytes"), res.get("storage")))
             _push_note["done"] = True
         elif not res.get("pushed") and not _push_note["done"]:
-            log("Dashboard: snapshot saved to trader/live/dashboard_snapshot.json (open it with start_dashboard.bat).")
+            log("Dashboard: snapshot saved to trader/live/dashboard_snapshot.json (the dashboard reads it).")
             _push_note["done"] = True
     except Exception as e:
         if not _push_note.get("err"):

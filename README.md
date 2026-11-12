@@ -5,36 +5,18 @@ After the testing phase the plan is to connect real brokers and trade real money
 integration plus hard safety limits (see "Before real money" below).
 
 ```
-D:\trader                       (this repo)
+claude-trading-bot              (this repo; on the VPS: /opt/trader)
 ├── app/, components/, lib/     Next.js dashboard (frontend)
-├── api/index.py                FastAPI: the dashboard API (and a cloud runner, parked for later)
-├── *.py                        the bot: live.py (runner), paper.py, scan_crypto.py, auto_crypto.py, ...
-├── start_all.bat               starts the runner
-├── start_dashboard.bat         starts the dashboard (http://localhost:3000)
-├── cloud_seed.py, vercel.json  for the optional cloud setup later
+├── api/                        FastAPI: the dashboard API (index.py, _ops.py, _kite.py)
+├── *.py                        the bot: live.py (runner), paper.py, scanners, auto_* agents, research*.py, tickers
+├── us/                         the US agents' helper scripts (scanner, entry, exit, budget, risk, ...)
+├── deploy/                     VPS install / update scripts and the systemd services
+├── tests/                      offline tests (run in CI)
 └── trader/                     the bot's data (ledger, logs, control.json): NOT in git
 ```
 
-## Run it on your PC (current setup)
-
-Two windows, both from `D:\trader`:
-
-1. **`start_all.bat`**: the runner. Scans NSE, F&O, crypto and US, takes paper trades and checks stops and
-   targets every 5 minutes. After every cycle it writes `trader\live\dashboard_snapshot.json`.
-2. **`start_dashboard.bat`**: the dashboard at http://localhost:3000, and on your phone on the same WiFi at
-   `http://<PC's IP>:3000` (the window prints the address). First run: installs the packages (needs Node.js LTS
-   and Python) and asks for a password, saved in `trader\dashboard_password.txt`; login is any username + that
-   password. The Python API listens on 127.0.0.1:8000 only; the phone reaches it through Next.js.
-   Away from home: install Tailscale on the PC and the phone and open `http://<PC's Tailscale IP>:3000`.
-
-The **Automation control** switches on the dashboard write `trader\live\control.json`. The runner reads it
-before every cycle, so a switch takes effect within ~5 minutes, without restarting. "Pause everything" stops
-new trades in every market; open paper positions are still watched (stops and targets keep working).
-A market only runs if `start_all.bat` started it.
-
-The runner only works while the PC is on and awake: set Windows sleep to "Never" while testing.
-
-Development without the .bat: `npm install`, `pip install fastapi uvicorn`, `npm run dev`.
+The bot runs 24x7 on the VPS (below). For development on a PC: `npm install`, `pip install -r requirements.txt`,
+then `python live.py` (runner) and `npm run dev` (dashboard at http://localhost:3000, API on 127.0.0.1:8000).
 
 ## Run it on a VPS (24x7, PC can be off)
 
@@ -57,22 +39,10 @@ Settings: `/etc/trader/trader.env` (password, markets). Data: `/opt/trader/trade
 - Update after code changes: `sudo bash deploy/update.sh` from the new copy.
 - Logs: `journalctl -u trader-runner -f`. The dashboard's Operations section shows the same health.
 
-## Claude Code on the VPS (Remote Control)
+## Claude Code on the VPS
 
-Run Claude Code on the VPS and drive it from the Claude app or claude.ai/code (needs a Pro/Max/Team/Enterprise
-plan). It runs as its own user `claudeops`: it can read the bot and its logs and restart the three services,
-nothing else as root, and it cannot read `/etc/trader/trader.env`.
-
-```
-cd ~/claude-trading-bot && git pull
-sudo bash deploy/claude-code.sh          # install
-sudo bash deploy/claude-code.sh login    # sign in once (prints a link to open on your phone/PC)
-sudo bash deploy/claude-code.sh start    # Remote Control, restarts by itself after a reboot
-sudo bash deploy/claude-code.sh status   # running? last lines of its terminal
-```
-Or without SSH for the non-interactive steps: GitHub -> Actions -> **Claude Code on VPS** -> Run workflow ->
-`install` -> `login-begin` -> `keys` (repeat: answer what the screen in the log asks; the sign-in link shows
-up there, open it on your phone and send back the code) -> `start`. `screen` shows the terminal again.
+Claude Code runs on the VPS as its own user `claudeops` (Remote Control service, set up once). It can read the
+bot and its logs and restart the services, nothing else as root, and it cannot read `/etc/trader/trader.env`.
 `CLAUDE.md` tells that session where everything is and the rules (no edits on the VPS; changes go through GitHub).
 
 ## CI / CD (GitHub Actions)
@@ -93,15 +63,17 @@ up there, open it on your phone and send back the code) -> `start`. `screen` sho
 - **Positions**: close one position or all, at the market price (the runner does it within ~5 s).
 - **Settings**: crypto strategy rules (with the backtested defaults and a reset), risk limits per account,
   coins watched, goal and US$ rate. Every change is written to the runner log as "Dashboard: ...".
-- **Scanner version**: Settings > Risk limits > "Scanner version", per account (CRYPTO, INDIA, US). Versions never
-  mix. `v4` = only the owner's 7 Nov final workflow (`scanner_v4.py`): a primary trade (BOS, a reclaimed sweep,
-  doji / hammer / inverted hammer, break-and-close), then - only after it closed - one sequential OB / FVG secondary
-  (zone exists, tapped, break-and-close). The PDF's skip rules are on: no trade against the 1-hour trend, no BOS
-  out of chop (efficiency < 0.30) or on a weak candle (body < 0.8 ATR, volume < 1.2x), no nearby opposing FVG
-  within 1R. `v3` = only the 5 Nov workflow (`sweep_reversal.py`): sweep reversal and
-  FVG / OB retest. `v2` = A-B-C-D, the playbook's doji / star / hammer and FVG / OB retests. The broker skips a
-  setup of another version. Nothing is redeployed; the next candle uses it. Backtest first: Backtest > "Scanner
-  v4 ..." / "Scanner v3 ...".
+- **Scanner version**: Settings > Risk limits > "Scanner version", per account (CRYPTO, INDIA, FNO, US). Versions
+  never mix. `v4` (`scanner_v4.py`, the owner's rules): BOS = a close beyond the last swing high / low; then a
+  close below an old low (above an old high), a signal candle (doji / gravestone / long-legged doji / inverted
+  hammer to buy; doji / dragonfly / long-legged doji / hammer to sell), then the next 1-2 candles close past it;
+  target the next liquidity, trailing +1R -> entry, +2R -> +1R; after that trade closed, one OB / FVG secondary.
+  On 5-minute NSE / US charts only yesterday's unswept BOS setups carry into today. `v5`, `v3`, `v2` and `rules`
+  are the older versions. The broker skips a setup of another version. Backtest first: Backtest > "Scanner v4 ...".
+- **Accounts**: INDIA (NSE stocks, Rs 50,000), FNO (Nifty 50 / Bank Nifty options, Rs 1,00,000), US ($50,000),
+  CRYPTO ($1,000). All paper money.
+- **Bigger picture (POV)**: chips 1h / 4h / D / W / M next to each chart: the direction of the last complete v4
+  setup on that timeframe (`pov.py`, hourly). Display only.
 - **Trade Manager** (Settings > Risk limits, per account; on by default): every open paper trade with a fixed
   target is managed: stop to the entry at +1R, half the move locked once 80% of the way to the target is covered,
   out on a reversal candle near the high (5-minute candles; 15 for crypto) after +1R, out when a trade goes nowhere
@@ -114,13 +86,10 @@ up there, open it on your phone and send back the code) -> `start`. `screen` sho
 - **Backtest**: runs research.py on the machine with fresh data and shows the report.
 - **Alerts**: Telegram messages for trades, errors, runner restarts and a daily summary.
 
-## Later: cloud (optional, not set up)
+## Cloud mode (parked)
 
-The repo can also deploy to Vercel (Next.js + `api/index.py`) with Upstash Redis and an outside scheduler
-calling `/api/py/cron/tick` every 5 minutes, so the PC can be off. Only crypto fits a 60-second cloud tick.
-That path is parked for now; `vercel.json`, `cloud_seed.py` and `github-workflow-tick.yml` are kept for it.
-In the cloud the API switches to Redis automatically (it runs in local mode only when no Redis is configured
-and it is not on Vercel).
+`api/index.py` can also run against Upstash Redis instead of local files (it switches automatically when Redis is
+configured); `cloud_seed.py` copies the bot's files there. Not used: everything runs on the VPS.
 
 ## Before real money
 
