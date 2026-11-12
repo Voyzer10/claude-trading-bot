@@ -103,6 +103,8 @@ def option_trade(t, rows, tz_local, cfg, acc, lot_size=None):
 
 def events(data, tz_local, cfg, acc, entry_ok, lot_size=None):
     evs, skipped = [], {}
+    trail = {"trail": bool(acc.get("v4_trail", True)),   # the FNO account's Settings > Trade Manager
+             **{k: float(acc.get(k, V4.DEFAULTS[k])) for k in ("v4_be_r", "v4_trail_step", "v4_trail_gap")}}
     for sym, d in data.items():
         rows = [(datetime.fromtimestamp(t, UTC), o, h, l, c, v or 0) for t, o, h, l, c, v in
                 zip(d["t"], d["o"], d["h"], d["l"], d["c"], d["v"]) if None not in (o, h, l, c)]
@@ -111,7 +113,7 @@ def events(data, tz_local, cfg, acc, entry_ok, lot_size=None):
         for rr in (0.0, 1.0, 2.0):
             try:
                 seq = V4.sequence(rows, lambda x: x.astimezone(tz_local).date(), intraday=True, min_rr=rr,
-                                  max_hold=None)
+                                  max_hold=None, **trail)
             except Exception:
                 continue
             for t in seq:
