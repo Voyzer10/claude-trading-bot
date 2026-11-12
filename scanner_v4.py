@@ -9,27 +9,31 @@ PRIMARY BUY (SELL is the mirror)
   1. BOS: a completed candle CLOSES above the latest confirmed swing high (a wick through it is not a BOS). A
      reversal also needs this bullish BOS (the CHoCH) first. Swings are confirmed causally: a pivot is known once
      2 candles have closed after it (smc_playbook.Context, k=2), whatever the shape of the move.
-     Every BOS starts its own setup. Setups are never cancelled: all stay active, buy and sell, old and new, until
-     one is traded (owner: "jitne bhi bane saare active ho"). Only the candles the scanner holds limit them.
+     Every BOS starts its own setup; all stay active, buy and sell, until one is traded (owner: "jitne bhi bane
+     saare active ho"), except the intraday day rule below.
   2. Sweep: after that BOS, a completed candle CLOSES BELOW an old low: the low the BOS move started from, or a
      confirmed swing low formed after the BOS. A wick below is not a sweep. Further closes lower only deepen it.
-  3. Signal: after the sweep, at any time, a DOJI (body <= 15% of the range) or an INVERTED HAMMER (prominent upper
-     wick). A hammer is not a BUY signal.
+  3. Signal: after the sweep, at any time, one of the owner's buying candles (12 Nov 2026), any colour: classic doji,
+     gravestone doji, long-legged doji (body <= 15% of the range) or inverted hammer. A dragonfly doji or a hammer
+     is not a BUY signal (they are the SELL signals at a top). See signal_kind().
   4. Trigger: the 1st or 2nd candle after the signal CLOSES ABOVE THE SIGNAL CANDLE'S HIGH (that close may still be
-     below the swept low). No trigger in 2 candles: a later doji / inverted hammer gives a new chance.
+     below the swept low). No trigger in 2 candles: a later signal candle gives a new chance.
   5. Entry: right after the trigger candle closes, at the current price (backtest: the next candle's open).
   6. Stop: below the lowest low from the sweep candle to the signal candle, minus 0.1 ATR.
   7. Target: the nearest untaken liquidity above the entry (a confirmed swing high, or the BOS move's high). The
      target must be above the entry; there is no minimum reward:risk (min_rr = 0; the backtest also tries 1 and 2).
   8. Trade Manager, trailing only: at +1R the stop goes to the entry, at +2R to +1R, then up 1R per R. No other
      exit (intraday charts still close at the session's end).
+  Intraday charts (NSE / US 5-minute; owner, 12 Nov 2026): at the session's start only the previous day's BOS
+  setups whose sweep has not happened stay active, and for that day only; today's BOS add up as they form. Setups
+  that were swept but not traded, and older ones, end with their day. Crypto (no session) keeps every setup.
   One trade at a time per chart. A setup that triggers while a trade is open is skipped but stays active; when two
   trigger on the same candle, the oldest BOS is taken. One trade per setup.
 
 SECONDARY (OB / FVG), strictly after the primary trade CLOSED:
   9. A real zone of the primary move must exist and be unbroken (not closed through): the order block (the last
      bearish candle between the sweep and the trigger) or a 3-candle FVG (candle 1 high below candle 3 low).
- 10. Entry when a candle TAPS the zone and is itself a reversal candle (doji / inverted hammer for a buy; mirrored
+ 10. Entry when a candle TAPS the zone and is itself a signal candle (the buying candles for a buy; mirrored
      for a sell), closing inside or above the zone: entry right after it closes. Stop below the zone (or that
      candle's low, if lower) minus 0.1 ATR; target and Trade Manager as above. At most one secondary per primary;
      a new primary trade ends the search.
@@ -51,9 +55,37 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15, "conf_max": 2, "
             # off by the owner's choice (kept so older backtest settings still run)
             "chop_er": 0, "er_n": 20, "opp_zone": False, "opp_lookback": 48}
 
-# the signal candle, src terms: a doji, or a prominent upper wick ("star" in smc_playbook.patterns). For a BUY that
-# is an inverted hammer at the low; mirrored for a SELL it is a real hammer at the top.
-TRIGGERS = {"doji", "star"}
+# The signal candle (owner, 12 Nov 2026, "Trading candlestick patterns for buying & selling"), any colour.
+#   BUY at the low:  classic doji, gravestone doji, long-legged doji, inverted hammer
+#   SELL at the top: classic doji, dragonfly doji, long-legged doji, hammer
+# A dragonfly doji or a hammer at a low is NOT a buy signal; a gravestone doji or an inverted hammer at a top is NOT a
+# sell signal. Shorts read mirrored prices, so one classifier (src terms) serves both: a real dragonfly at a top is
+# a gravestone in src terms, a real hammer an inverted hammer.
+TRIGGERS = {"doji", "gravestone doji", "long-legged doji", "inverted hammer"}
+SHORT_NAME = {"gravestone doji": "dragonfly doji", "inverted hammer": "hammer"}
+
+
+def signal_kind(bar, doji_pct=0.15, tiny=0.10, leg=0.30):
+    """The signal-candle name of one candle in src terms, or None. Shares of the candle's range (high - low):
+    doji = body <= doji_pct; a doji whose upper wick is < tiny is a dragonfly (not a buy signal); lower wick < tiny
+    = gravestone; both wicks >= leg = long-legged. Inverted hammer = upper wick >= 2 x body and >= half the range,
+    lower wick <= a quarter."""
+    o, h, l, c = bar[1], bar[2], bar[3], bar[4]
+    rng = h - l
+    if rng <= 0:
+        return None
+    body, up, lo = abs(c - o), h - max(o, c), min(o, c) - l
+    if body <= doji_pct * rng:
+        if up < tiny * rng:
+            return None                    # dragonfly doji (src): a sell signal only, at a top
+        if lo < tiny * rng:
+            return "gravestone doji"
+        if up >= leg * rng and lo >= leg * rng:
+            return "long-legged doji"
+        return "doji"
+    if up >= 2 * body and up >= 0.5 * rng and lo <= 0.25 * rng:
+        return "inverted hammer"
+    return None
 
 
 def efficiency(bars, j, n):
@@ -181,8 +213,9 @@ class _Range:
 class _Side:
     """The setups of one side of a chart (src terms), advanced candle by candle."""
 
-    def __init__(self, src, ctx, htf, p):
+    def __init__(self, src, ctx, htf, p, day=None):
         self.b, self.ctx, self.htf, self.p = src, ctx, htf, p
+        self.day = day            # session days (intraday charts): setups carry over one day only if unswept
         self.setups = []          # every BOS setup, oldest first: {"bos", "level", "origin", "sweep", "lvl", "used"}
         self.waiting = []         # not swept yet
         self.pats = {}
@@ -190,8 +223,9 @@ class _Side:
         self.highs = _Range([r[2] for r in src], max)
 
     def pat(self, k):
+        """The signal-candle name of candle k (src terms), or None."""
         if k not in self.pats:
-            self.pats[k] = PB.patterns(self.b[k], self.p["doji_pct"]) & TRIGGERS
+            self.pats[k] = signal_kind(self.b[k], self.p["doji_pct"])
         return self.pats[k]
 
     def step(self, j):
@@ -199,6 +233,12 @@ class _Side:
         {"setup", "i", "signal", "entry" (close), "stop", "target", "atr", ...} (the oldest active setup)."""
         b, ctx, p = self.b, self.ctx, self.p
         c = b[j][4]
+        if self.day is not None and j > 0 and self.day[j] != self.day[j - 1]:
+            # a new session (owner, 12 Nov 2026, 5-minute intraday): only the previous day's BOS setups whose sweep
+            # has not happened stay active, for this day only; swept-but-untraded and older setups end
+            prev = self.day[j - 1]
+            keep = [st for st in self.setups if not st["used"] and st["sweep"] is None and st["day"] == prev]
+            self.setups, self.waiting = keep, [st for st in keep]
         # sweeps first: a close below the setup's BOS-start low or a swing low confirmed after its BOS
         still = []
         for st in self.waiting:
@@ -218,7 +258,8 @@ class _Side:
             ok, _ = bos_quality(b, ctx, j, p)
             if ok:
                 sh_i, sh_px = ctx.sh_known[j - 1][-1]
-                st = {"bos": j, "level": sh_px, "origin": self.lows.q(sh_i, j), "sweep": None, "used": False}
+                st = {"bos": j, "level": sh_px, "origin": self.lows.q(sh_i, j), "sweep": None, "used": False,
+                      "day": self.day[j] if self.day is not None else None}
                 self.setups.append(st)
                 self.waiting.append(st)
         # trigger: candle j closes above the high of a signal 1 or 2 candles back
@@ -247,10 +288,9 @@ class _Side:
         tgt = min([x for x in (liq, move_hi if move_hi > c else None) if x is not None], default=None)
         if tgt is None or stop >= c or (tgt - c) < p["min_rr"] * (c - stop):
             return None
-        pats = self.pat(s)
         return {"i": j, "kind": "primary", "setup": st, "bos": st["bos"], "sweep": st["sweep"], "reclaim": st["sweep"],
                 "signal": s, "level_name": st["lvl_name"], "level": st["lvl"], "entry": c, "stop": stop,
-                "target": tgt, "atr": a, "trigger_px": b[s][2], "signal_pattern": "doji" if "doji" in pats else "wick"}
+                "target": tgt, "atr": a, "trigger_px": b[s][2], "signal_pattern": self.pat(s)}
 
     def secondary_at(self, prim, k_exit, m):
         """The OB / FVG secondary on candle m after the primary closed at candle k_exit, or None; "dead" when no
@@ -284,7 +324,7 @@ class _Side:
             return None
         return {"i": m, "kind": "secondary", "zone": z["name"], "zone_top": z["top"], "zone_bottom": z["bot"],
                 "tap": m, "entry": c, "stop": stop, "target": tgt, "atr": a, "primary_at": prim["i"],
-                "primary_closed_at": k_exit, "signal_pattern": "doji" if "doji" in self.pat(m) else "wick"}
+                "primary_closed_at": k_exit, "signal_pattern": self.pat(m)}
 
 
 def _exit_step(bars, k, tr, p, day, intraday):
@@ -340,7 +380,8 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
     p = dict(DEFAULTS, **kw)
     cx = ctxs or contexts(rows, day_of, bool(p.get("htf")))
     srcs = (rows, cx["mirror"])
-    sides = [_Side(srcs[s], cx["ctx"][s], cx["htf"][s] if p.get("htf") else None, p) for s in (0, 1)]
+    carry_day = cx["day"] if (intraday and p.get("day_carry", True)) else None
+    sides = [_Side(srcs[s], cx["ctx"][s], cx["htf"][s] if p.get("htf") else None, p, carry_day) for s in (0, 1)]
     day, n = cx["day"], len(rows)
     out, open_tr, sec = [], None, None       # sec: (side, primary trade, exit candle) while a secondary is looked for
     for k in range(31, n):
@@ -429,8 +470,8 @@ def _real(t, short):
     """src-terms trade -> normal prices and a side."""
     t = {k: v for k, v in t.items() if k not in ("setup", "_zones", "cur_stop", "stop_kind", "_side")}
     t["side"] = "short" if short else "long"
-    if t.get("signal_pattern") == "wick":          # upper wick in src terms: inverted hammer (buy) / hammer (sell)
-        t["signal_pattern"] = "hammer" if short else "inverted hammer"
+    if short and t.get("signal_pattern") in SHORT_NAME:   # mirrored back: a real dragonfly doji / hammer at the top
+        t["signal_pattern"] = SHORT_NAME[t["signal_pattern"]]
     if short:
         for f in ("level", "extreme", "entry", "stop", "target", "trigger_px", "zone_top", "zone_bottom", "exit",
                   "signal_close"):

@@ -42,8 +42,8 @@ def set_timeframe(tf):
 
 
 COINBASE = "https://api.exchange.coinbase.com"
-_GRAN = {"5m": 300, "15m": 900, "1h": 3600, "1d": 86400}
-_RANGE_DAYS = {"2d": 2, "5d": 5, "30d": 30, "60d": 60, "3mo": 92}
+_GRAN = {"5m": 300, "15m": 900, "1h": 3600, "60m": 3600, "1d": 86400}
+_RANGE_DAYS = {"2d": 2, "5d": 5, "30d": 30, "60d": 60, "3mo": 92, "1y": 365, "2y": 730, "5y": 1825}
 
 
 def coinbase_chart(sym, rng, interval, suffix=SUFFIX):

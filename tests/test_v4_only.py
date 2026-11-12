@@ -98,7 +98,9 @@ if __name__ == "__main__":
               PB.v4_only("NSE"))
         set_version(P, "INDIA", "v4")
 
-        # F&O index ORB off under v4 (INDIA)
+        # F&O index ORB off under v4 (INDIA). Offline: no Bank Nifty candles, else a live setup during market hours
+        # (CI fetching Yahoo) opens / skips a trade and the check depends on the clock.
+        AF.index_rows = lambda *a, **k: []
         logs.clear()
         st = {}
         out = AF.process(st, log)

@@ -24,7 +24,8 @@ import scanner_v4 as V4
 
 UTC = timezone.utc
 FILTERS = {"all": {}, "none": {"bos_body_atr": 0, "bos_vol_x": 0},
-           "with_htf": {"htf": True}, "no_trailing": {"trail": False}}
+           "with_htf": {"htf": True}, "no_trailing": {"trail": False},
+           "no_day_rule": {"day_carry": False}}
 RRS = (0.0, 1.0, 2.0)
 VARIANTS = [(rr, f) for rr in RRS for f in FILTERS]
 LIVE = {"side": "both", "trades": "both", "min_rr": 0.0, "filters": "all", "session": "all"}
@@ -187,8 +188,8 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
         exits[e["exit_reason"]] = exits.get(e["exit_reason"], 0) + 1
     lines = ["research.py %s  %s" % (mode, datetime.now(tz_local).strftime("%Y-%m-%d %H:%M %Z")),
              "Scanner v4 (scanner_v4.py, the owner's rules of 11 Nov 2026): PRIMARY BUY = bullish BOS (close) -> a close "
-             "below an old low -> doji / inverted hammer -> the next or next-to-next candle closes above its high "
-             "(SELL: mirror, doji / hammer); every BOS setup stays active until traded; stop below the sweep-to-signal "
+             "below an old low -> classic / gravestone / long-legged doji or inverted hammer -> the next or next-to-next "
+             "candle closes above its high (SELL: mirror, classic / dragonfly / long-legged doji or hammer); every BOS setup stays active until traded; stop below the sweep-to-signal "
              "low; target = next liquidity; trailing stop +1R -> entry, +2R -> +1R. SECONDARY = only after the primary "
              "closed: a reversal candle tapping the move's OB / FVG. One trade at a time per chart. Shorts = mirror.",
              "%s, %d days (%s..%s). Live-reading trades: %d primary, %d secondary; exits %s. R after costs (%s). "

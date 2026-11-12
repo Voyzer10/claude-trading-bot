@@ -162,8 +162,8 @@ type MarketKey = "CRYPTO" | "NSE" | "US" | "FNO";
 const MARKET_TABS: [MarketKey, string][] = [["CRYPTO", "Crypto"], ["NSE", "NSE stocks"], ["US", "US stocks"], ["FNO", "F&O"]];
 const ACCOUNT_OF: Record<MarketKey, string> = { CRYPTO: "CRYPTO", NSE: "INDIA", US: "US", FNO: "INDIA" };
 const V4_NAMES: Record<string, string> = {
-  v4_primary_long: "v4 primary long (bullish BOS, a close below an old low, doji / inverted hammer, the next 1-2 candles close above its high)",
-  v4_primary_short: "v4 primary short (bearish BOS, a close above an old high, doji / hammer, the next 1-2 candles close below its low)",
+  v4_primary_long: "v4 primary long (bullish BOS, a close below an old low, a classic / gravestone / long-legged doji or inverted hammer, the next 1-2 candles close above its high)",
+  v4_primary_short: "v4 primary short (bearish BOS, a close above an old high, a classic / dragonfly / long-legged doji or hammer, the next 1-2 candles close below its low)",
   v4_secondary_long: "v4 OB / FVG secondary long (only after the primary closed)",
   v4_secondary_short: "v4 OB / FVG secondary short (only after the primary closed)",
 };

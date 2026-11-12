@@ -1,0 +1,15 @@
+[Unit]
+Description=Trader bot POV (Scanner v4 setup direction on 1h / 4h / 1D / 1W / 1M -> trader/live/pov.json; display only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=trader
+WorkingDirectory=/opt/trader
+ExecStart=/opt/trader/.venv/bin/python -u pov.py loop /opt/trader
+Restart=always
+RestartSec=30
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

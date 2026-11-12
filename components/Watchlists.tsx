@@ -5,6 +5,7 @@ import type { Snapshot } from "@/lib/types";
 import type { LiveTicks } from "@/lib/live";
 import { price, timeIST } from "@/lib/format";
 import SymbolIcon from "@/components/SymbolIcon";
+import PovChips from "@/components/Pov";
 
 /** Watch lists for the markets other than crypto (owner, 10 Nov 2026): NSE (Nifty 50, live from Zerodha when
  *  connected, else the last opening-range scan), US (the scanner's liquid list, every 5-minute candle) and the
@@ -135,7 +136,7 @@ function WatchList({ id, title, sub, rows, cur }: { id: string; title: string; s
           <div key={r.sym} className="list-row-wrap">
             <button className="list-row" aria-expanded={h ? isOpen : undefined} onClick={() => h && setOpen({ ...open, [r.sym]: !isOpen })}>
               <span className="lr-main">
-                <b className="sym"><SymbolIcon id={r.key} />{r.sym}</b>
+                <b className="sym"><SymbolIcon id={r.key} />{r.sym}<PovChips id={r.key} /></b>
                 <span className="small muted">
                   {h ? <span className={short ? "neg" : "pos"}>{short ? "Broke down" : "Broke out"} at {h.time ?? "?"}{h.holding === false ? " · back inside" : ""}</span>
                     : r.live ? "live" : "watching"}

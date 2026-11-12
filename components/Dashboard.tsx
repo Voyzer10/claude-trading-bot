@@ -11,6 +11,7 @@ import Backtest from "@/components/Backtest";
 import Alerts from "@/components/Alerts";
 import Agents from "@/components/Agents";
 import SymbolIcon from "@/components/SymbolIcon";
+import PovChips from "@/components/Pov";
 import Icon from "@/components/Icon";
 import Zerodha, { ZerodhaBanner } from "@/components/Zerodha";
 import { FnoWatch, NseWatch, UsWatch } from "@/components/Watchlists";
@@ -561,7 +562,7 @@ function CoinCard({ c, tick }: { c: Coin; tick?: { ltp: number; chg_pct?: number
   return (
     <div className={`coin st-${c.state.replace(" ", "")}`}>
       <div className="row">
-        <b className="sym"><SymbolIcon market="CRYPTO" symbol={c.symbol} size={20} />{c.symbol}</b>
+        <b className="sym"><SymbolIcon market="CRYPTO" symbol={c.symbol} size={20} />{c.symbol}<PovChips id={"CRYPTO:" + c.symbol} /></b>
         <span className={`chip plain ${STATE_CHIP[c.state] ?? "c-off"}`}>{c.state}</span>
       </div>
       <div className="row">
@@ -934,7 +935,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
               <tbody>
                 {open.map((p) => (
                   <tr key={p.key}>
-                    <td data-label="Instrument" className="num"><span className="sym"><SymbolIcon id={p.key} />{p.key}</span></td>
+                    <td data-label="Instrument" className="num"><span className="sym"><SymbolIcon id={p.key} />{p.key}</span><PovChips id={p.v4_chart ?? p.key} /></td>
                     <SetupCell p={p} />
                     <td data-label="Side">{p.side ?? "long"}</td>
                     <td data-label="Qty" className="num">{p.qty}</td>
