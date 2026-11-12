@@ -83,8 +83,9 @@ if __name__ == "__main__":
 
         # through the agents: an INDIA account on Scanner v4 with stock options on
         cfg = P.load_config()
-        cfg["accounts"]["INDIA"].update({"scanner_version": "v4", "fno_stock_options": True, "trade_setups": True,
-                                         "fno_underlyings": ["BANKNIFTY", "RELIANCE"]})
+        cfg["accounts"]["INDIA"].update({"scanner_version": "v4", "trade_setups": True})
+        cfg["accounts"]["FNO"].update({"scanner_version": "v4", "fno_stock_options": True, "trade_setups": True,
+                                       "fno_underlyings": ["BANKNIFTY", "RELIANCE"]})
         P.save_json(P.CONFIG, cfg)
         FS.plan.__defaults__ = (None, fk)
         P.session = lambda m, n: "open"
@@ -115,7 +116,7 @@ if __name__ == "__main__":
             check("   an older v4 option without chart metadata still blocks overlap",
                   again["result"] == "skipped" and "wait for the open trade" in again["why"], again)
         cfg = P.load_config()
-        cfg["accounts"]["INDIA"]["fno_stock_options"] = False
+        cfg["accounts"]["FNO"]["fno_stock_options"] = False
         P.save_json(P.CONFIG, cfg)
         led["open"] = []
         P.save_json(P.LEDGER, led)
@@ -125,12 +126,14 @@ if __name__ == "__main__":
         check("6. switch off (the default): the shares, as before",
               rec2["result"] == "PAPER BUY" and led["open"] and led["open"][0]["key"] == "NSE:RELIANCE", rec2)
         check("   the default config has stock options OFF until the backtest passes",
-              P.DEFAULT_CONFIG["accounts"]["INDIA"]["fno_stock_options"] is False)
+              P.DEFAULT_CONFIG["accounts"]["FNO"]["fno_stock_options"] is False)
 
-        # owner, 12 Nov 2026: F&O only on Bank Nifty
-        check("7. the default F&O list is Bank Nifty only", P.DEFAULT_CONFIG["accounts"]["INDIA"]["fno_underlyings"] == ["BANKNIFTY"])
+        # owner, 12 Nov 2026: F&O only on Nifty 50 and Bank Nifty, in its own FNO account
+        check("7. the default F&O list is Nifty 50 + Bank Nifty, stock options off",
+              P.DEFAULT_CONFIG["accounts"]["FNO"]["fno_underlyings"] == ["NIFTY", "BANKNIFTY"]
+              and not P.DEFAULT_CONFIG["accounts"]["FNO"]["fno_stock_options"])
         cfg = P.load_config()
-        cfg["accounts"]["INDIA"].update({"fno_stock_options": True, "fno_underlyings": ["BANKNIFTY"]})
+        cfg["accounts"]["FNO"].update({"fno_stock_options": True, "fno_underlyings": ["BANKNIFTY"]})
         P.save_json(P.CONFIG, cfg)
         led = P.load_ledger(cfg)
         led["open"], led["closed"] = [], []
@@ -141,7 +144,7 @@ if __name__ == "__main__":
               rec3["result"] == "PAPER BUY" and led["open"] and led["open"][0]["key"] == "NSE:RELIANCE", rec3)
         nifty = dict(setup, price=24500.0, stop=24470.0, target=24560.0)
         rec4 = P.setup_decision("NSE", "NIFTY", nifty)
-        check("   a v4 setup on Nifty: skipped, F&O only on Bank Nifty", rec4["result"] == "skipped"
+        check("   an index not in the F&O list: skipped with the reason", rec4["result"] == "skipped"
               and "only on BANKNIFTY" in rec4["why"], rec4)
         bnf = dict(setup, price=52540.0, stop=52480.0, target=52640.0)
         fk.prem = 250.0
@@ -155,6 +158,9 @@ if __name__ == "__main__":
         check("   a v4 setup on Bank Nifty buys its ATM call (52500 CE), linked to the Bank Nifty chart",
               rec5["result"] == "PAPER BUY" and bpos and bpos[0]["key"] == "NFO:BANKNIFTY-20261124-52500-CE"
               and bpos[0].get("v4_chart") == "NSE:BANKNIFTY", (rec5.get("why"), [p["key"] for p in led["open"]]))
+        check("   the option is paid from the FNO account, not the INDIA stock account",
+              P.account_of("NFO") == "FNO" and led["accounts"]["FNO"]["cash"] < 100000
+              and P.account_of("NSE") == "INDIA", led["accounts"])
     finally:
         os.chdir(old)
         shutil.rmtree(tmp, ignore_errors=True)

@@ -225,10 +225,11 @@ if __name__ == "__main__":
     ms, logs = {}, []
     wed_11 = datetime(2026, 11, 11, 11, 0, tzinfo=AF.IST)
     out = AF.v4_process(AF.DEFAULTS, wed_11, ms, logs.append)
-    check("18. F&O on v4: only Bank Nifty's chart is scanned, its v4 setup goes to the paper agents",
-          calls == [("NSE", "BANKNIFTY", "v4_primary_long")] and AF.DEFAULTS["v4_indices"] == ["BANKNIFTY"], (calls, logs))
+    check("18. F&O on v4: the Nifty 50 and Bank Nifty charts are scanned, their v4 setups go to the paper agents",
+          calls == [("NSE", "NIFTY", "v4_primary_long"), ("NSE", "BANKNIFTY", "v4_primary_long")]
+          and AF.DEFAULTS["v4_indices"] == ["NIFTY", "BANKNIFTY"], (calls, logs))
     AF.v4_process(AF.DEFAULTS, wed_11, ms, logs.append)
-    check("    the same candle is not read twice", len(calls) == 1, calls)
+    check("    the same candle is not read twice", len(calls) == 2, calls)
     check("    outside 09:20-15:00 IST nothing is scanned",
           not AF.v4_process(AF.DEFAULTS, datetime(2026, 11, 11, 15, 10, tzinfo=AF.IST), {}, logs.append))
     AF.P.load_ledger, AF.P.load_config, AF.P.setup_decision = saved

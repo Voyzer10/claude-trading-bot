@@ -10,7 +10,8 @@ Symbols (prefix picks the market; a bare symbol uses "default_market" in config)
     NSE:RELIANCE   BSE:RELIANCE   US:TSLA   CRYPTO:BTC
     NFO:NIFTY-20261103-22800-CE    NFO:BANKNIFTY-20261124-48000-PE    NFO:NIFTY-FUT-20261124
 
-Accounts: NSE, BSE and NFO share one INDIA account (Rs 50,000 by default); US and CRYPTO have their own.
+Accounts: NSE and BSE share the INDIA account (Rs 50,000); NFO (F&O) has its own FNO account (Rs 1,00,000, owner
+12 Nov 2026); US and CRYPTO have their own.
 
     python paper.py price NSE:RELIANCE NFO:NIFTY-20261103-22800-CE
     python paper.py buy NSE:RELIANCE --stop 1165 --target 2R      # auto-sized to your max loss
@@ -20,7 +21,7 @@ Accounts: NSE, BSE and NFO share one INDIA account (Rs 50,000 by default); US an
     python paper.py sell NSE:RELIANCE     # close by hand
     python paper.py status                # cash, open positions, today's numbers
     python paper.py journal               # every closed trade + win rate, average R
-    python paper.py reset INDIA --yes     # start an account over (INDIA, US, CRYPTO or ALL)
+    python paper.py reset INDIA --yes     # start an account over (INDIA, FNO, US, CRYPTO or ALL)
 
 Accounts, limits, charges and square-off times live in trader/paper/config.json (made on first
 run; new defaults are merged in). Standard-library Python 3.8+. Nothing to pip install.
@@ -46,14 +47,15 @@ IST = timezone(timedelta(hours=5, minutes=30))
 MARKETS = {
     "NSE":    {"suffix": ".NS",  "cur": "Rs", "open": "09:15", "close": "15:30", "fractional": False, "account": "INDIA"},
     "BSE":    {"suffix": ".BO",  "cur": "Rs", "open": "09:15", "close": "15:30", "fractional": False, "account": "INDIA"},
-    "NFO":    {"suffix": None,   "cur": "Rs", "open": "09:15", "close": "15:30", "fractional": False, "account": "INDIA"},
+    "NFO":    {"suffix": None,   "cur": "Rs", "open": "09:15", "close": "15:30", "fractional": False, "account": "FNO"},
     "US":     {"suffix": "",     "cur": "$",  "open": "09:30", "close": "16:00", "fractional": False, "account": "US"},
     "CRYPTO": {"suffix": "-USD", "cur": "$",  "open": None,    "close": None,    "fractional": True,  "account": "CRYPTO"},
 }
-ACCOUNT_MARKET = {"INDIA": "NSE", "US": "US", "CRYPTO": "CRYPTO"}  # for currency formatting
+ACCOUNT_MARKET = {"INDIA": "NSE", "FNO": "NFO", "US": "US", "CRYPTO": "CRYPTO"}  # for currency formatting
+INDIA_ACCOUNTS = ("INDIA", "FNO")   # Indian charges (india_charges), not fee_pct
 
 DEFAULT_CONFIG = {
-    "_note": "Paper money only. Edit freely. INDIA is shared by NSE, BSE and NFO (F&O). "
+    "_note": "Paper money only. Edit freely. INDIA = NSE / BSE stocks, FNO = NFO (index options / futures). "
              "US/CRYPTO charge fee_pct per side; INDIA uses india_charges (approximate: check your broker's "
              "brokerage calculator and correct them).",
     "default_market": "NSE",
@@ -68,8 +70,22 @@ DEFAULT_CONFIG = {
                    "v5_target": "leg",
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
                    "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 60,
+                   "tm_candle_min": 5},
+        # FNO (owner, 12 Nov 2026): its own Rs 1,00,000 budget, apart from the Rs 50,000 INDIA stock account; F&O only
+        # on Nifty 50 and Bank Nifty (index ATM options), no stock options. Strategy switches are copied from INDIA
+        # once when the account is made, then set on their own (Settings > F&O).
+        "FNO":    {"capital": 100000, "max_loss_per_trade": 1500, "max_loss_per_trade_fno": 1500,
+                   "max_position_pct": 40, "max_position_pct_fno": 40, "daily_loss_limit": 5000,
+                   "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
+                   "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": False,
+                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
+                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
+                   "v5_target": "leg",
+                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
+                   "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 60,
                    "tm_candle_min": 5, "fno_stock_options": False,
-                   "fno_underlyings": ["BANKNIFTY"]},     # owner, 12 Nov 2026: F&O only on Bank Nifty
+                   "fno_underlyings": ["NIFTY", "BANKNIFTY"]},
         "US":     {"capital": 50000, "max_loss_per_trade": 50, "max_position_pct": 25,
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
                    "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
@@ -123,6 +139,13 @@ DEFAULT_CONFIG = {
 }
 
 
+# the strategy switches FNO starts with: INDIA's, so F&O keeps running the Scanner version it ran before the split
+FNO_FROM_INDIA = ("scanner_version", "v4_setups", "v5_setups", "v5_constant", "v5_move", "v5_target", "trade_setups",
+                  "risk_limits", "trade_manager", "tm_be_r", "tm_lock_at", "tm_lock_keep", "tm_reversal",
+                  "tm_rev_min_r", "tm_stale_min", "tm_candle_min", "max_loss_per_trade_fno", "futures_margin_pct",
+                  "flat_by", "cooldown_losses", "cooldown_minutes", "weekly_loss_x")
+
+
 class PaperError(Exception):
     pass
 
@@ -150,6 +173,19 @@ def load_config():
         print("Made %s with default paper accounts (edit it to change capital and limits)." % CONFIG)
     cfg = load_json(CONFIG, DEFAULT_CONFIG)
     changed = False
+    accs = cfg.setdefault("accounts", {})
+    if "FNO" not in accs:  # one-time (owner, 12 Nov 2026): F&O gets its own account; INDIA = stocks, Rs 50,000
+        fno = dict(DEFAULT_CONFIG["accounts"]["FNO"])
+        india = accs.get("INDIA") or {}
+        for k in FNO_FROM_INDIA:
+            if k in india:
+                fno[k] = india[k]
+        accs["FNO"] = fno
+        if india:
+            india["capital"] = 50000
+            for k in ("fno_underlyings", "fno_stock_options"):
+                india.pop(k, None)
+        changed = True
     for name, acc in DEFAULT_CONFIG["accounts"].items():
         merged = dict(acc)
         merged.update(cfg.get("accounts", {}).get(name, {}))
@@ -176,7 +212,7 @@ def load_config():
 
 def load_ledger(cfg):
     led = load_json(LEDGER, {"accounts": {}, "open": [], "closed": []})
-    topped = False
+    topped = split_fno(led, cfg)
     for name, acc in cfg["accounts"].items():
         if name in ACCOUNT_MARKET:
             book = led["accounts"].setdefault(name, {"cash": float(acc["capital"]), "start_capital": float(acc["capital"])})
@@ -189,6 +225,23 @@ def load_ledger(cfg):
     if topped and os.path.exists(LEDGER):
         save_json(LEDGER, led)
     return led
+
+
+def split_fno(led, cfg):
+    """One-time (owner, 12 Nov 2026): F&O moves out of INDIA into its own FNO book. Each book's cash stays
+    start + realised P&L - money tied in open positions: the NFO trades' realised P&L and the cash their open
+    positions tie up move from INDIA to FNO. Returns True if the ledger changed."""
+    books = led.setdefault("accounts", {})
+    if "FNO" in books or "INDIA" not in books or "FNO" not in cfg.get("accounts", {}):
+        return False
+    cap = float(cfg["accounts"]["FNO"]["capital"])
+    realised = sum(float(c.get("pnl") or 0) for c in led.get("closed", []) if c.get("market") == "NFO")
+    tied = sum((p["margin"] if p.get("margin") is not None else p["qty"] * p["entry"]) + float(p.get("entry_fee") or 0)
+               for p in led.get("open", []) if p.get("market") == "NFO")
+    books["INDIA"]["cash"] = round(float(books["INDIA"]["cash"]) - realised + tied, 6)
+    books["FNO"] = {"cash": round(cap + realised - tied, 6), "start_capital": cap,
+                    "split_from_india": {"realised": round(realised, 4), "tied": round(tied, 4)}}
+    return True
 
 
 def account_of(m):
@@ -642,7 +695,7 @@ def fmt_qty(m, q):
 
 def charges(cfg, m, t, side, value):
     """Cost of one order (buy or sell) of this value."""
-    if account_of(m) != "INDIA":
+    if account_of(m) not in INDIA_ACCOUNTS:
         return value * acct_cfg(cfg, m).get("fee_pct", 0) / 100
     k = kind_of(m, t)
     ch = cfg["india_charges"]["equity_intraday" if k == "equity" else k]
@@ -1345,7 +1398,7 @@ def cmd_reset(a, cfg, led):
     names = list(ACCOUNT_MARKET) if want == "ALL" else [MARKETS[want]["account"] if want in MARKETS else want]
     for name in names:
         if name not in ACCOUNT_MARKET:
-            raise PaperError("unknown account %r (INDIA, US, CRYPTO or ALL)" % name)
+            raise PaperError("unknown account %r (INDIA, FNO, US, CRYPTO or ALL)" % name)
         led["open"] = [p for p in led["open"] if account_of(p["market"]) != name]
         led["closed"] = [c for c in led["closed"] if account_of(c["market"]) != name]
         cap = float(cfg["accounts"][name]["capital"])
@@ -1466,6 +1519,9 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     # Scanner v3's sweep reversal carries its own target (the opposing liquidity); the older setups use 2R
     cfg = load_config()
     acc = cfg["accounts"][MARKETS[market]["account"]] if market in MARKETS else cfg["accounts"]["US"]
+    if market in ("NSE", "BSE") and symbol.upper() in INDEX_UNDERLYINGS:
+        acc = cfg["accounts"].get("FNO", acc)   # an index setup is an F&O trade: the FNO account's switches
+    fno_acc = cfg["accounts"].get("FNO", acc)
     version = acc.get("scanner_version", "v3")
     st["1_scanner"]["scanner"] = version
     # versions never mix (owner, 5 and 7 Nov 2026): a setup of another version (switched after it was scanned) is
@@ -1506,9 +1562,9 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     if risk <= 0:
         return done("skipped", "price %s is already past the stop %s" % (entry, stop))
     is_index = symbol.upper() in INDEX_UNDERLYINGS
-    fno_ok = [u.upper() for u in (acc.get("fno_underlyings") or ["BANKNIFTY"])]
-    if market in ("NSE", "BSE") and (is_index or acc.get("fno_stock_options")):
-        # F&O only on the owner's underlyings (12 Nov 2026: Bank Nifty only): an index setup buys its ATM option; a
+    fno_ok = [u.upper() for u in (fno_acc.get("fno_underlyings") or ["NIFTY", "BANKNIFTY"])]
+    if market in ("NSE", "BSE") and (is_index or fno_acc.get("fno_stock_options")):
+        # F&O only on the owner's underlyings (12 Nov 2026: Nifty 50 and Bank Nifty): an index setup buys its ATM option; a
         # stock's setup buys the option only if the stock is listed there, else the shares (backtests: research.py
         # bnf-sv4, fno-sv4)
         op = None
@@ -1524,7 +1580,7 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
                     st["4_exit"] = {"underlying_entry": entry, "underlying_stop": stop, "underlying_target": target}
                     return done("skipped", "option: %s" % e)
         if op:
-            return _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields)
+            return _option_setup(st, done, cfg, fno_acc, symbol, s, op, version, led, v4_fields)
     units = min(acc["max_loss_per_trade"] / risk, acc["capital"] * acc["max_position_pct"] / 100 / entry)
     qty = units if market == "CRYPTO" else int(units)
     cost = None

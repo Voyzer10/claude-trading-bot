@@ -101,11 +101,12 @@ if __name__ == "__main__":
         # F&O index ORB off under v4 (INDIA). Offline: no Bank Nifty candles, else a live setup during market hours
         # (CI fetching Yahoo) opens / skips a trade and the check depends on the clock.
         AF.index_rows = lambda *a, **k: []
+        set_version(P, "FNO", "v4")
         logs.clear()
         st = {}
         out = AF.process(st, log)
         check("4. F&O on v4 (INDIA): no index opening-range trade; Scanner v4 on Bank Nifty's chart instead",
-              out == [] and "Scanner v4 on BANKNIFTY" in st["markets"]["FNO"]["status"], st)
+              out == [] and "Scanner v4 on NIFTY, BANKNIFTY" in st["markets"]["FNO"]["status"], st)
 
         # US: ORB scan / trades off under v4
         set_version(P, "US", "v4")

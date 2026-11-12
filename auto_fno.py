@@ -43,7 +43,7 @@ DECISIONS = os.path.join(LIVE_DIR, "decisions.jsonl")
 IST = F.IST
 
 DEFAULTS = {
-    "_note": "Auto PAPER trading rules for Nifty / Bank Nifty F&O (INDIA account). Paper money only.",
+    "_note": "Auto PAPER trading rules for Nifty / Bank Nifty F&O (FNO account, Rs 1,00,000). Paper money only.",
     "indices": ["NIFTY", "BANKNIFTY"],
     "instruments": ["options", "futures"],
     "entry_start": "09:35",
@@ -59,8 +59,9 @@ DEFAULTS = {
     "sim_paths": 2000,
     "auto_buy": False,            # research.py fno (31 Oct 2026): 6 of 264 combinations positive both halves, all
                                   # marginal (+0.01..+0.05R in-sample); no edge distinguishable from zero: log only
-    # Scanner v4 on the index chart (owner, 12 Nov 2026: F&O only on Bank Nifty); backtest: research.py bnf-sv4
-    "v4_indices": ["BANKNIFTY"],
+    # Scanner v4 on the index chart (owner, 12 Nov 2026: F&O only on Nifty 50 and Bank Nifty, no stocks);
+    # backtests: research.py nifty-sv4, bnf-sv4
+    "v4_indices": ["NIFTY", "BANKNIFTY"],
     "v4_entry_start": "09:20",
     "v4_entry_end": "15:00",
 }
@@ -73,7 +74,12 @@ def load_cfg():
             json.dump(DEFAULTS, fh, indent=2)
     cfg = dict(DEFAULTS)
     with open(CFG_FILE, encoding="utf-8") as fh:
-        cfg.update(json.load(fh))
+        mine = json.load(fh)
+    if not mine.get("_v4_nifty"):   # one-time (owner, 12 Nov 2026): Nifty 50 joins Bank Nifty
+        mine["v4_indices"], mine["_v4_nifty"] = list(DEFAULTS["v4_indices"]), True
+        with open(CFG_FILE, "w", encoding="utf-8") as fh:
+            json.dump(mine, fh, indent=2)
+    cfg.update(mine)
     return cfg
 
 
@@ -271,7 +277,7 @@ def process(state, log):
     ms = state.setdefault("markets", {}).setdefault("FNO", {})
     import smc_playbook as PB
     own = PB.v4_only("NFO")
-    if own == "v4":  # owner, 12 Nov 2026: v4 trades F&O only on Bank Nifty's own chart
+    if own == "v4":  # owner, 12 Nov 2026: v4 trades F&O only on the Nifty 50 and Bank Nifty charts
         out = v4_process(cfg, now, ms, log)
         auto = state.setdefault("auto", {"recent": []})
         auto["recent"] = (auto.get("recent", []) + [{"time": r["time"], "symbol": r["symbol"], "result": r["result"],

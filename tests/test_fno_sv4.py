@@ -36,7 +36,7 @@ def history(n=400, px=1000.0, start=datetime(2026, 10, 27, 4, 0, tzinfo=timezone
 
 if __name__ == "__main__":
     cfg = P.DEFAULT_CONFIG
-    acc = cfg["accounts"]["INDIA"]
+    acc = cfg["accounts"]["FNO"]
     rows = history()
     i = 380
     win = {"i": i, "exit_i": i + 12, "side": "long", "entry": 1000.0, "stop": 995.0, "exit": 1010.0}
