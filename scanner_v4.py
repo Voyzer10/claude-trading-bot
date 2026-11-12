@@ -24,9 +24,11 @@ PRIMARY BUY (SELL is the mirror)
      target must be above the entry; there is no minimum reward:risk (min_rr = 0; the backtest also tries 1 and 2).
   8. Trade Manager, trailing only: at +1R the stop goes to the entry, at +2R to +1R, then up 1R per R. No other
      exit (intraday charts still close at the session's end).
-  Intraday charts (NSE / US 5-minute; owner, 12 Nov 2026): at the session's start only the previous day's BOS
-  setups whose sweep has not happened stay active, and for that day only; today's BOS add up as they form. Setups
-  that were swept but not traded, and older ones, end with their day. Crypto (no session) keeps every setup.
+  Day rule (owner, 12 Nov 2026): at a new day only the previous day's BOS setups whose sweep has not happened stay
+  active, and for that day only; today's BOS add up as they form. Setups that were swept but not traded, and older
+  ones, end with their day. NSE / US 5-minute: the day = the trading session. Crypto (24h): the day starts at
+  00:00 UTC (5:30 IST), where the crypto daily candle starts. The POV's higher timeframes keep every setup
+  (pov.py passes day_carry=False).
   One trade at a time per chart. A setup that triggers while a trade is open is skipped but stays active; when two
   trigger on the same candle, the oldest BOS is taken. One trade per setup.
 
@@ -43,6 +45,8 @@ more (owner, 12 Nov 2026, the BULLISH / BEARISH BOS image: "high ke upper break 
 bn gya bos"). The weak-BOS check (bos_body_atr 0.8 ATR body, bos_vol_x 1.2x volume) is off; the backtest can still
 switch it on (variant with_weak_bos), as it can the 1-hour trend skip (htf). Chop and opposing-zone filters: off.
 """
+from datetime import timezone
+
 import smc_playbook as PB
 
 
@@ -381,7 +385,10 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
     p = dict(DEFAULTS, **kw)
     cx = ctxs or contexts(rows, day_of, bool(p.get("htf")))
     srcs = (rows, cx["mirror"])
-    carry_day = cx["day"] if (intraday and p.get("day_carry", True)) else None
+    carry_day = None
+    if p.get("day_carry", True):
+        # intraday: the session's day; crypto (not intraday): the UTC day (owner, 12 Nov 2026)
+        carry_day = cx["day"] if intraday else [r[0].astimezone(timezone.utc).date() for r in rows]
     sides = [_Side(srcs[s], cx["ctx"][s], cx["htf"][s] if p.get("htf") else None, p, carry_day) for s in (0, 1)]
     day, n = cx["day"], len(rows)
     out, open_tr, sec = [], None, None       # sec: (side, primary trade, exit candle) while a secondary is looked for

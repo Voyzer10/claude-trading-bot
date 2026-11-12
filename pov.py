@@ -76,7 +76,8 @@ def pov_of(rows):
     if len(rows) < MIN_CANDLES:
         return {"pov": None, "why": "not enough history (%d candles)" % len(rows)}
     try:
-        seq = V4.sequence(rows, lambda t: t.date(), intraday=False)
+        # higher timeframes: no day rule (owner: the old no-cancel rules on 1h / 4h / D / W / M)
+        seq = V4.sequence(rows, lambda t: t.date(), intraday=False, day_carry=False)
     except Exception as e:
         return {"pov": None, "why": "error: %s" % e}
     if not seq:
