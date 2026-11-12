@@ -66,7 +66,8 @@ bot and its logs and restart the services, nothing else as root, and it cannot r
 - **Scanner version**: Settings > Risk limits > "Scanner version", per account (CRYPTO, INDIA, FNO, US). Versions
   never mix. `v4` (`scanner_v4.py`, the owner's rules): BOS = a close beyond the last swing high / low; then a
   close below an old low (above an old high), a signal candle (doji / gravestone / long-legged doji / inverted
-  hammer to buy; doji / dragonfly / long-legged doji / hammer to sell), then the next 1-2 candles close past it;
+  hammer to buy; doji / dragonfly / long-legged doji / hammer to sell; hammer wick >= 1x the body), then the next
+  1-2 candles close past it;
   target the next liquidity, trailing +1R -> entry, +2R -> +1R; after that trade closed, one OB / FVG secondary.
   Only yesterday's unswept BOS setups carry into today (NSE / US: the session; crypto: the day from 00:00 UTC). `v5`, `v3`, `v2` and `rules`
   are the older versions. The broker skips a setup of another version. Backtest first: Backtest > "Scanner v4 ...".

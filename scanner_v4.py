@@ -14,7 +14,8 @@ PRIMARY BUY (SELL is the mirror)
   2. Sweep: after that BOS, a completed candle CLOSES BELOW an old low: the low the BOS move started from, or a
      confirmed swing low formed after the BOS. A wick below is not a sweep. Further closes lower only deepen it.
   3. Signal: after the sweep, at any time, one of the owner's buying candles (12 Nov 2026), any colour: classic doji,
-     gravestone doji, long-legged doji (body <= 15% of the range) or inverted hammer. A dragonfly doji or a hammer
+     gravestone doji, long-legged doji (body <= 15% of the range) or inverted hammer (upper wick >= 1x the body, >= half
+     the range; owner, 13 Nov 2026). A dragonfly doji or a hammer
      is not a BUY signal (they are the SELL signals at a top). See signal_kind().
   4. Trigger: the 1st or 2nd candle after the signal CLOSES ABOVE THE SIGNAL CANDLE'S HIGH (that close may still be
      below the swept low). No trigger in 2 candles: a later signal candle gives a new chance.
@@ -54,7 +55,7 @@ def mirror(rows):
     return [(r[0], -r[1], -r[3], -r[2], -r[4], r[5]) for r in rows]
 
 
-DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15, "conf_max": 2, "max_hold": None, "trail": True,
+DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15, "hammer_x": 1.0, "conf_max": 2, "max_hold": None, "trail": True,
             # BOS by close only (owner, 12 Nov 2026): the weak-BOS check is off (0); the backtest can set 0.8 / 1.2
             "htf": False, "bos_body_atr": 0, "bos_vol_x": 0, "vol_n": 20,
             # off by the owner's choice (kept so older backtest settings still run)
@@ -70,25 +71,27 @@ TRIGGERS = {"doji", "gravestone doji", "long-legged doji", "inverted hammer"}
 SHORT_NAME = {"gravestone doji": "dragonfly doji", "inverted hammer": "hammer"}
 
 
-def signal_kind(bar, doji_pct=0.15, tiny=0.10, leg=0.30):
+def signal_kind(bar, doji_pct=0.15, tiny=0.10, leg=0.30, hammer_x=1.0, one_side=0.6, side_x=3.0):
     """The signal-candle name of one candle in src terms, or None. Shares of the candle's range (high - low):
-    doji = body <= doji_pct; a doji whose upper wick is < tiny is a dragonfly (not a buy signal); lower wick < tiny
-    = gravestone; both wicks >= leg = long-legged. Inverted hammer = upper wick >= 2 x body and >= half the range,
-    lower wick <= a quarter."""
+    doji = body <= doji_pct. A ONE-SIDED doji is a dragonfly (long lower wick: not a buy signal) or a gravestone (long
+    upper wick): its long wick is >= one_side of the range and >= side_x times the other wick, or the other wick is
+    < tiny (owner, 13 Nov 2026, RTX 12 Nov 20:30 IST: lower wick 85%, upper 11% was read as a doji and bought; it is a
+    dragonfly / hammer). Both wicks >= leg = long-legged; otherwise a classic doji. Inverted hammer = upper wick >= hammer_x x body (owner, 13 Nov
+    2026: 1x, was 2x; QCOM 12 Nov 21:55 IST, wick 1.27x body) and >= half the range, lower wick <= a quarter."""
     o, h, l, c = bar[1], bar[2], bar[3], bar[4]
     rng = h - l
     if rng <= 0:
         return None
     body, up, lo = abs(c - o), h - max(o, c), min(o, c) - l
     if body <= doji_pct * rng:
-        if up < tiny * rng:
+        if up < tiny * rng or (lo >= one_side * rng and lo >= side_x * up):
             return None                    # dragonfly doji (src): a sell signal only, at a top
-        if lo < tiny * rng:
+        if lo < tiny * rng or (up >= one_side * rng and up >= side_x * lo):
             return "gravestone doji"
         if up >= leg * rng and lo >= leg * rng:
             return "long-legged doji"
         return "doji"
-    if up >= 2 * body and up >= 0.5 * rng and lo <= 0.25 * rng:
+    if up >= hammer_x * body and up >= 0.5 * rng and lo <= 0.25 * rng:
         return "inverted hammer"
     return None
 
@@ -230,7 +233,7 @@ class _Side:
     def pat(self, k):
         """The signal-candle name of candle k (src terms), or None."""
         if k not in self.pats:
-            self.pats[k] = signal_kind(self.b[k], self.p["doji_pct"])
+            self.pats[k] = signal_kind(self.b[k], self.p["doji_pct"], hammer_x=self.p["hammer_x"])
         return self.pats[k]
 
     def step(self, j):

@@ -76,6 +76,26 @@ if __name__ == "__main__":
     check("2. a wick below the old low (close back above) is not a sweep: no trade",
           not longs(build([WICK, INV, TRIG, UP1, TP])))
     check("3. a hammer at the low is not a BUY signal", not longs(build([SWEEP, HAMMER, TRIG, UP1, TP])))
+    # hammer wick >= 1x the body (owner, 13 Nov 2026). The real QCOM 5m candle of 12 Nov 21:55 IST (o h l c):
+    # a red candle at the top, lower wick 0.57 = 1.27x its 0.45 body -> a SELL hammer now (2x said no)
+    qcom = (183.10, 183.10, 182.08, 182.65)
+    sell_name = V4.signal_kind(V4.mirror([(None,) + qcom + (0,)])[0])
+    check("3b. hammer = wick >= 1x the body: the QCOM 12 Nov 21:55 candle is a SELL hammer (inverted hammer in src)",
+          sell_name == "inverted hammer" and V4.DEFAULTS["hammer_x"] == 1.0, sell_name)
+    check("    with the old 2x rule (backtest variant hammer_2x) it was not",
+          V4.signal_kind(V4.mirror([(None,) + qcom + (0,)])[0], hammer_x=2.0) is None)
+    check("    still needs the wick >= half the range and a short other wick (a plain red candle is no hammer)",
+          V4.signal_kind(V4.mirror([(None, 183.1, 183.3, 182.6, 182.7, 0)])[0]) is None
+          and V4.signal_kind(V4.mirror([(None, 183.1, 183.1, 182.5, 182.6, 0)])[0]) is None)
+    # a one-sided doji by balance, not only by a <10% wick (owner, 13 Nov 2026). The real RTX 5m candle of 12 Nov
+    # 20:30 IST: lower wick 85%, upper 11.4% -> a dragonfly / hammer: no BUY; it is a SELL candle
+    rtx = (None, 199.07, 199.19, 198.40, 199.10, 0)
+    check("3c. RTX 12 Nov 20:30 (lower wick 85%, upper 11%): not a BUY signal any more (it was read as a doji)",
+          V4.signal_kind(rtx) is None and V4.signal_kind(V4.mirror([rtx])[0]) == "gravestone doji",
+          (V4.signal_kind(rtx), V4.signal_kind(V4.mirror([rtx])[0])))
+    rtx_top = (None, 202.69, 204.27, 202.15, 202.82, 0)   # 20:00: upper 68%, lower 25% (2.7x): not one-sided
+    check("    a doji with both wicks real (68% / 25%) stays a plain doji, a signal both ways",
+          V4.signal_kind(rtx_top) == "doji" and V4.signal_kind(V4.mirror([rtx_top])[0]) == "doji")
     # the owner's buying / selling candles (12 Nov 2026)
     kinds = {"classic": (99.7, 100.0, 99.6, 99.72), "gravestone": (99.62, 100.0, 99.6, 99.63),
              "long-legged": (99.8, 100.0, 99.6, 99.81), "dragonfly": (99.98, 100.0, 99.6, 99.99)}
