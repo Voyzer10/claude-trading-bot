@@ -67,10 +67,12 @@ TRIGGERS = {"doji", "gravestone doji", "long-legged doji", "inverted hammer"}
 SHORT_NAME = {"gravestone doji": "dragonfly doji", "inverted hammer": "hammer"}
 
 
-def signal_kind(bar, doji_pct=0.15, tiny=0.10, leg=0.30, hammer_x=1.0):
+def signal_kind(bar, doji_pct=0.15, tiny=0.10, leg=0.30, hammer_x=1.0, one_side=0.6, side_x=3.0):
     """The signal-candle name of one candle in src terms, or None. Shares of the candle's range (high - low):
-    doji = body <= doji_pct; a doji whose upper wick is < tiny is a dragonfly (not a buy signal); lower wick < tiny
-    = gravestone; both wicks >= leg = long-legged. Inverted hammer = upper wick >= hammer_x x body (owner, 13 Nov
+    doji = body <= doji_pct. A ONE-SIDED doji is a dragonfly (long lower wick: not a buy signal) or a gravestone (long
+    upper wick): its long wick is >= one_side of the range and >= side_x times the other wick, or the other wick is
+    < tiny (owner, 13 Nov 2026, RTX 12 Nov 20:30 IST: lower wick 85%, upper 11% was read as a doji and bought; it is a
+    dragonfly / hammer). Both wicks >= leg = long-legged; otherwise a classic doji. Inverted hammer = upper wick >= hammer_x x body (owner, 13 Nov
     2026: 1x, was 2x; QCOM 12 Nov 21:55 IST, wick 1.27x body) and >= half the range, lower wick <= a quarter."""
     o, h, l, c = bar[1], bar[2], bar[3], bar[4]
     rng = h - l
@@ -78,9 +80,9 @@ def signal_kind(bar, doji_pct=0.15, tiny=0.10, leg=0.30, hammer_x=1.0):
         return None
     body, up, lo = abs(c - o), h - max(o, c), min(o, c) - l
     if body <= doji_pct * rng:
-        if up < tiny * rng:
+        if up < tiny * rng or (lo >= one_side * rng and lo >= side_x * up):
             return None                    # dragonfly doji (src): a sell signal only, at a top
-        if lo < tiny * rng:
+        if lo < tiny * rng or (up >= one_side * rng and up >= side_x * lo):
             return "gravestone doji"
         if up >= leg * rng and lo >= leg * rng:
             return "long-legged doji"
