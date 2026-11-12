@@ -187,8 +187,8 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
         exits[e["exit_reason"]] = exits.get(e["exit_reason"], 0) + 1
     lines = ["research.py %s  %s" % (mode, datetime.now(tz_local).strftime("%Y-%m-%d %H:%M %Z")),
              "Scanner v4 (scanner_v4.py, the owner's rules of 11 Nov 2026): PRIMARY BUY = bullish BOS (close) -> a close "
-             "below an old low -> doji / inverted hammer -> the next or next-to-next candle closes above its high "
-             "(SELL: mirror, doji / hammer); every BOS setup stays active until traded; stop below the sweep-to-signal "
+             "below an old low -> classic / gravestone / long-legged doji or inverted hammer -> the next or next-to-next "
+             "candle closes above its high (SELL: mirror, classic / dragonfly / long-legged doji or hammer); every BOS setup stays active until traded; stop below the sweep-to-signal "
              "low; target = next liquidity; trailing stop +1R -> entry, +2R -> +1R. SECONDARY = only after the primary "
              "closed: a reversal candle tapping the move's OB / FVG. One trade at a time per chart. Shorts = mirror.",
              "%s, %d days (%s..%s). Live-reading trades: %d primary, %d secondary; exits %s. R after costs (%s). "

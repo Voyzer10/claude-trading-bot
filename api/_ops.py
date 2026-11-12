@@ -1310,7 +1310,7 @@ def agents():
            "Your setups, one scanner version per account (Settings: Scanner version), never mixed. v5 = the 0.146 "
            "level: after a move, the level C x range short of its extreme (C = 0.146), touched and closed back on the "
            "right side, stop beyond the extreme, target the other end of the move. v4 = your 11 Nov rules only: a primary trade (a BOS by close, then a "
-           "close below an old low / above an old high, then a doji or inverted hammer (BUY) / doji or hammer (SELL), then "
+           "close below an old low / above an old high, then a classic / gravestone / long-legged doji or inverted hammer (BUY) / classic / dragonfly / long-legged doji or hammer (SELL), then "
            "the next 1-2 candles close past its high / low; every BOS setup stays active until traded; stop beyond the "
            "sweep-to-signal extreme, target the next liquidity, trailing +1R -> entry, +2R -> +1R), then - only after it "
            "closed - one OB / FVG secondary (a reversal candle tapping the zone). v4 skips weak BOS candles (body + "

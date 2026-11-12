@@ -76,6 +76,22 @@ if __name__ == "__main__":
     check("2. a wick below the old low (close back above) is not a sweep: no trade",
           not longs(build([WICK, INV, TRIG, UP1, TP])))
     check("3. a hammer at the low is not a BUY signal", not longs(build([SWEEP, HAMMER, TRIG, UP1, TP])))
+    # the owner's buying / selling candles (12 Nov 2026)
+    kinds = {"classic": (99.7, 100.0, 99.6, 99.72), "gravestone": (99.62, 100.0, 99.6, 99.63),
+             "long-legged": (99.8, 100.0, 99.6, 99.81), "dragonfly": (99.98, 100.0, 99.6, 99.99)}
+    names = {k: V4.signal_kind((None,) + v) for k, v in kinds.items()}
+    check("   signal candles: classic, gravestone and long-legged dojis are named; a dragonfly is not a BUY candle",
+          names == {"classic": "doji", "gravestone": "gravestone doji", "long-legged": "long-legged doji",
+                    "dragonfly": None}, names)
+    got = {k: [t["signal_pattern"] for t in longs(build([SWEEP, v, TRIG, UP1, TP]))] for k, v in kinds.items()}
+    check("   at the low: classic, gravestone and long-legged dojis give the BUY; a dragonfly doji does not",
+          got == {"classic": ["doji"], "gravestone": ["gravestone doji"], "long-legged": ["long-legged doji"],
+                  "dragonfly": []}, got)
+    sells = {k: [t["signal_pattern"] for t in V4.sequence(V4.mirror(build([SWEEP, v, TRIG, UP1, TP])), DAY)
+                 if t["side"] == "short"] for k, v in kinds.items()}
+    check("   at the top (mirror): a dragonfly doji gives the SELL; a gravestone (mirror of the dragonfly) does not",
+          sells == {"classic": ["doji"], "gravestone": ["dragonfly doji"], "long-legged": ["long-legged doji"],
+                    "dragonfly": []}, sells)
     x1, x2 = (99.7, 99.95, 99.6, 99.9), (99.9, 99.98, 99.8, 99.95)
     check("4. the break-and-close on the 3rd candle after the signal: no trade",
           not longs(build([SWEEP, INV, x1, x2, TRIG, UP1, TP])))
