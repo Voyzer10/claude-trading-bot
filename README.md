@@ -74,7 +74,9 @@ bot and its logs and restart the services, nothing else as root, and it cannot r
   CRYPTO ($1,000). All paper money.
 - **Bigger picture (POV)**: chips 1h / 4h / D / W / M next to each chart: the direction of the last complete v4
   setup on that timeframe (`pov.py`, hourly). Display only.
-- **Trade Manager** (Settings > Risk limits, per account; on by default): every open paper trade with a fixed
+- **Trade Manager** (Settings > Trade Manager, per account). Scanner v4 trades: trailing stop only, by default +1R ->
+  entry, +2R -> +1R, then 1R higher per R; settable (on/off, breakeven R, step, gap) with a live preview, and the v4
+  backtests use the saved values. Other scanners (on by default): every open paper trade with a fixed
   target is managed: stop to the entry at +1R, half the move locked once 80% of the way to the target is covered,
   out on a reversal candle near the high (5-minute candles; 15 for crypto) after +1R, out when a trade goes nowhere
   (60 min; crypto 4h). The crypto trailing exits are left alone. Each trade records mfe_r / mae_r. Backtest:

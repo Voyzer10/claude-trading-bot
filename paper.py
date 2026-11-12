@@ -70,7 +70,7 @@ DEFAULT_CONFIG = {
                    "v5_target": "leg",
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
                    "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 60,
-                   "tm_candle_min": 5},
+                   "tm_candle_min": 5, "v4_trail": True, "v4_be_r": 1.0, "v4_trail_step": 1.0, "v4_trail_gap": 1.0},
         # FNO (owner, 12 Nov 2026): its own Rs 1,00,000 budget, apart from the Rs 50,000 INDIA stock account; F&O only
         # on Nifty 50 and Bank Nifty (index ATM options), no stock options. Strategy switches are copied from INDIA
         # once when the account is made, then set on their own (Settings > F&O).
@@ -84,7 +84,7 @@ DEFAULT_CONFIG = {
                    "v5_target": "leg",
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
                    "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 60,
-                   "tm_candle_min": 5, "fno_stock_options": False,
+                   "tm_candle_min": 5, "v4_trail": True, "v4_be_r": 1.0, "v4_trail_step": 1.0, "v4_trail_gap": 1.0, "fno_stock_options": False,
                    "fno_underlyings": ["NIFTY", "BANKNIFTY"]},
         "US":     {"capital": 50000, "max_loss_per_trade": 50, "max_position_pct": 25,
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
@@ -95,7 +95,7 @@ DEFAULT_CONFIG = {
                    "v5_target": "leg",
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
                    "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 60,
-                   "tm_candle_min": 5},
+                   "tm_candle_min": 5, "v4_trail": True, "v4_be_r": 1.0, "v4_trail_step": 1.0, "v4_trail_gap": 1.0},
         "CRYPTO": {"capital": 1000, "max_loss_per_trade": 10, "max_position_pct": 25,
                    "daily_loss_limit": 30, "max_trades_per_day": 10, "min_reward_risk": 1.0,
                    "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True,
@@ -105,7 +105,7 @@ DEFAULT_CONFIG = {
                    "v5_target": "leg",
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
                    "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 240,
-                   "tm_candle_min": 15},
+                   "tm_candle_min": 15, "v4_trail": True, "v4_be_r": 1.0, "v4_trail_step": 1.0, "v4_trail_gap": 1.0},
         # trade_manager (owner, 7 Nov 2026: "agents should think and react"): manages every open paper trade that has
         # a fixed target (not the crypto trailing exits): stop to the entry at +tm_be_r R; once price has covered
         # tm_lock_at of the way to the target, the stop locks tm_lock_keep of that way; after +tm_rev_min_r R a
@@ -1015,23 +1015,29 @@ def pdf_only(pos):
     return pos.get("scanner") == "v4"
 
 
-def v4_trail(pos, best, sh, when=None):
-    """Scanner v4's Trade Manager, trailing only (owner, 11 Nov 2026: "1:1 ya 1:2 nikal paye"): at +1R the stop goes
-    to the entry, at +2R to +1R, then 1R higher for every further R. Same rule as scanner_v4._exit_step."""
+def v4_trail(pos, best, sh, when=None, acc=None):
+    """Scanner v4's Trade Manager, trailing only (owner, 11 Nov 2026: "1:1 ya 1:2 nikal paye"): by default at +1R the
+    stop goes to the entry, at +2R to +1R, then 1R higher for every further R. The account's Settings > Trade Manager
+    (v4_trail, v4_be_r, v4_trail_step, v4_trail_gap) change it; the same rule as scanner_v4._exit_step."""
+    import scanner_v4 as V4
+    p = {k: (acc or {}).get(k, V4.DEFAULTS.get(k, True)) for k in ("v4_trail", "v4_be_r", "v4_trail_step", "v4_trail_gap")}
+    if not p["v4_trail"]:
+        return
     rs = pos.get("risk_stop", pos["stop"])
     risk = abs(pos["entry"] - rs)
     if risk <= 0:
         return
-    steps = int((((pos["entry"] - best) if sh else (best - pos["entry"])) / risk) + 1e-9)
-    if steps < 1:
+    gain = ((pos["entry"] - best) if sh else (best - pos["entry"])) / risk
+    lock = V4.trail_lock_r(gain, p)
+    if lock is None:
         return
     m = pos["market"]
-    new = round_px(m, pos["entry"] - (steps - 1) * risk if sh else pos["entry"] + (steps - 1) * risk, down=not sh)
+    new = round_px(m, pos["entry"] - lock * risk if sh else pos["entry"] + lock * risk, down=not sh)
     if (new < pos["stop"]) if sh else (new > pos["stop"]):
         pos["stop"], pos["breakeven"] = new, True
-        if steps >= 2:
+        if lock > 0:
             pos["trailing"] = True
-        tm_event(pos, "v4 trailing: price reached +%dR, stop moved to %s (%+dR)" % (steps, money(m, new), steps - 1),
+        tm_event(pos, "v4 trailing: price reached +%.1fR, stop moved to %s (%+.1fR)" % (gain, money(m, new), lock),
                  when)
 
 
@@ -1154,7 +1160,7 @@ def step_bar(led, cfg, pos, acc, b, now, sh):
     if strict or pos.get("pdf_only"):
         pos["pdf_only"] = strict           # shown on the dashboard's Trade Manager strip
     if strict:
-        v4_trail(pos, best, sh, when)      # v4: trailing only (owner, 11 Nov 2026), no other Trade Manager exit
+        v4_trail(pos, best, sh, when, acc)  # v4: trailing only (owner, 11 Nov 2026), no other Trade Manager exit
         return False
     tm = tm_cfg(acc) if not pos.get("trail_k") else None
     be = acc.get("breakeven_at_r") or (tm["tm_be_r"] if tm else None)

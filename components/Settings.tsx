@@ -92,6 +92,10 @@ const RISK_LABELS: Record<string, string> = {
   trade_setups: "Paper trade the Scanner's setups (v4, v3 or v2, as chosen in Scanner version)",
   fno_stock_options: "F&O stocks: buy the ATM option instead of the shares, only for underlyings in the F&O list (Nifty 50 and Bank Nifty only, so stocks trade as shares, never as options)",
   trade_manager: "Trade Manager on (breakeven, profit lock, reversal and no-follow-through exits)",
+  v4_trail: "Trailing stop on (off = only the stop and the target)",
+  v4_be_r: "Stop to the entry at (R; 0 = never)",
+  v4_trail_step: "Then move the stop every (R)",
+  v4_trail_gap: "Keeping it this far behind the best R reached (R)",
   tm_be_r: "Trade Manager: stop to the entry at (R)",
   tm_lock_at: "Trade Manager: lock profit once this share of the way to the target is covered (0.8 = 80%)",
   tm_lock_keep: "Trade Manager: share of the way to the target the lock keeps (0.5 = half)",
@@ -148,6 +152,7 @@ export default function Settings() {
       {msg && <div className={`notice ${msg.bad ? "bad" : "ok"}`} role="status" style={{ marginBottom: 12 }}>{msg.text}</div>}
       <RulesForm doc={doc} onSaved={(t) => { say(t); load(); }} onError={(t) => say(t, true)} />
       <RiskForm doc={doc} onSaved={(t) => { say(t); load(); }} onError={(t) => say(t, true)} />
+      <TradeManagerForm doc={doc} onSaved={(t) => { say(t); load(); }} onError={(t) => say(t, true)} />
       <div className="grid-2" style={{ marginTop: 16 }}>
         <CoinsForm coins={doc.coins} onSaved={(t) => { say(t); load(); }} onError={(t) => say(t, true)} />
         <PrefsForm prefs={doc.prefs} onSaved={(t) => { say(t); load(); }} onError={(t) => say(t, true)} />
@@ -352,7 +357,7 @@ function RiskForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) {
   const [busy, setBusy] = useState(false);
   useEffect(() => setV(doc.risk[acct] ?? {}), [doc.risk, acct]);
 
-  const fields = Object.entries(doc.risk_fields).filter(([k, f]) => (!f.accounts || f.accounts.includes(acct)) && f.type !== "setups" && k in (doc.risk[acct] ?? {}));
+  const fields = Object.entries(doc.risk_fields).filter(([k, f]) => (!f.accounts || f.accounts.includes(acct)) && f.type !== "setups" && !isTmKey(k) && k in (doc.risk[acct] ?? {}));
   const changed = fields.map(([k]) => k).filter((k) => String(v[k]) !== String(doc.risk[acct]?.[k]));
   const cur = currencyOf(acct);
 
@@ -399,6 +404,100 @@ function RiskForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) {
       <div className="actions">
         <button className="btn primary" onClick={save} disabled={busy || changed.length === 0}>
           {changed.length ? `Save ${acct} limits` : "No changes"}
+        </button>
+      </div>
+    </fieldset>
+  );
+}
+
+const V4_TM = ["v4_trail", "v4_be_r", "v4_trail_step", "v4_trail_gap"];
+const OTHER_TM = ["trade_manager", "tm_be_r", "tm_lock_at", "tm_lock_keep", "tm_reversal", "tm_rev_min_r", "tm_stale_min", "tm_candle_min"];
+const isTmKey = (k: string) => V4_TM.includes(k) || OTHER_TM.includes(k);
+const TM_DEFAULTS: Record<string, number | boolean> = { v4_trail: true, v4_be_r: 1, v4_trail_step: 1, v4_trail_gap: 1 };
+
+/** The v4 trailing stop in words, from the form's values (the same rule as scanner_v4.trail_lock_r). */
+function trailPreview(v: Record<string, number | string | boolean>): string {
+  if (!(v.v4_trail === true || v.v4_trail === "true")) return "Trailing off: a v4 trade exits only at its stop or its target (or the session's end).";
+  const be = Number(v.v4_be_r), step = Number(v.v4_trail_step), gap = Number(v.v4_trail_gap);
+  if (!(step > 0) || !(gap > 0) || !(be >= 0)) return "";
+  const lock = (g: number) => {
+    let l: number | null = be > 0 && g + 1e-9 >= be ? 0 : null;
+    const k = Math.floor(g / step + 1e-9);
+    if (k >= 1 && k * step - gap > 1e-9) l = Math.max(l ?? 0, k * step - gap);
+    return l;
+  };
+  const marks: string[] = [];
+  let last: number | null = null;
+  for (let g = 0.25; g <= 5 + 1e-9 && marks.length < 5; g += 0.25) {
+    const l = lock(g);
+    if (l !== null && l !== last) { marks.push(`+${+g.toFixed(2)}R \u2192 ${l === 0 ? "entry" : `+${+l.toFixed(2)}R`}`); last = l; }
+  }
+  return marks.length ? `Stop moves: ${marks.join(", ")}, ...` : "The stop never moves with these values.";
+}
+
+function TradeManagerForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) {
+  const names = Object.keys(doc.risk);
+  const [acct, setAcct] = useState(names.includes("US") ? "US" : names[0]);
+  const [v, setV] = useState<Record<string, number | string | boolean>>(doc.risk[acct] ?? {});
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setV(doc.risk[acct] ?? {}), [doc.risk, acct]);
+  const saved = doc.risk[acct] ?? {};
+  const keys = [...V4_TM, ...OTHER_TM].filter((k) => k in saved && doc.risk_fields[k]);
+  const changed = keys.filter((k) => String(v[k]) !== String(saved[k]));
+  const offDefault = V4_TM.filter((k) => k in saved && String(v[k]) !== String(TM_DEFAULTS[k]));
+  const v4 = saved.scanner_version === "v4";
+
+  async function save() {
+    setBusy(true);
+    try {
+      const changes = Object.fromEntries(changed.map((k) => [k, v[k]]));
+      const r = await postJSON<{ changed: string[] }>(`${OPS}/settings/risk`, { account: acct, changes });
+      onSaved(r.changed.length ? `${acct} Trade Manager saved: ${r.changed.join("; ")}. Open trades use it from the next check.` : "Nothing changed.");
+    } catch (e) { onError(`Not saved: ${errText(e)}`); } finally { setBusy(false); }
+  }
+
+  const field = (k: string) => {
+    const f = doc.risk_fields[k];
+    return (
+      <div key={k} className="field">
+        <label htmlFor={`tm-${k}`} className="field-label">{RISK_LABELS[k] ?? k}</label>
+        {f.type === "bool" ? (
+          <input id={`tm-${k}`} type="checkbox" checked={v[k] === true || v[k] === "true"}
+                 onChange={(e) => setV({ ...v, [k]: e.target.checked })} />
+        ) : (
+          <input id={`tm-${k}`} type="number" inputMode="decimal" step={f.type === "int" ? 1 : "any"} min={f.min} max={f.max}
+                 value={String(v[k] ?? "")} onChange={(e) => setV({ ...v, [k]: e.target.value })} />
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <fieldset className="formblock" style={{ marginTop: 16 }}>
+      <legend>Trade Manager</legend>
+      <div className="filters" style={{ marginBottom: 10 }}>
+        <div className="seg-ctl" role="group" aria-label="Account">
+          {names.map((n) => (
+            <button key={n} aria-pressed={n === acct} onClick={() => setAcct(n)}>{n}</button>
+          ))}
+        </div>
+        <span className="small muted">{v4 ? "This account runs Scanner v4: the first block applies." : "This account does not run v4: the second block applies."}</span>
+      </div>
+      <h3 className="small" style={{ margin: "4px 0 6px" }}>Scanner v4 trades (trailing stop only)</h3>
+      <div className={`form-grid compact${v4 ? "" : " dimmed"}`}>{V4_TM.filter((k) => keys.includes(k)).map(field)}</div>
+      <p className="small muted" aria-live="polite" style={{ margin: "6px 0 12px" }}>{trailPreview(v)}</p>
+      <h3 className="small" style={{ margin: "4px 0 6px" }}>Other scanners (v2 / v3 / v5 / rules)</h3>
+      <div className={`form-grid compact${v4 ? " dimmed" : ""}`}>{OTHER_TM.filter((k) => keys.includes(k)).map(field)}</div>
+      <p className="small muted" style={{ margin: "6px 0 0" }}>
+        The backtests (Scanner v4 ...) use these saved v4 values, so check a change there first.
+      </p>
+      <div className="actions">
+        <button className="btn primary" onClick={save} disabled={busy || changed.length === 0}>
+          {changed.length ? `Save ${acct} Trade Manager` : "No changes"}
+        </button>
+        <button className="btn" onClick={() => setV(saved)} disabled={busy || changed.length === 0}>Undo</button>
+        <button className="btn" onClick={() => setV({ ...v, ...TM_DEFAULTS })} disabled={busy || offDefault.length === 0}>
+          v4 defaults (+1R entry, +2R +1R)
         </button>
       </div>
     </fieldset>
