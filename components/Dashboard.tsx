@@ -861,6 +861,8 @@ function withLive(open: Position[], live: LiveTicks | null): (Position & { live?
   });
 }
 
+const ACCOUNT_LABEL: Record<string, string> = { INDIA: "INDIA stocks", FNO: "INDIA F&O" };
+
 /** The paper ledger. part: "accounts" (balances), "open" (Trade Manager + open positions), "closed" (closed trades
  *  with the market filter) or "all". The tabbed layout shows each part where it belongs; nothing is dropped. */
 function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot; onChange: () => void; live: LiveTicks | null; part?: "all" | "accounts" | "open" | "closed" }) {
@@ -883,7 +885,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
     setErr(null);
     try { await send(key ? "close" : "close_all", key); } catch (e) { setErr(errText(e)); }
   }
-  const acctOf = (m: string) => (m === "NSE" || m === "BSE" || m === "NFO" ? "INDIA" : m);
+  const acctOf = (m: string) => (m === "NSE" || m === "BSE" ? "INDIA" : m === "NFO" ? "FNO" : m);
   const title = part === "open" ? "Open trades" : part === "closed" ? "Closed trades" : part === "accounts" ? "Paper accounts" : "Paper ledger";
   return (
     <section id={part === "all" ? "ledger" : `ledger-${part}`} className={`panel ledger-${part}`} aria-labelledby={`led-h-${part}`}>
@@ -905,7 +907,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
           const cur = currencyOf(name);
           return (
             <div key={name} className="stat">
-              <span className="label">{name}</span>
+              <span className="label">{ACCOUNT_LABEL[name] ?? name}</span>
               <span className="value" style={{ fontSize: 19 }}>{money(a.cash, cur)}</span>
               <span className={`sub ${d > 0 ? "pos" : d < 0 ? "neg" : ""}`}>
                 {d === 0 ? "untouched" : `${d > 0 ? "+" : ""}${money(d, cur)} on ${money(a.start_capital, cur)}`}

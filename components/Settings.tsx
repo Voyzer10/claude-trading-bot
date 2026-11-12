@@ -90,7 +90,7 @@ const RISK_LABELS: Record<string, string> = {
   capital: "Paper capital (changing it adds / removes the difference as cash; P&L kept)",
   risk_limits: "Risk limits ON (daily loss, trades/day, cooldown, weekly, max per side). Off while paper testing; turn on before real money",
   trade_setups: "Paper trade the Scanner's setups (v4, v3 or v2, as chosen in Scanner version)",
-  fno_stock_options: "F&O stocks: buy the ATM option instead of the shares, only for underlyings in the F&O list (now Bank Nifty only, so stocks trade as shares)",
+  fno_stock_options: "F&O stocks: buy the ATM option instead of the shares, only for underlyings in the F&O list (Nifty 50 and Bank Nifty only, so stocks trade as shares, never as options)",
   trade_manager: "Trade Manager on (breakeven, profit lock, reversal and no-follow-through exits)",
   tm_be_r: "Trade Manager: stop to the entry at (R)",
   tm_lock_at: "Trade Manager: lock profit once this share of the way to the target is covered (0.8 = 80%)",
@@ -160,7 +160,7 @@ type FormProps = { onSaved: (t: string) => void; onError: (t: string) => void };
 
 type MarketKey = "CRYPTO" | "NSE" | "US" | "FNO";
 const MARKET_TABS: [MarketKey, string][] = [["CRYPTO", "Crypto"], ["NSE", "NSE stocks"], ["US", "US stocks"], ["FNO", "F&O"]];
-const ACCOUNT_OF: Record<MarketKey, string> = { CRYPTO: "CRYPTO", NSE: "INDIA", US: "US", FNO: "INDIA" };
+const ACCOUNT_OF: Record<MarketKey, string> = { CRYPTO: "CRYPTO", NSE: "INDIA", US: "US", FNO: "FNO" };
 const V4_NAMES: Record<string, string> = {
   v4_primary_long: "v4 primary long (bullish BOS, a close below an old low, a classic / gravestone / long-legged doji or inverted hammer, the next 1-2 candles close above its high)",
   v4_primary_short: "v4 primary short (bearish BOS, a close above an old high, a classic / dragonfly / long-legged doji or hammer, the next 1-2 candles close below its low)",
@@ -248,7 +248,7 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
       {v4 ? (
         <div className="notice" style={{ marginBottom: 12 }}>
           <b>Scanner {version} is on for {acct}:</b> only the {version} setups{version === "v4" || version === "v5" ? " ticked below" : ""} are watched and traded. The {RULES_NAME[mkt]} rules
-          are off for this account{mkt === "FNO" ? ` (${version} does not trade the indices)` : ""}; their values below are kept for when you switch back.
+          are off for this account{mkt === "FNO" ? (version === "v4" ? " (v4 runs on the Nifty 50 and Bank Nifty charts and buys their ATM options)" : ` (${version} does not trade the indices)`) : ""}; their values below are kept for when you switch back.
           {version === "v5" && <> The 0.146 level is <b>not backtested yet</b>: run the Scanner v5 backtests first.</>}
         </div>
       ) : (
@@ -262,7 +262,7 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
           <b>Rules only for {acct}:</b> the {RULES_NAME[mkt]} rules below run; no Scanner setups are traded.
         </div>
       )}
-      {mkt !== "FNO" && (version === "v4" || version === "v5") && (
+      {(version === "v4" || version === "v5") && (
         <div className="field" style={{ marginBottom: 12 }}>
           <span className="field-label">Setups traded: Scanner {version === "v5" ? "v5" : "v4"}{v4 ? "" : " (used when Scanner version is v4)"}</span>
           <div className="checks" role="group" aria-label={`Scanner ${version === "v5" ? "v5" : "v4"} setups traded`}>
@@ -278,7 +278,7 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
             {version === "v5"
               ? `The 0.146 level (C = ${doc.risk[acct]?.v5_constant ?? 0.146}, move ${doc.risk[acct]?.v5_move ?? "swing"}, target ${doc.risk[acct]?.v5_target ?? "leg"}; change them in Risk limits). Unticked: found and logged, not traded.`
               : "Your 7 Nov final workflow. Secondaries only come after that chart's primary closed. Unticked: found and logged, not traded."}
-            {mkt === "NSE" ? " Shared with the INDIA account (NSE + F&O)." : ""}
+            {mkt === "FNO" ? " F&O has its own account (FNO): Nifty 50 and Bank Nifty options only." : ""}
           </span>
         </div>
       )}

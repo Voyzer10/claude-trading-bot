@@ -176,12 +176,12 @@ def row(r, label=""):
 
 
 def main(a, syms, src, fetch_all, stats, out_dir, tz_local, suffix=".NS", lot_size=None, mode="fno-sv4"):
-    """mode "fno-sv4": Nifty 50 stocks; "bnf-sv4": the Bank Nifty index (^NSEBANK, exchange lot, owner 12 Nov 2026:
-    F&O only on Bank Nifty)."""
+    """mode "fno-sv4": Nifty 50 stocks; "bnf-sv4" / "nifty-sv4": the Bank Nifty / Nifty 50 index (exchange lot; owner
+    12 Nov 2026: F&O only on these two, sized from the FNO account, Rs 1,00,000)."""
     import os
     import paper as P
     cfg = P.DEFAULT_CONFIG
-    acc = cfg["accounts"]["INDIA"]
+    acc = cfg["accounts"]["FNO"]
     print("Fetching 60 days of 5-minute bars for %d F&O underlyings (%s)..." % (len(syms), src), flush=True)
     data, _ = fetch_all(syms, suffix, "5m", a.workers)
 
