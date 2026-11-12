@@ -152,6 +152,8 @@ if __name__ == "__main__":
     dirs = V4.htf_dirs(down, DAY)
     check("13. higher timeframe: an hourly downtrend reads 'down' (longs skipped there)", dirs[-1] == "down", dirs[-12:])
     check("    and the mirror of it reads 'up' for shorts' (src) terms", V4.htf_dirs(V4.mirror(down), DAY)[-1] == "up")
+    check("    the owner's skip rules (12 Nov): weak BOS on, the 1-hour trend skip off by default",
+          V4.DEFAULTS["htf"] is False and V4.DEFAULTS["bos_vol_x"] == 1.2 and V4.DEFAULTS["bos_body_atr"] == 0.8)
 
     # 14. the scanner: the trigger on the last candle is reported (live), named; v2 / v3 never return v4
     upto = full[:full.index(full[-3]) + 1]           # ends with the trigger candle
