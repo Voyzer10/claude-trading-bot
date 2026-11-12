@@ -11,9 +11,10 @@ trailing stop (+1R -> entry, +2R -> +1R, ...).
     python research.py nse-sv4          # NSE stocks, 5m, intraday
 
 Grid (small on purpose): side (long, short, both) x trades (primary only, primary + secondary, secondary only) x
-min R:R (0 = the owner's rule, 1, 2) x skip rules (weak BOS on = live, off, or the 1-hour trend skip added) and
+min R:R (0 = the owner's rule, 1, 2) x skip rules (none = live: BOS by close only; the old weak-BOS skip; the 1-hour
+trend skip; the intraday day rule off) and
 the trailing stop off [x hours for crypto]. "Live" = what Scanner v4 paper trades: both sides, primary + secondary,
-no minimum R:R, the weak-BOS skip on, trailing on. Exits: stop, target, trailing stop, the session's end (no time stop).
+no minimum R:R, BOS by close only (no weak-BOS skip), trailing on. Exits: stop, target, trailing stop, the session's end (no time stop).
 """
 import itertools
 import os
@@ -23,7 +24,7 @@ import research_abcd as RA
 import scanner_v4 as V4
 
 UTC = timezone.utc
-FILTERS = {"all": {}, "none": {"bos_body_atr": 0, "bos_vol_x": 0},
+FILTERS = {"all": {}, "with_weak_bos": {"bos_body_atr": 0.8, "bos_vol_x": 1.2},
            "with_htf": {"htf": True}, "no_trailing": {"trail": False},
            "no_day_rule": {"day_carry": False}}
 RRS = (0.0, 1.0, 2.0)

@@ -38,9 +38,10 @@ SECONDARY (OB / FVG), strictly after the primary trade CLOSED:
      candle's low, if lower) minus 0.1 ATR; target and Trade Manager as above. At most one secondary per primary;
      a new primary trade ends the search.
 
-SKIPS (owner's choice, 12 Nov 2026): only a weak BOS (bos_body_atr: BOS body >= 0.8 ATR; bos_vol_x: volume >= 1.2x
-the 20-candle average, skipped when the feed has no volume). The 1-hour trend skip (htf), the chop filter and the
-opposing-zone filter are off (the backtest can still switch htf on).
+SKIPS: none. BOS = a close above the last swing high (higher high) / below the last swing low (lower low), nothing
+more (owner, 12 Nov 2026, the BULLISH / BEARISH BOS image: "high ke upper break and close kre to hi higher high ...
+bn gya bos"). The weak-BOS check (bos_body_atr 0.8 ATR body, bos_vol_x 1.2x volume) is off; the backtest can still
+switch it on (variant with_weak_bos), as it can the 1-hour trend skip (htf). Chop and opposing-zone filters: off.
 """
 import smc_playbook as PB
 
@@ -50,8 +51,8 @@ def mirror(rows):
 
 
 DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15, "conf_max": 2, "max_hold": None, "trail": True,
-            # the skip rule the owner kept (12 Nov 2026: weak BOS only); 0 switches it off for the backtest
-            "htf": False, "bos_body_atr": 0.8, "bos_vol_x": 1.2, "vol_n": 20,
+            # BOS by close only (owner, 12 Nov 2026): the weak-BOS check is off (0); the backtest can set 0.8 / 1.2
+            "htf": False, "bos_body_atr": 0, "bos_vol_x": 0, "vol_n": 20,
             # off by the owner's choice (kept so older backtest settings still run)
             "chop_er": 0, "er_n": 20, "opp_zone": False, "opp_lookback": 48}
 
