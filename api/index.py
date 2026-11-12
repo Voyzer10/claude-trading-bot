@@ -63,7 +63,7 @@ CLOUD_MARKETS = ["CRYPTO"]  # markets the cloud runner can run today; the others
 DEFAULT_CONTROL = {"CRYPTO": True, "US": False, "NSE": False, "FNO": False, "paused": False}
 
 # LOCAL MODE (the default when there is no Redis and we are not on Vercel): the API runs on your PC next to the
-# runner (start_dashboard.bat). It reads the runner's own files directly and writes the market switches to
+# runner (the VPS services, or npm run dev on a PC). It reads the runner's own files directly and writes the market switches to
 # trader/live/control.json, which live.py reads before every cycle.
 LOCAL = not os.environ.get("VERCEL") and not (
     (os.environ.get("KV_REST_API_URL") or os.environ.get("UPSTASH_REDIS_REST_URL")))

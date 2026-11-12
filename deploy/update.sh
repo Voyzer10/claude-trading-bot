@@ -9,7 +9,7 @@ SRC="$(cd "$(dirname "$0")/.." && pwd)"
 APP=/opt/trader
 if [ "$SRC" != "$APP" ]; then
   rsync -a --delete --exclude node_modules --exclude .next --exclude .venv --exclude trader/ --exclude us/trader/ \
-    --exclude '__pycache__' --exclude '*.bat' "$SRC/" "$APP/"
+    --exclude '__pycache__' "$SRC/" "$APP/"
 fi
 chown -R trader:trader "$APP"
 cd "$APP"

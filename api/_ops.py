@@ -1,6 +1,6 @@
 """
 Operations API for the dashboard when the bot runs on your own machine (PC or VPS): everything you would
-otherwise do by editing files or double-clicking .bat files. Mounted by api/index.py under /api/py/ops.
+otherwise do by editing files or restarting services. Mounted by api/index.py under /api/py/ops.
 
 The runner (live.py) is the only process that writes the paper ledger. Actions that touch positions (close,
 close all), "scan now" and "restart" are queued in trader/live/commands.jsonl; the runner picks them up within

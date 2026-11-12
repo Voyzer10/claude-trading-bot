@@ -97,7 +97,7 @@ export default function Operations({ onChange, part = "all" }: { onChange: () =>
         <div className="notice bad" style={{ marginBottom: 12 }}>
           The runner process (pid {sys!.runner.pid}) is not running. {sys!.service_mode
             ? "systemd should restart it; check: sudo journalctl -u trader-runner -n 50"
-            : "Start start_all.bat again."} Buttons below only work while it runs.
+            : "Start it again: python live.py."} Buttons below only work while it runs.
         </div>
       )}
 
@@ -140,7 +140,7 @@ export default function Operations({ onChange, part = "all" }: { onChange: () =>
               <dl className="kv" style={{ marginTop: 10 }}>
                 <dt>Runner</dt>
                 <dd>{sys.runner.alive === null ? "unknown" : sys.runner.alive ? `running (pid ${sys.runner.pid})` : "not running"}</dd>
-                <dt>Mode</dt><dd>{sys.service_mode ? "VPS service (systemd)" : "PC (.bat windows)"}</dd>
+                <dt>Mode</dt><dd>{sys.service_mode ? "VPS service (systemd)" : "PC (python live.py)"}</dd>
                 {sys.boot_time && (<><dt>Machine up since</dt><dd>{timeIST(sys.boot_time, true)}</dd></>)}
                 <dt>Python</dt><dd>{sys.python} · {sys.platform}</dd>
                 {sys.load && (<><dt>Load</dt><dd>{sys.load.join(" / ")}</dd></>)}

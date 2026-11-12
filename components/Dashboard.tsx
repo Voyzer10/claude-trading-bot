@@ -1126,7 +1126,7 @@ function SetupHelp() {
       <h2 style={{ fontSize: 16 }}>Waiting for the runner&apos;s first snapshot</h2>
       <ol>
         <li>
-          Start <code>start_all.bat</code> in <code>D:\trader</code> and keep its window open.
+          Start the runner: on the VPS <code>sudo systemctl start trader-runner</code> (on a PC: <code>python live.py</code>).
         </li>
         <li>
           After its first cycle it writes <code>trader\live\dashboard_snapshot.json</code>; this page reads it and
