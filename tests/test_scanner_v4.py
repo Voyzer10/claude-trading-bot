@@ -116,6 +116,29 @@ if __name__ == "__main__":
     check("9. no minimum R:R by default; min_rr=5 (backtest setting) skips this 4R trade",
           longs(full) and not longs(full, min_rr=5))
 
+    # 9b. intraday day rule (owner, 12 Nov 2026): yesterday's UNSWEPT BOS setups live one more day; swept-untraded and
+    #     older ones end; crypto (not intraday) keeps every setup
+    def next_days(rows, days):
+        out, t0 = list(rows), rows[-1][0]
+        for d, cands in enumerate(days, 1):
+            t = datetime(t0.year, t0.month, t0.day, tzinfo=timezone.utc) + timedelta(days=d, hours=4)
+            for o, h, l, c in cands:
+                out.append((t, o, h, l, c, 100))
+                t += timedelta(minutes=5)
+        return out
+    quiet = [(100.6, 100.8, 100.5, 100.7)] * 3          # no close below 99.8: the setup stays unswept
+    d2 = next_days(build([]), [[SWEEP, INV, TRIG, UP1, TP]])
+    check("9b. intraday: yesterday's unswept BOS setup trades today (sweep, signal, break-close on the next day)",
+          [t["kind"] for t in longs(d2, intraday=True)] == ["primary"], longs(d2, intraday=True))
+    d3 = next_days(build([]), [quiet, [SWEEP, INV, TRIG, UP1, TP]])
+    check("    but only for one day: unswept for two days, it is gone on the third (intraday)",
+          not longs(d3, intraday=True), longs(d3, intraday=True))
+    check("    crypto (not intraday) keeps every setup: the same chart trades on the third day",
+          [t["kind"] for t in longs(d3)] == ["primary"], longs(d3))
+    swept = next_days(build([SWEEP]), [[INV, TRIG, UP1, TP]])
+    check("    swept yesterday but not traded: gone today (intraday)", not longs(swept, intraday=True),
+          longs(swept, intraday=True))
+
     # 10. the v4 trailing stop: +1R -> the entry, +2R -> +1R
     risk = p1["entry"] - p1["stop"] if p1 else 0.7
     up_1r = (100.1, 100.1 + 1.2 * risk, 100.05, 100.6)

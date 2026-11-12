@@ -554,3 +554,9 @@ a { text-underline-offset: 3px; }
 .attention { flex-wrap: wrap; }
 .attention > .kite-paste { flex: 1 1 100%; }
 .live-dot.inline:first-child { margin: 0 6px 0 0; }
+/* the bigger-picture chips (pov.py): 1h 4h D W M */
+.pov { display: inline-flex; gap: 2px; vertical-align: middle; margin-left: 6px; }
+.pov i { font-style: normal; font-size: 10px; line-height: 14px; padding: 0 4px; border-radius: 3px;
+  border: 1px solid var(--line); color: var(--muted); }
+.pov i.bull { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
+.pov i.bear { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }

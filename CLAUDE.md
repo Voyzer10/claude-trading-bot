@@ -10,7 +10,8 @@ Owner: Ansh. Replies in Hinglish, direct and candid.
     `live/state.json`, `paper/ledger.json` paper accounts and trades, `live/auto_config.json` crypto rules.
 - Services: `trader-runner` (live.py), `trader-api` (FastAPI on 127.0.0.1:8000), `trader-web` (Next.js :3000),
   `trader-ticker` (Zerodha prices), `trader-crypto-ticker` (Coinbase public crypto prices, no API key),
-  `trader-us-ticker` (Alpaca IEX US prices, paper key, data only).
+  `trader-us-ticker` (Alpaca IEX US prices, paper key, data only), `trader-pov` (hourly 1h/4h/D/W/M v4
+  direction per chart, `live/pov.json`, display only).
   - status: `systemctl status trader-runner`, logs: `journalctl -u trader-runner -n 100 --no-pager`
   - restart (allowed via sudo): `sudo systemctl restart trader-runner` (or trader-api / trader-web)
 - API without password from inside the VPS: `curl -s localhost:8000/api/py/health`,

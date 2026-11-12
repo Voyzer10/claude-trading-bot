@@ -125,6 +125,13 @@ def _crypto():
     return _file(CX.TICKS_FILE)
 
 
+@router.get("/api/py/pov")
+def pov():
+    """pov.py's file: per chart, the direction of the last complete v4 setup on 1h / 4h / 1D / 1W / 1M (display)."""
+    doc, age = _file(os.path.join(K.LIVE_DIR, "pov.json"))
+    return dict(doc, age_s=None if age is None else round(age))
+
+
 @router.get("/api/py/live/ticks")
 def live_ticks():
     doc, age = _ticker()

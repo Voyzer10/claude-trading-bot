@@ -9,8 +9,8 @@ PRIMARY BUY (SELL is the mirror)
   1. BOS: a completed candle CLOSES above the latest confirmed swing high (a wick through it is not a BOS). A
      reversal also needs this bullish BOS (the CHoCH) first. Swings are confirmed causally: a pivot is known once
      2 candles have closed after it (smc_playbook.Context, k=2), whatever the shape of the move.
-     Every BOS starts its own setup. Setups are never cancelled: all stay active, buy and sell, old and new, until
-     one is traded (owner: "jitne bhi bane saare active ho"). Only the candles the scanner holds limit them.
+     Every BOS starts its own setup; all stay active, buy and sell, until one is traded (owner: "jitne bhi bane
+     saare active ho"), except the intraday day rule below.
   2. Sweep: after that BOS, a completed candle CLOSES BELOW an old low: the low the BOS move started from, or a
      confirmed swing low formed after the BOS. A wick below is not a sweep. Further closes lower only deepen it.
   3. Signal: after the sweep, at any time, one of the owner's buying candles (12 Nov 2026), any colour: classic doji,
@@ -24,6 +24,9 @@ PRIMARY BUY (SELL is the mirror)
      target must be above the entry; there is no minimum reward:risk (min_rr = 0; the backtest also tries 1 and 2).
   8. Trade Manager, trailing only: at +1R the stop goes to the entry, at +2R to +1R, then up 1R per R. No other
      exit (intraday charts still close at the session's end).
+  Intraday charts (NSE / US 5-minute; owner, 12 Nov 2026): at the session's start only the previous day's BOS
+  setups whose sweep has not happened stay active, and for that day only; today's BOS add up as they form. Setups
+  that were swept but not traded, and older ones, end with their day. Crypto (no session) keeps every setup.
   One trade at a time per chart. A setup that triggers while a trade is open is skipped but stays active; when two
   trigger on the same candle, the oldest BOS is taken. One trade per setup.
 
@@ -210,8 +213,9 @@ class _Range:
 class _Side:
     """The setups of one side of a chart (src terms), advanced candle by candle."""
 
-    def __init__(self, src, ctx, htf, p):
+    def __init__(self, src, ctx, htf, p, day=None):
         self.b, self.ctx, self.htf, self.p = src, ctx, htf, p
+        self.day = day            # session days (intraday charts): setups carry over one day only if unswept
         self.setups = []          # every BOS setup, oldest first: {"bos", "level", "origin", "sweep", "lvl", "used"}
         self.waiting = []         # not swept yet
         self.pats = {}
@@ -229,6 +233,12 @@ class _Side:
         {"setup", "i", "signal", "entry" (close), "stop", "target", "atr", ...} (the oldest active setup)."""
         b, ctx, p = self.b, self.ctx, self.p
         c = b[j][4]
+        if self.day is not None and j > 0 and self.day[j] != self.day[j - 1]:
+            # a new session (owner, 12 Nov 2026, 5-minute intraday): only the previous day's BOS setups whose sweep
+            # has not happened stay active, for this day only; swept-but-untraded and older setups end
+            prev = self.day[j - 1]
+            keep = [st for st in self.setups if not st["used"] and st["sweep"] is None and st["day"] == prev]
+            self.setups, self.waiting = keep, [st for st in keep]
         # sweeps first: a close below the setup's BOS-start low or a swing low confirmed after its BOS
         still = []
         for st in self.waiting:
@@ -248,7 +258,8 @@ class _Side:
             ok, _ = bos_quality(b, ctx, j, p)
             if ok:
                 sh_i, sh_px = ctx.sh_known[j - 1][-1]
-                st = {"bos": j, "level": sh_px, "origin": self.lows.q(sh_i, j), "sweep": None, "used": False}
+                st = {"bos": j, "level": sh_px, "origin": self.lows.q(sh_i, j), "sweep": None, "used": False,
+                      "day": self.day[j] if self.day is not None else None}
                 self.setups.append(st)
                 self.waiting.append(st)
         # trigger: candle j closes above the high of a signal 1 or 2 candles back
@@ -369,7 +380,8 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
     p = dict(DEFAULTS, **kw)
     cx = ctxs or contexts(rows, day_of, bool(p.get("htf")))
     srcs = (rows, cx["mirror"])
-    sides = [_Side(srcs[s], cx["ctx"][s], cx["htf"][s] if p.get("htf") else None, p) for s in (0, 1)]
+    carry_day = cx["day"] if (intraday and p.get("day_carry", True)) else None
+    sides = [_Side(srcs[s], cx["ctx"][s], cx["htf"][s] if p.get("htf") else None, p, carry_day) for s in (0, 1)]
     day, n = cx["day"], len(rows)
     out, open_tr, sec = [], None, None       # sec: (side, primary trade, exit candle) while a secondary is looked for
     for k in range(31, n):
