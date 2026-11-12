@@ -142,7 +142,7 @@ if __name__ == "__main__":
           longs(full) and not longs(full, min_rr=5))
 
     # 9b. intraday day rule (owner, 12 Nov 2026): yesterday's UNSWEPT BOS setups live one more day; swept-untraded and
-    #     older ones end; crypto (not intraday) keeps every setup
+    #     older ones end; crypto the same with the day starting 00:00 UTC
     def next_days(rows, days):
         out, t0 = list(rows), rows[-1][0]
         for d, cands in enumerate(days, 1):
@@ -159,8 +159,21 @@ if __name__ == "__main__":
     first = lambda ts: [t for t in ts if t["bos"] == 40]   # noqa: E731  (day 1's BOS; later days may make their own)
     check("    but only for one day: unswept for two days, day 1's BOS is gone on the third (intraday)",
           not first(longs(d3, intraday=True)), longs(d3, intraday=True))
-    check("    crypto (not intraday) keeps every setup: day 1's BOS trades on the third day",
-          [t["kind"] for t in first(longs(d3))] == ["primary"], longs(d3))
+    check("    crypto too (owner, 12 Nov: the day starts 00:00 UTC): day 1's BOS is gone on the third UTC day",
+          not first(longs(d3)), longs(d3))
+    check("    crypto, yesterday's unswept BOS still trades today", [t["kind"] for t in longs(d2)] == ["primary"],
+          longs(d2))
+    check("    with the rule off (backtest no_day_rule; the POV's higher timeframes) every setup stays",
+          [t["kind"] for t in first(longs(d3, day_carry=False))] == ["primary"], longs(d3, day_carry=False))
+    # day 1 = 3 Nov 19:00-23:10 UTC (4 Nov IST), quiet candles 4 Nov 01:00 UTC (4 Nov IST), the sweep 5 Nov 00:05 UTC.
+    # UTC days: 3, 4, 5 Nov -> day 1's BOS is gone on the third day. IST days would be 4, 4, 5 Nov -> it would trade.
+    late = [(r[0] + timedelta(hours=19), *r[1:]) for r in build([])]
+    q4 = [(datetime(2026, 11, 4, 1, 0, tzinfo=timezone.utc) + timedelta(minutes=5 * k), *bar, 100)
+          for k, bar in enumerate(quiet)]
+    t5 = datetime(2026, 11, 5, 0, 5, tzinfo=timezone.utc)
+    utc3 = late + q4 + [(t5 + timedelta(minutes=5 * k), *bar, 100) for k, bar in enumerate([SWEEP, INV, TRIG, UP1, TP])]
+    check("    crypto's day starts 00:00 UTC, not IST midnight (an IST day would still trade it here)",
+          late[0][0].hour == 19 and not first(longs(utc3)), longs(utc3))
     swept = next_days(build([SWEEP]), [[INV, TRIG, UP1, TP]])
     check("    swept yesterday but not traded: gone today (intraday)", not first(longs(swept, intraday=True)),
           longs(swept, intraday=True))
