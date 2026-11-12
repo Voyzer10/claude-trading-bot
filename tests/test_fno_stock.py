@@ -30,14 +30,15 @@ class FakeKite:
         self.asked = []
 
     def fno_underlyings(self):
-        return ["NIFTY", "RELIANCE"]
+        return ["NIFTY", "BANKNIFTY", "RELIANCE"]
 
     def fno_chain(self, name, expiry=None):
         out = []
+        lo, hi, step, lot = (52000, 53100, 100, 30) if name == "BANKNIFTY" else (1380, 1460, 20, 500)
         for e in ("2026-11-12", "2026-11-24"):            # a too-near expiry first: must be skipped
-            for k in range(1380, 1460, 20):
+            for k in range(lo, hi, step):
                 for t in ("CE", "PE"):
-                    out.append({"type": t, "strike": float(k), "expiry": e, "tradingsymbol": "X", "token": 1, "lot": 500})
+                    out.append({"type": t, "strike": float(k), "expiry": e, "tradingsymbol": "X", "token": 1, "lot": lot})
         return out
 
     def quotes(self, keys):
@@ -82,7 +83,8 @@ if __name__ == "__main__":
 
         # through the agents: an INDIA account on Scanner v4 with stock options on
         cfg = P.load_config()
-        cfg["accounts"]["INDIA"].update({"scanner_version": "v4", "fno_stock_options": True, "trade_setups": True})
+        cfg["accounts"]["INDIA"].update({"scanner_version": "v4", "fno_stock_options": True, "trade_setups": True,
+                                         "fno_underlyings": ["BANKNIFTY", "RELIANCE"]})
         P.save_json(P.CONFIG, cfg)
         FS.plan.__defaults__ = (None, fk)
         P.session = lambda m, n: "open"
@@ -124,6 +126,35 @@ if __name__ == "__main__":
               rec2["result"] == "PAPER BUY" and led["open"] and led["open"][0]["key"] == "NSE:RELIANCE", rec2)
         check("   the default config has stock options OFF until the backtest passes",
               P.DEFAULT_CONFIG["accounts"]["INDIA"]["fno_stock_options"] is False)
+
+        # owner, 12 Nov 2026: F&O only on Bank Nifty
+        check("7. the default F&O list is Bank Nifty only", P.DEFAULT_CONFIG["accounts"]["INDIA"]["fno_underlyings"] == ["BANKNIFTY"])
+        cfg = P.load_config()
+        cfg["accounts"]["INDIA"].update({"fno_stock_options": True, "fno_underlyings": ["BANKNIFTY"]})
+        P.save_json(P.CONFIG, cfg)
+        led = P.load_ledger(cfg)
+        led["open"], led["closed"] = [], []
+        P.save_json(P.LEDGER, led)
+        rec3 = P.setup_decision("NSE", "RELIANCE", setup)
+        led = P.load_ledger(P.load_config())
+        check("   stock options on, but RELIANCE is not in the F&O list: the shares, not an option",
+              rec3["result"] == "PAPER BUY" and led["open"] and led["open"][0]["key"] == "NSE:RELIANCE", rec3)
+        nifty = dict(setup, price=24500.0, stop=24470.0, target=24560.0)
+        rec4 = P.setup_decision("NSE", "NIFTY", nifty)
+        check("   a v4 setup on Nifty: skipped, F&O only on Bank Nifty", rec4["result"] == "skipped"
+              and "only on BANKNIFTY" in rec4["why"], rec4)
+        bnf = dict(setup, price=52540.0, stop=52480.0, target=52640.0)
+        fk.prem = 250.0
+        led["open"] = []                                   # free the cash the RELIANCE shares tied up
+        P.save_json(P.LEDGER, led)
+        P.fetch_price = lambda m, t: (250.0, datetime.now(timezone.utc))
+        P.lot_of = lambda m, t: 30 if m == "NFO" else 1
+        rec5 = P.setup_decision("NSE", "BANKNIFTY", bnf)
+        led = P.load_ledger(P.load_config())
+        bpos = [p for p in led["open"] if p["key"].startswith("NFO:BANKNIFTY")]
+        check("   a v4 setup on Bank Nifty buys its ATM call (52500 CE), linked to the Bank Nifty chart",
+              rec5["result"] == "PAPER BUY" and bpos and bpos[0]["key"] == "NFO:BANKNIFTY-20261124-52500-CE"
+              and bpos[0].get("v4_chart") == "NSE:BANKNIFTY", (rec5.get("why"), [p["key"] for p in led["open"]]))
     finally:
         os.chdir(old)
         shutil.rmtree(tmp, ignore_errors=True)

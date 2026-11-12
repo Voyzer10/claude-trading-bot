@@ -173,6 +173,27 @@ if __name__ == "__main__":
         check("    Scanner %s never returns v4 setups" % v,
               not [g for g in PB.owner_setups(upto, DAY, version=v) if g["setup"].startswith("v4_")])
 
+    # 18. F&O only on Bank Nifty: the F&O agent runs v4 on Bank Nifty's own chart (owner, 12 Nov 2026)
+    import auto_fno as AF
+    calls = []
+    saved = (AF.P.load_ledger, AF.P.load_config, AF.P.setup_decision)
+    AF.index_rows = lambda idx, now: upto
+    AF.record = lambda rec: None
+    AF.P.load_ledger = lambda cfg=None: {"open": [], "closed": []}
+    AF.P.load_config = lambda: {}
+    AF.P.setup_decision = lambda m, sym, s: calls.append((m, sym, s["setup"])) or {"result": "PAPER BUY", "why": "t",
+                                                                                   "time": "x", "symbol": sym}
+    ms, logs = {}, []
+    wed_11 = datetime(2026, 11, 11, 11, 0, tzinfo=AF.IST)
+    out = AF.v4_process(AF.DEFAULTS, wed_11, ms, logs.append)
+    check("18. F&O on v4: only Bank Nifty's chart is scanned, its v4 setup goes to the paper agents",
+          calls == [("NSE", "BANKNIFTY", "v4_primary_long")] and AF.DEFAULTS["v4_indices"] == ["BANKNIFTY"], (calls, logs))
+    AF.v4_process(AF.DEFAULTS, wed_11, ms, logs.append)
+    check("    the same candle is not read twice", len(calls) == 1, calls)
+    check("    outside 09:20-15:00 IST nothing is scanned",
+          not AF.v4_process(AF.DEFAULTS, datetime(2026, 11, 11, 15, 10, tzinfo=AF.IST), {}, logs.append))
+    AF.P.load_ledger, AF.P.load_config, AF.P.setup_decision = saved
+
     tmp, old = tempfile.mkdtemp(), os.getcwd()
     os.chdir(tmp)
     try:
