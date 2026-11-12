@@ -62,7 +62,7 @@ def monthly_expiry(d):
     return e
 
 
-def option_trade(t, rows, tz_local, cfg, acc):
+def option_trade(t, rows, tz_local, cfg, acc, lot_size=None):
     """One Scanner v4 trade as an ATM option bought: dict with r (option R after costs), money, lots... or a reason
     string when it can not be traded."""
     i, k = t["i"], t["exit_i"]
@@ -85,7 +85,7 @@ def option_trade(t, rows, tz_local, cfg, acc):
     sell = max(0.05, p1 - max(0.05, p1 * SPREAD))
     stop_fill = p_stop - max(0.05, p_stop * SPREAD)
     risk_unit = buy - stop_fill
-    lot = max(1, math.ceil(500000 / s0))
+    lot = lot_size or max(1, math.ceil(500000 / s0))
     lots = int(min(acc["max_loss_per_trade_fno"] / (risk_unit * lot),
                    acc["capital"] * acc["max_position_pct_fno"] / 100 / (buy * lot)))
     if lots < 1:
@@ -101,7 +101,7 @@ def option_trade(t, rows, tz_local, cfg, acc):
             "held_min": (t1 - t0).total_seconds() / 60}
 
 
-def events(data, tz_local, cfg, acc, entry_ok):
+def events(data, tz_local, cfg, acc, entry_ok, lot_size=None):
     evs, skipped = [], {}
     for sym, d in data.items():
         rows = [(datetime.fromtimestamp(t, UTC), o, h, l, c, v or 0) for t, o, h, l, c, v in
@@ -117,7 +117,7 @@ def events(data, tz_local, cfg, acc, entry_ok):
             for t in seq:
                 if t.get("exit") is None or t.get("exit_i") is None or not entry_ok(rows[t["i"]][0]):
                     continue
-                o = option_trade(t, rows, tz_local, cfg, acc)
+                o = option_trade(t, rows, tz_local, cfg, acc, lot_size)
                 if isinstance(o, str):
                     if rr == 0.0:
                         skipped[o] = skipped.get(o, 0) + 1
@@ -175,18 +175,20 @@ def row(r, label=""):
         label, f["side"], f["trades"], f["min_rr"], s(i), s(o))
 
 
-def main(a, syms, src, fetch_all, stats, out_dir, tz_local):
+def main(a, syms, src, fetch_all, stats, out_dir, tz_local, suffix=".NS", lot_size=None, mode="fno-sv4"):
+    """mode "fno-sv4": Nifty 50 stocks; "bnf-sv4": the Bank Nifty index (^NSEBANK, exchange lot, owner 12 Nov 2026:
+    F&O only on Bank Nifty)."""
     import os
     import paper as P
     cfg = P.DEFAULT_CONFIG
     acc = cfg["accounts"]["INDIA"]
-    print("Fetching 60 days of 5-minute bars for %d F&O stocks (%s)..." % (len(syms), src), flush=True)
-    data, _ = fetch_all(syms, ".NS", "5m", a.workers)
+    print("Fetching 60 days of 5-minute bars for %d F&O underlyings (%s)..." % (len(syms), src), flush=True)
+    data, _ = fetch_all(syms, suffix, "5m", a.workers)
 
     def entry_ok(t):
         lt = t.astimezone(tz_local)
         return (9, 30) <= (lt.hour, lt.minute) <= (14, 30)
-    evs, skipped = events(data, tz_local, cfg, acc, entry_ok)
+    evs, skipped = events(data, tz_local, cfg, acc, entry_ok, lot_size)
     if not evs:
         print("No Scanner v4 option trades: no data came back (check the internet / Yahoo).")
         return 1
@@ -195,8 +197,8 @@ def main(a, syms, src, fetch_all, stats, out_dir, tz_local):
     split = days[int(len(days) * 0.7)]
     live = {"side": "both", "trades": "both", "min_rr": 0.0}
     base = pick(evs, live, 10 ** 6)
-    lines = ["research.py fno-sv4  %s" % datetime.now(tz_local).strftime("%Y-%m-%d %H:%M %Z"),
-             "Scanner v4 setups on %d F&O stocks (%s), traded by BUYING the ATM option (call for long, put for short), "
+    lines = ["research.py %s  %s" % (mode, datetime.now(tz_local).strftime("%Y-%m-%d %H:%M %Z")),
+             "Scanner v4 setups on %d F&O underlyings (%s), traded by BUYING the ATM option (call for long, put for short), "
              "intraday, entries 9:30-14:30 IST, flat by the close. Option prices are a Black-Scholes MODEL (the stock's "
              "own volatility x%.2f, theta paid), spread %.1f%% a side + paper.py F&O charges. Sizing: Rs %d max loss, "
              "%d%% of Rs %d premium cap, %d trades a day." % (
@@ -220,14 +222,14 @@ def main(a, syms, src, fetch_all, stats, out_dir, tz_local):
     lv = score(evs, live, split, stats, mpd)["out_of_sample"]
     verdict = ("PASS: the live setting is positive out of sample (%+.2fR a trade over %d trades). Small sample: "
                "paper trade it and keep checking." % (lv["avg_r"], lv["trades"])) if lv.get("trades", 0) >= 20 and \
-        lv["avg_r"] > 0 else "FAIL: no edge out of sample for the live setting (%s). Do not turn stock options on." % (
+        lv["avg_r"] > 0 else "FAIL: no edge out of sample for the live setting (%s). Do not trade these options." % (
             "%+.2fR a trade over %d trades" % (lv["avg_r"], lv["trades"]) if lv.get("trades") else "no trades")
     lines += ["", "%d of %d combinations (with enough trades) positive both in- and out-of-sample." % (len(good), len(res)),
               "VERDICT: " + verdict]
     text = "\n".join(lines)
     print(text)
     os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, "fno-sv4_%s.txt" % datetime.now(tz_local).strftime("%Y%m%d_%H%M"))
+    path = os.path.join(out_dir, "%s_%s.txt" % (mode, datetime.now(tz_local).strftime("%Y%m%d_%H%M")))
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(text + "\n")
     print("\nSaved: %s" % path)

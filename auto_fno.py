@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 auto_fno.py - Nifty 50 / Bank Nifty opening-range breakouts traded with F&O, PAPER only
-(paper.py's INDIA account; nothing reaches a broker).
+(paper.py's INDIA account; nothing reaches a broker). With the INDIA account on Scanner v4 (owner, 12 Nov 2026):
+Scanner v4 on Bank Nifty's own 5-minute chart instead, each setup bought as the ATM option (v4_process).
 
 live.py --markets ...,FNO --auto-paper calls process() every cycle during the NSE session.
 For each index, on the first 5-minute close beyond its 9:15-9:30 range:
@@ -58,6 +59,10 @@ DEFAULTS = {
     "sim_paths": 2000,
     "auto_buy": False,            # research.py fno (31 Oct 2026): 6 of 264 combinations positive both halves, all
                                   # marginal (+0.01..+0.05R in-sample); no edge distinguishable from zero: log only
+    # Scanner v4 on the index chart (owner, 12 Nov 2026: F&O only on Bank Nifty); backtest: research.py bnf-sv4
+    "v4_indices": ["BANKNIFTY"],
+    "v4_entry_start": "09:20",
+    "v4_entry_end": "15:00",
 }
 
 
@@ -213,13 +218,66 @@ def run_one(idx, brk, cfg, now, log):
     return done("blocked", why or "no instrument enabled")
 
 
+def index_rows(idx, now):
+    """The index's completed 5-minute candles of the last 5 days: [(utc start, o, h, l, c, volume)]."""
+    d = F.yahoo_bars(F.FNO[idx]["yahoo"], "5d", "5m")
+    rows = []
+    for t, o, h, l, c, v in zip(d["t"], d["o"], d["h"], d["l"], d["c"], d.get("v") or [0] * len(d["t"])):
+        st = datetime.fromtimestamp(t, timezone.utc)
+        if st + timedelta(minutes=5) <= now.astimezone(timezone.utc):
+            rows.append((st, o, h, l, c, v or 0))
+    return rows
+
+
+def v4_process(cfg, now, ms, log):
+    """INDIA on Scanner v4: v4 on the index's own 5-minute chart; a setup buys the index's ATM option through
+    paper.setup_decision (the same gates as every v4 trade: one at a time per chart, fresh signal, F&O list)."""
+    import smc_playbook as PB
+    out = []
+    ms["status"] = "Scanner v4 on %s (5-minute chart, ATM options)" % ", ".join(cfg["v4_indices"])
+    if now.weekday() >= 5 or not (at(now, cfg["v4_entry_start"]) <= now < at(now, cfg["v4_entry_end"])):
+        return out
+    seen = ms.setdefault("v4_seen", {})
+    for idx in cfg["v4_indices"]:
+        try:
+            rows = index_rows(idx, now)
+        except Exception as e:
+            log("FNO %s data failed: %s" % (idx, e))
+            continue
+        if len(rows) < 40:
+            continue
+        last = rows[-1][0].isoformat()
+        if seen.get(idx) == last:
+            continue                    # this candle was read already
+        seen[idx] = last
+        led = P.load_ledger(P.load_config())
+        try:
+            setups = PB.owner_setups(rows, lambda x: x.astimezone(IST).date(), version="v4", market="NSE",
+                                     symbol=idx, ledger=led, intraday=True)
+        except Exception as e:
+            log("AUTO FNO %s v4 scan failed: %s" % (idx, e))
+            continue
+        for s in setups:
+            rec = P.setup_decision("NSE", idx, s)
+            record(rec)
+            log("AUTO FNO %s v4 %s: %s (%s)" % (idx, s.get("name") or s["setup"], rec["result"], rec.get("why")))
+            out.append(rec)
+    return out
+
+
 def process(state, log):
     cfg = load_cfg()
     now = datetime.now(IST)
     ms = state.setdefault("markets", {}).setdefault("FNO", {})
     import smc_playbook as PB
     own = PB.v4_only("NFO")
-    if own:          # INDIA on Scanner v4: no index opening-range breakout trades
+    if own == "v4":  # owner, 12 Nov 2026: v4 trades F&O only on Bank Nifty's own chart
+        out = v4_process(cfg, now, ms, log)
+        auto = state.setdefault("auto", {"recent": []})
+        auto["recent"] = (auto.get("recent", []) + [{"time": r["time"], "symbol": r["symbol"], "result": r["result"],
+                                                     "why": r.get("why")} for r in out])[-20:]
+        return out
+    if own:          # INDIA on another Scanner version: no index opening-range breakout trades
         ms["status"] = "Scanner %s only: the index opening-range breakout rules are off" % own
         if ms.get("v4_note") != now.date().isoformat():
             ms["v4_note"] = now.date().isoformat()

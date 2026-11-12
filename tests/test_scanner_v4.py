@@ -152,6 +152,15 @@ if __name__ == "__main__":
     dirs = V4.htf_dirs(down, DAY)
     check("13. higher timeframe: an hourly downtrend reads 'down' (longs skipped there)", dirs[-1] == "down", dirs[-12:])
     check("    and the mirror of it reads 'up' for shorts' (src) terms", V4.htf_dirs(V4.mirror(down), DAY)[-1] == "up")
+    check("    the owner's skip rules (12 Nov): weak BOS on, the 1-hour trend skip off by default",
+          V4.DEFAULTS["htf"] is False and V4.DEFAULTS["bos_vol_x"] == 1.2 and V4.DEFAULTS["bos_body_atr"] == 0.8)
+    weak = build([SWEEP, INV, TRIG], bos_vol=100)
+    strong = build([SWEEP, INV, TRIG])
+    per = {m: (PB.owner_setups(weak, DAY, version="v4", market=m, symbol="TST", intraday=m != "CRYPTO"),
+               PB.owner_setups(strong, DAY, version="v4", market=m, symbol="TST", intraday=m != "CRYPTO"))
+           for m in ("NSE", "US", "CRYPTO")}
+    check("    the weak-BOS skip works the same in all three markets (NSE, US, crypto)",
+          all(not w and [g["setup"] for g in st] == ["v4_primary_long"] for w, st in per.values()), per)
 
     # 14. the scanner: the trigger on the last candle is reported (live), named; v2 / v3 never return v4
     upto = full[:full.index(full[-3]) + 1]           # ends with the trigger candle
@@ -163,6 +172,27 @@ if __name__ == "__main__":
     for v in ("v2", "v3"):
         check("    Scanner %s never returns v4 setups" % v,
               not [g for g in PB.owner_setups(upto, DAY, version=v) if g["setup"].startswith("v4_")])
+
+    # 18. F&O only on Bank Nifty: the F&O agent runs v4 on Bank Nifty's own chart (owner, 12 Nov 2026)
+    import auto_fno as AF
+    calls = []
+    saved = (AF.P.load_ledger, AF.P.load_config, AF.P.setup_decision)
+    AF.index_rows = lambda idx, now: upto
+    AF.record = lambda rec: None
+    AF.P.load_ledger = lambda cfg=None: {"open": [], "closed": []}
+    AF.P.load_config = lambda: {}
+    AF.P.setup_decision = lambda m, sym, s: calls.append((m, sym, s["setup"])) or {"result": "PAPER BUY", "why": "t",
+                                                                                   "time": "x", "symbol": sym}
+    ms, logs = {}, []
+    wed_11 = datetime(2026, 11, 11, 11, 0, tzinfo=AF.IST)
+    out = AF.v4_process(AF.DEFAULTS, wed_11, ms, logs.append)
+    check("18. F&O on v4: only Bank Nifty's chart is scanned, its v4 setup goes to the paper agents",
+          calls == [("NSE", "BANKNIFTY", "v4_primary_long")] and AF.DEFAULTS["v4_indices"] == ["BANKNIFTY"], (calls, logs))
+    AF.v4_process(AF.DEFAULTS, wed_11, ms, logs.append)
+    check("    the same candle is not read twice", len(calls) == 1, calls)
+    check("    outside 09:20-15:00 IST nothing is scanned",
+          not AF.v4_process(AF.DEFAULTS, datetime(2026, 11, 11, 15, 10, tzinfo=AF.IST), {}, logs.append))
+    AF.P.load_ledger, AF.P.load_config, AF.P.setup_decision = saved
 
     tmp, old = tempfile.mkdtemp(), os.getcwd()
     os.chdir(tmp)

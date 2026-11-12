@@ -11,9 +11,9 @@ trailing stop (+1R -> entry, +2R -> +1R, ...).
     python research.py nse-sv4          # NSE stocks, 5m, intraday
 
 Grid (small on purpose): side (long, short, both) x trades (primary only, primary + secondary, secondary only) x
-min R:R (0 = the owner's rule, 1, 2) x skip rules (both on = live, both off, one off: 1-hour trend, weak BOS) and the
-trailing stop off [x hours for crypto]. "Live" = what Scanner v4 paper trades: both sides, primary + secondary, no
-minimum R:R, both skip rules on, trailing on. Exits: stop, target, trailing stop, the session's end (no time stop).
+min R:R (0 = the owner's rule, 1, 2) x skip rules (weak BOS on = live, off, or the 1-hour trend skip added) and
+the trailing stop off [x hours for crypto]. "Live" = what Scanner v4 paper trades: both sides, primary + secondary,
+no minimum R:R, the weak-BOS skip on, trailing on. Exits: stop, target, trailing stop, the session's end (no time stop).
 """
 import itertools
 import os
@@ -23,9 +23,8 @@ import research_abcd as RA
 import scanner_v4 as V4
 
 UTC = timezone.utc
-FILTERS = {"all": {}, "none": {"htf": False, "bos_body_atr": 0, "bos_vol_x": 0},
-           "no_htf": {"htf": False}, "no_bos_quality": {"bos_body_atr": 0, "bos_vol_x": 0},
-           "no_trailing": {"trail": False}}
+FILTERS = {"all": {}, "none": {"bos_body_atr": 0, "bos_vol_x": 0},
+           "with_htf": {"htf": True}, "no_trailing": {"trail": False}}
 RRS = (0.0, 1.0, 2.0)
 VARIANTS = [(rr, f) for rr in RRS for f in FILTERS]
 LIVE = {"side": "both", "trades": "both", "min_rr": 0.0, "filters": "all", "session": "all"}

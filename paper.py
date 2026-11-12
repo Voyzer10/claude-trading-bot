@@ -68,7 +68,8 @@ DEFAULT_CONFIG = {
                    "v5_target": "leg",
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
                    "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 60,
-                   "tm_candle_min": 5, "fno_stock_options": False},
+                   "tm_candle_min": 5, "fno_stock_options": False,
+                   "fno_underlyings": ["BANKNIFTY"]},     # owner, 12 Nov 2026: F&O only on Bank Nifty
         "US":     {"capital": 50000, "max_loss_per_trade": 50, "max_position_pct": 25,
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
                    "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
@@ -1391,6 +1392,9 @@ if __name__ == "__main__":
 
 # ------------------------------------------------------------------ Scanner v3 setups: the agents, then the paper broker
 
+INDEX_UNDERLYINGS = ("NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY")
+
+
 def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields):
     """setup_decision for an F&O stock with fno_stock_options on: the ATM option is paper bought."""
     entry, stop = s["price"], s["stop"]
@@ -1501,16 +1505,24 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     risk = ((stop - entry) if short else (entry - stop)) if stop is not None else 0
     if risk <= 0:
         return done("skipped", "price %s is already past the stop %s" % (entry, stop))
-    if market in ("NSE", "BSE") and acc.get("fno_stock_options"):
-        # F&O stocks: buy the at-the-money option instead of the shares (fno_stock.py; backtest: research.py fno-sv4)
-        import fno_stock as _FS
-        try:
-            op = _FS.plan(symbol, s)
-        except _FS.NoOption as e:
-            if "has no F&O" not in str(e):
-                st["4_exit"] = {"stock_entry": entry, "stock_stop": stop, "stock_target": target}
-                return done("skipped", "stock option: %s" % e)
-            op = None                      # not an F&O stock: the shares, as before
+    is_index = symbol.upper() in INDEX_UNDERLYINGS
+    fno_ok = [u.upper() for u in (acc.get("fno_underlyings") or ["BANKNIFTY"])]
+    if market in ("NSE", "BSE") and (is_index or acc.get("fno_stock_options")):
+        # F&O only on the owner's underlyings (12 Nov 2026: Bank Nifty only): an index setup buys its ATM option; a
+        # stock's setup buys the option only if the stock is listed there, else the shares (backtests: research.py
+        # bnf-sv4, fno-sv4)
+        op = None
+        if symbol.upper() not in fno_ok:
+            if is_index:
+                return done("skipped", "F&O is traded only on %s (owner, 12 Nov 2026)" % ", ".join(fno_ok))
+        else:
+            import fno_stock as _FS
+            try:
+                op = _FS.plan(symbol, s)
+            except _FS.NoOption as e:
+                if is_index or "has no F&O" not in str(e):
+                    st["4_exit"] = {"underlying_entry": entry, "underlying_stop": stop, "underlying_target": target}
+                    return done("skipped", "option: %s" % e)
         if op:
             return _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields)
     units = min(acc["max_loss_per_trade"] / risk, acc["capital"] * acc["max_position_pct"] / 100 / entry)

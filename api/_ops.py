@@ -154,7 +154,7 @@ RISK_FIELDS = {
 PREF_FIELDS = {"usd_inr": {"type": "float", "min": 50, "max": 200},
                "daily_goal_inr": {"type": "float", "min": 0, "max": 1e7}}
 PREF_DEFAULT = {"usd_inr": 88.0, "daily_goal_inr": 500.0}
-BACKTEST_MODES = ["crypto-sv5", "crypto-sv5-5m", "us-sv5", "nse-sv5", "gold-sv5", "fno-sv4", "us-tm", "nse-tm", "crypto-tm", "crypto-tm-5m", "crypto-sv4", "crypto-sv4-5m", "us-sv4", "nse-sv4", "crypto-v3", "crypto-v3-5m", "us-v3", "nse-v3", "us-orb", "crypto-abcd", "crypto-abcd-5m", "us-abcd", "nse-abcd", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-v4", "crypto-v4-short", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
+BACKTEST_MODES = ["crypto-sv5", "crypto-sv5-5m", "us-sv5", "nse-sv5", "gold-sv5", "bnf-sv4", "fno-sv4", "us-tm", "nse-tm", "crypto-tm", "crypto-tm-5m", "crypto-sv4", "crypto-sv4-5m", "us-sv4", "nse-sv4", "crypto-v3", "crypto-v3-5m", "us-v3", "nse-v3", "us-orb", "crypto-abcd", "crypto-abcd-5m", "us-abcd", "nse-abcd", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-v4", "crypto-v4-short", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
 
 
 # ------------------------------------------------------------------ small helpers
@@ -1313,8 +1313,8 @@ def agents():
            "close below an old low / above an old high, then a doji or inverted hammer (BUY) / doji or hammer (SELL), then "
            "the next 1-2 candles close past its high / low; every BOS setup stays active until traded; stop beyond the "
            "sweep-to-signal extreme, target the next liquidity, trailing +1R -> entry, +2R -> +1R), then - only after it "
-           "closed - one OB / FVG secondary (a reversal candle tapping the zone). v4 skips trades against the 1-hour "
-           "trend and weak BOS candles. v3 = your 5 Nov workflow only: sweep reversal (BOS, a close "
+           "closed - one OB / FVG secondary (a reversal candle tapping the zone). v4 skips weak BOS candles (body + "
+           "volume). v3 = your 5 Nov workflow only: sweep reversal (BOS, a close "
            "below / above the swept swing, doji or (inverted) hammer, a close past the trigger within 2 candles) and its "
            "FVG / order-block retest. v2 = A-B-C-D, the SMC playbook's doji / bottom star / top hammer and FVG / "
            "order-block retests. They go through the same agents and, while paper testing, the broker paper trades "

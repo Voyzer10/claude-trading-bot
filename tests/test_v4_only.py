@@ -102,8 +102,8 @@ if __name__ == "__main__":
         logs.clear()
         st = {}
         out = AF.process(st, log)
-        check("4. F&O on v4 (INDIA): no index opening-range trade", out == [] and "Scanner v4 only" in
-              st["markets"]["FNO"]["status"], st)
+        check("4. F&O on v4 (INDIA): no index opening-range trade; Scanner v4 on Bank Nifty's chart instead",
+              out == [] and "Scanner v4 on BANKNIFTY" in st["markets"]["FNO"]["status"], st)
 
         # US: ORB scan / trades off under v4
         set_version(P, "US", "v4")
