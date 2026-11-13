@@ -51,4 +51,4 @@ export function pct(x: number | null | undefined): string {
   return `${x > 0 ? "+" : ""}${x.toFixed(2)}%`;
 }
 
-export const currencyOf = (account: string) => (account === "US" || account === "CRYPTO" ? "$" : "₹");
+export const currencyOf = (account: string) => (account === "US" || account === "USFNO" || account === "CRYPTO" ? "$" : "₹");

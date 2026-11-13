@@ -33,15 +33,15 @@ SPREAD = 0.005
 MIN_DAYS = 3
 
 
-def realised_vol(rows, i, n=375):
-    """Annualised volatility from the 5-minute closes before candle i (75 candles a day, 252 days)."""
+def realised_vol(rows, i, n=375, per_day=75):
+    """Annualised volatility from the 5-minute closes before candle i (per_day candles a day, 252 days)."""
     a = max(1, i - n)
     rets = [math.log(rows[k][4] / rows[k - 1][4]) for k in range(a, i) if rows[k - 1][4] > 0 and rows[k][4] > 0]
     if len(rets) < 50:
         return None
     m = sum(rets) / len(rets)
     sd = math.sqrt(sum((x - m) ** 2 for x in rets) / (len(rets) - 1))
-    return min(0.8, max(0.15, sd * math.sqrt(75 * 252) * IV_OVER_RV))
+    return min(0.8, max(0.1, sd * math.sqrt(per_day * 252) * IV_OVER_RV))
 
 
 def strike_step(px):
@@ -62,29 +62,58 @@ def monthly_expiry(d):
     return e
 
 
-def option_trade(t, rows, tz_local, cfg, acc, lot_size=None):
+def weekly_expiry_us(d):
+    """US F&O (QQQ / SPY): the Friday expiry at least us_options.MIN_DAYS calendar days away."""
+    import us_options as UO
+    e = d + timedelta(days=(4 - d.weekday()) % 7)
+    while (e - d).days < UO.MIN_DAYS:
+        e += timedelta(days=7)
+    return e
+
+
+def _us_years(exp, t):
+    import us_options as UO
+    return UO.years_to(exp, t)
+
+
+# what differs between the markets: India (NFO: monthly stock / index options, Rs, paper.py F&O charges) and the
+# US (owner, 13 Nov 2026: QQQ / SPY ATM weekly options, $, the USFNO account's fee_pct per side, 100 a contract)
+SPEC_IN = {"account": "FNO", "expiry": monthly_expiry, "years": F.years_to, "step": strike_step, "per_day": 75,
+           "rate": F.RATE, "spread": SPREAD, "tick": 0.05, "min_premium": 0.5, "cur": "Rs", "window": ((9, 30), (14, 30)),
+           "tz_name": "IST", "fees": None}
+SPEC_US = {"account": "USFNO", "expiry": weekly_expiry_us, "years": _us_years, "step": lambda px: 1.0, "per_day": 78,
+           "rate": 0.045, "spread": 0.0, "tick": 0.01, "min_premium": 0.2, "cur": "$", "window": ((9, 45), (15, 30)),
+           "tz_name": "New York", "fees": "fee_pct"}
+
+
+def option_trade(t, rows, tz_local, cfg, acc, lot_size=None, spec=None):
     """One Scanner v4 trade as an ATM option bought: dict with r (option R after costs), money, lots... or a reason
     string when it can not be traded."""
+    spec = spec or SPEC_IN
     i, k = t["i"], t["exit_i"]
     s0, s_stop, s1 = t["entry"], t["stop"], t["exit"]
-    vol = realised_vol(rows, i)
+    vol = realised_vol(rows, i, n=5 * spec["per_day"], per_day=spec["per_day"])
     if vol is None:
         return "not enough history"
     t0, t1 = rows[i][0] + timedelta(minutes=5), rows[k][0] + timedelta(minutes=5)
-    exp = monthly_expiry(t0.astimezone(tz_local).date())
+    exp = spec["expiry"](t0.astimezone(tz_local).date())
     kind = "CE" if t["side"] == "long" else "PE"
-    step = strike_step(s0)
+    step = spec["step"](s0)
     strike = round(s0 / step) * step
-    y0, y1 = F.years_to(exp, t0), F.years_to(exp, t1)
-    p0 = F.bs(s0, strike, y0, vol, kind)[0]
-    p_stop = F.bs(s_stop, strike, y0, vol, kind)[0]
-    p1 = F.bs(s1, strike, y1, vol, kind)[0]
-    if p0 <= 0.5 or p0 - p_stop <= 0.05:
+    y0, y1 = spec["years"](exp, t0), spec["years"](exp, t1)
+    r = spec["rate"]
+    p0 = F.bs(s0, strike, y0, vol, kind, r)[0]
+    p_stop = F.bs(s_stop, strike, y0, vol, kind, r)[0]
+    p1 = F.bs(s1, strike, y1, vol, kind, r)[0]
+    tick, sp = spec["tick"], spec["spread"]
+    if p0 <= spec["min_premium"] or p0 - p_stop <= tick:
         return "premium too small"
-    buy = p0 + max(0.05, p0 * SPREAD)
-    sell = max(0.05, p1 - max(0.05, p1 * SPREAD))
-    stop_fill = p_stop - max(0.05, p_stop * SPREAD)
+    buy = p0 + (max(tick, p0 * sp) if sp else 0)
+    sell = max(tick, p1 - (max(tick, p1 * sp) if sp else 0))
+    stop_fill = p_stop - (max(tick, p_stop * sp) if sp else 0)
     risk_unit = buy - stop_fill
+    if spec["fees"] == "fee_pct":   # the account's fee_pct a side, as paper.py charges it (fees + spread)
+        risk_unit += (buy + stop_fill) * float(acc.get("fee_pct") or 0) / 100
     lot = lot_size or max(1, math.ceil(500000 / s0))
     lots = int(min(acc["max_loss_per_trade_fno"] / (risk_unit * lot),
                    acc["capital"] * acc["max_position_pct_fno"] / 100 / (buy * lot)))
@@ -93,7 +122,10 @@ def option_trade(t, rows, tz_local, cfg, acc, lot_size=None):
     import paper as P
     name = "%s-%s-%s-%s" % ("STK", exp.strftime("%Y%m%d"), int(strike) if strike == int(strike) else strike, kind)
     qty = lots * lot
-    fees = P.charges(cfg, "NFO", name, "buy", qty * buy) + P.charges(cfg, "NFO", name, "sell", qty * sell)
+    if spec["fees"] == "fee_pct":
+        fees = qty * (buy + sell) * float(acc.get("fee_pct") or 0) / 100
+    else:
+        fees = P.charges(cfg, "NFO", name, "buy", qty * buy) + P.charges(cfg, "NFO", name, "sell", qty * sell)
     money = qty * (sell - buy) - fees
     sg = 1 if t["side"] == "long" else -1
     return {"r": money / (qty * risk_unit), "money": money, "lots": lots, "lot": lot, "premium": round(buy, 2),
@@ -101,7 +133,7 @@ def option_trade(t, rows, tz_local, cfg, acc, lot_size=None):
             "held_min": (t1 - t0).total_seconds() / 60}
 
 
-def events(data, tz_local, cfg, acc, entry_ok, lot_size=None):
+def events(data, tz_local, cfg, acc, entry_ok, lot_size=None, spec=None):
     evs, skipped = [], {}
     trail = V4.tm_settings(acc)   # the FNO account's Settings > Trade Manager
     for sym, d in data.items():
@@ -118,7 +150,7 @@ def events(data, tz_local, cfg, acc, entry_ok, lot_size=None):
             for t in seq:
                 if t.get("exit") is None or t.get("exit_i") is None or not entry_ok(rows[t["i"]][0]):
                     continue
-                o = option_trade(t, rows, tz_local, cfg, acc, lot_size)
+                o = option_trade(t, rows, tz_local, cfg, acc, lot_size, spec)
                 if isinstance(o, str):
                     if rr == 0.0:
                         skipped[o] = skipped.get(o, 0) + 1
@@ -151,7 +183,7 @@ def score(evs, f, split, stats, max_per_day, field="r"):
     return {"filters": f, "in_sample": stats(ins), "out_of_sample": stats(oos)}
 
 
-def money_line(evs, f, split, max_per_day, capital):
+def money_line(evs, f, split, max_per_day, capital, cur="Rs"):
     tr = pick(evs, f, max_per_day)
     o = [e for e in tr if e["day"] >= split]
     days = sorted({e["day"] for e in o})
@@ -159,8 +191,8 @@ def money_line(evs, f, split, max_per_day, capital):
     if not days:
         return "no out-of-sample trades"
     per_month = tot / len(days) * 21
-    return "out-of-sample: Rs %+.0f over %d trading days (Rs %+.0f a day, about Rs %+.0f / %+.1f%% a month on Rs %d)" % (
-        tot, len(days), tot / len(days), per_month, 100 * per_month / capital, capital)
+    return "out-of-sample: %s %+.0f over %d trading days (%s %+.0f a day, about %s %+.0f / %+.1f%% a month on %s %d)" % (
+        cur, tot, len(days), cur, tot / len(days), cur, per_month, 100 * per_month / capital, cur, capital)
 
 
 def row(r, label=""):
@@ -176,20 +208,27 @@ def row(r, label=""):
         label, f["side"], f["trades"], f["min_rr"], s(i), s(o))
 
 
-def main(a, syms, src, fetch_all, stats, out_dir, tz_local, suffix=".NS", lot_size=None, mode="fno-sv4"):
+def main(a, syms, src, fetch_all, stats, out_dir, tz_local, suffix=".NS", lot_size=None, mode="fno-sv4", spec=None):
     """mode "fno-sv4": Nifty 50 stocks; "bnf-sv4" / "nifty-sv4": the Bank Nifty / Nifty 50 index (exchange lot; owner
-    12 Nov 2026: F&O only on these two, sized from the FNO account, Rs 1,00,000)."""
+    12 Nov 2026: F&O only on these two, sized from the FNO account, Rs 1,00,000); "usopt-sv4": QQQ and SPY ATM weekly
+    options (owner, 13 Nov 2026), sized from the USFNO account ($50,000), spec=SPEC_US."""
     import os
     import paper as P
+    spec = spec or SPEC_IN
     cfg = P.DEFAULT_CONFIG
-    acc = cfg["accounts"]["FNO"]
+    acc = dict(cfg["accounts"][spec["account"]])
+    try:   # the account's saved limits and Trade Manager, as paper.py would use them
+        acc.update(P.load_config()["accounts"].get(spec["account"], {}))
+    except Exception:
+        pass
+    cur, (w0, w1) = spec["cur"], spec["window"]
     print("Fetching 60 days of 5-minute bars for %d F&O underlyings (%s)..." % (len(syms), src), flush=True)
     data, _ = fetch_all(syms, suffix, "5m", a.workers)
 
     def entry_ok(t):
         lt = t.astimezone(tz_local)
-        return (9, 30) <= (lt.hour, lt.minute) <= (14, 30)
-    evs, skipped = events(data, tz_local, cfg, acc, entry_ok, lot_size)
+        return w0 <= (lt.hour, lt.minute) <= w1
+    evs, skipped = events(data, tz_local, cfg, acc, entry_ok, lot_size, spec)
     if not evs:
         print("No Scanner v4 option trades: no data came back (check the internet / Yahoo).")
         return 1
@@ -200,19 +239,21 @@ def main(a, syms, src, fetch_all, stats, out_dir, tz_local, suffix=".NS", lot_si
     base = pick(evs, live, 10 ** 6)
     lines = ["research.py %s  %s" % (mode, datetime.now(tz_local).strftime("%Y-%m-%d %H:%M %Z")),
              "Scanner v4 setups on %d F&O underlyings (%s), traded by BUYING the ATM option (call for long, put for short), "
-             "intraday, entries 9:30-14:30 IST, flat by the close. Option prices are a Black-Scholes MODEL (the stock's "
-             "own volatility x%.2f, theta paid), spread %.1f%% a side + paper.py F&O charges. Sizing: Rs %d max loss, "
-             "%d%% of Rs %d premium cap, %d trades a day." % (
-                 len(data), src, IV_OVER_RV, SPREAD * 100, acc["max_loss_per_trade_fno"], acc["max_position_pct_fno"],
-                 acc["capital"], mpd),
+             "intraday, entries %d:%02d-%d:%02d %s, flat by the close. Option prices are a Black-Scholes MODEL (the "
+             "underlying's own volatility x%.2f, theta paid), costs: %s. Sizing: %s %d max loss, %d%% of %s %d premium "
+             "cap, %d trades a day." % (
+                 len(data), src, w0[0], w0[1], w1[0], w1[1], spec["tz_name"], IV_OVER_RV,
+                 ("%.1f%% of the premium a side (the USFNO account's fee_pct: contract fees + spread)" % float(acc.get("fee_pct") or 0))
+                 if spec["fees"] == "fee_pct" else "spread %.1f%% a side + paper.py F&O charges" % (spec["spread"] * 100),
+                 cur, acc["max_loss_per_trade_fno"], acc["max_position_pct_fno"], cur, acc["capital"], mpd),
              "%d days (%s..%s), out-of-sample = days from %s. Live-reading setups: %d tradable; not tradable: %s." % (
                  len(days), days[0], days[-1], split, len(base), skipped or "none"),
-             "Typical trade: premium Rs %.0f, %.1f lots, risk Rs %.0f, held %.0f min." % (
-                 sorted(e["premium"] for e in base)[len(base) // 2], sum(e["lots"] for e in base) / len(base),
-                 sum(e["risk"] for e in base) / len(base), sum(e["held_min"] for e in base) / len(base)), "",
+             "Typical trade: premium %s %.2f, %.1f lots, risk %s %.0f, held %.0f min." % (
+                 cur, sorted(e["premium"] for e in base)[len(base) // 2], sum(e["lots"] for e in base) / len(base),
+                 cur, sum(e["risk"] for e in base) / len(base), sum(e["held_min"] for e in base) / len(base)), "",
              row(score(evs, live, split, stats, mpd), "LIVE as OPTIONS (what would be paper traded):  "),
-             row(score(evs, live, split, stats, mpd, "stock_r"), "the same trades in the CASH STOCK (no costs):  "),
-             "  money: " + money_line(evs, live, split, mpd, acc["capital"]), ""]
+             row(score(evs, live, split, stats, mpd, "stock_r"), "the same trades in the UNDERLYING (no costs):  "),
+             "  money: " + money_line(evs, live, split, mpd, acc["capital"], cur), ""]
     for f in (dict(live, side="long"), dict(live, side="short"), dict(live, trades="primary"),
               dict(live, trades="secondary"), dict(live, min_rr=1.0), dict(live, min_rr=2.0)):
         lines.append(row(score(evs, f, split, stats, mpd), "  "))

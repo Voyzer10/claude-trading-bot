@@ -58,6 +58,13 @@ def chart_of(pos):
     if m == "NFO":
         under = (pos.get("v4_chart") or "").split(":")[-1] or sym.split("-")[0]
         return "INDEX", under.upper(), "NSE:%s" % under.upper(), False
+    if m == "USOPT":   # a US option: drawn on its ETF's chart (QQQ / SPY), no box (premiums)
+        import us_options as UO
+        try:
+            under = UO.parse(sym)["underlying"]
+        except Exception:
+            under = (pos.get("v4_chart") or "US:QQQ").split(":")[-1]
+        return "US", under, "US:%s" % under, False
     if m in ("NSE", "BSE") and sym.upper() in INDEX_YAHOO:
         return "INDEX", sym.upper(), "NSE:%s" % sym.upper(), True
     return m, sym, "%s:%s" % (m, sym), True

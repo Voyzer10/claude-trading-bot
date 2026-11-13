@@ -876,7 +876,7 @@ function withLive(open: Position[], live: LiveTicks | null): (Position & { live?
   });
 }
 
-const ACCOUNT_LABEL: Record<string, string> = { INDIA: "INDIA stocks", FNO: "INDIA F&O" };
+const ACCOUNT_LABEL: Record<string, string> = { INDIA: "INDIA stocks", FNO: "INDIA F&O", US: "US stocks", USFNO: "US F&O" };
 
 /** The paper ledger. part: "accounts" (balances), "open" (Trade Manager + open positions), "closed" (closed trades
  *  with the market filter) or "all". The tabbed layout shows each part where it belongs; nothing is dropped. */
@@ -885,7 +885,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
   const { accounts, closed } = snap.ledger;
   const open = withLive(snap.ledger.open, live);
   const [mkt, setMkt] = useState("all");
-  const MKTS: [string, string][] = [["all", "All"], ["CRYPTO", "Crypto"], ["US", "US"], ["NSE", "NSE"], ["NFO", "F&O"]];
+  const MKTS: [string, string][] = [["all", "All"], ["CRYPTO", "Crypto"], ["US", "US"], ["USOPT", "US F&O"], ["NSE", "NSE"], ["NFO", "F&O"]];
   const shown = mkt === "all" ? closed : closed.filter((c) => (mkt === "NSE" ? c.market === "NSE" || c.market === "BSE" : c.market === mkt));
   const sum = shown.reduce((a, c) => a + (c.pnl ?? 0), 0);
   const rsum = shown.reduce((a, c) => a + (c.r ?? 0), 0);
@@ -901,7 +901,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
     setErr(null);
     try { await send(key ? "close" : "close_all", key); } catch (e) { setErr(errText(e)); }
   }
-  const acctOf = (m: string) => (m === "NSE" || m === "BSE" ? "INDIA" : m === "NFO" ? "FNO" : m);
+  const acctOf = (m: string) => (m === "NSE" || m === "BSE" ? "INDIA" : m === "NFO" ? "FNO" : m === "USOPT" ? "USFNO" : m);
   const title = part === "open" ? "Open trades" : part === "closed" ? "Closed trades" : part === "accounts" ? "Paper accounts" : "Paper ledger";
   return (
     <>

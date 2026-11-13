@@ -620,7 +620,7 @@ def live_timing_main(a, syms, src):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="Walk-forward backtest of the breakout rules. Not financial advice.")
-    p.add_argument("mode", choices=["nse", "nse-v2", "crypto", "crypto-short", "crypto-mr", "crypto-5m", "crypto-live", "crypto-v4", "crypto-v4-5m", "crypto-v4-short", "crypto-smc", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-abcd", "crypto-abcd-5m", "nse-abcd", "us-abcd", "us-orb", "crypto-v3", "crypto-v3-5m", "nse-v3", "us-v3", "crypto-sv4", "crypto-sv4-5m", "nse-sv4", "us-sv4", "us-tm", "nse-tm", "crypto-tm", "crypto-tm-5m", "fno", "fno-sv4", "bnf-sv4", "nifty-sv4", "crypto-sv5", "crypto-sv5-5m", "us-sv5", "nse-sv5", "gold-sv5"])
+    p.add_argument("mode", choices=["nse", "nse-v2", "crypto", "crypto-short", "crypto-mr", "crypto-5m", "crypto-live", "crypto-v4", "crypto-v4-5m", "crypto-v4-short", "crypto-smc", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-abcd", "crypto-abcd-5m", "nse-abcd", "us-abcd", "us-orb", "crypto-v3", "crypto-v3-5m", "nse-v3", "us-v3", "crypto-sv4", "crypto-sv4-5m", "nse-sv4", "us-sv4", "us-tm", "nse-tm", "crypto-tm", "crypto-tm-5m", "fno", "fno-sv4", "bnf-sv4", "nifty-sv4", "usopt-sv4", "crypto-sv5", "crypto-sv5-5m", "us-sv5", "nse-sv5", "gold-sv5"])
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--workers", type=int, default=6)
     p.add_argument("--top", type=int, default=10)
@@ -678,6 +678,11 @@ def main(argv=None):
         import fno as F
         return research_fno_sv4.main(a, ["^NSEBANK"], "Bank Nifty index", fetch_all, stats, OUT, IST, suffix="",
                                      lot_size=F.FNO["BANKNIFTY"]["lot"], mode="bnf-sv4")
+    if a.mode == "usopt-sv4":  # US F&O: Scanner v4 on QQQ / SPY, bought as ATM weekly options (owner, 13 Nov 2026)
+        import research_fno_sv4
+        from zoneinfo import ZoneInfo
+        return research_fno_sv4.main(a, ["QQQ", "SPY"], "QQQ + SPY", fetch_all, stats, OUT, ZoneInfo("America/New_York"),
+                                     suffix="", lot_size=100, mode="usopt-sv4", spec=research_fno_sv4.SPEC_US)
     if a.mode == "nifty-sv4":  # Scanner v4 on the Nifty 50 index, bought as ATM options (owner, 12 Nov 2026)
         import research_fno_sv4
         import fno as F

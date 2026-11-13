@@ -90,8 +90,8 @@ if __name__ == "__main__":
         import api._ops as O
         check("5. dashboard performance / downloads split NFO into FNO",
               O._acct("NFO") == "FNO" and O._acct("NSE") == "INDIA" and O._ACCT["NFO"] == "FNO")
-        check("   F&O settings (F&O max loss, stock options) belong to FNO",
-              O.RISK_FIELDS["max_loss_per_trade_fno"]["accounts"] == ["FNO"] and O.MARKET_RULES["FNO"]["account"] == "FNO")
+        check("   F&O settings (F&O max loss: FNO and USFNO; stock options: FNO)",
+              O.RISK_FIELDS["max_loss_per_trade_fno"]["accounts"] == ["FNO", "USFNO"] and O.MARKET_RULES["FNO"]["account"] == "FNO")
     finally:
         os.chdir(old)
         shutil.rmtree(tmp, ignore_errors=True)

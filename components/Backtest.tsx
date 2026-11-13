@@ -26,6 +26,7 @@ const MODE_NAMES: Record<string, string> = {
   "gold-sv5": "Scanner v5: the 0.146 level on gold (the reel's market)",
   "bnf-sv4": "Scanner v4 on Bank Nifty as ATM options (model premiums, F&O charges, FNO account)",
   "nifty-sv4": "Scanner v4 on Nifty 50 as ATM options (model premiums, F&O charges, FNO account)",
+  "usopt-sv4": "US F&O: Scanner v4 on QQQ / SPY as ATM weekly options (model premiums, USFNO account)",
   "fno-sv4": "Scanner v4 on F&O stocks as ATM options (model premiums, F&O charges)",
   "crypto-v3": "Scanner v3 sweep reversal (crypto 15m): BOS -> close beyond the swept swing -> doji / hammer -> close past trigger",
   "crypto-v3-5m": "Scanner v3 sweep reversal (crypto 5m)",
@@ -161,6 +162,7 @@ export default function Backtest() {
         <button className="btn" onClick={() => start("nse-sv4")} disabled={running}>Scanner v4 NSE</button>
         <button className="btn" onClick={() => start("bnf-sv4")} disabled={running}>Scanner v4 Bank Nifty options</button>
         <button className="btn" onClick={() => start("nifty-sv4")} disabled={running}>Scanner v4 Nifty 50 options</button>
+        <button className="btn" onClick={() => start("usopt-sv4")} disabled={running}>Scanner v4 US options (QQQ / SPY)</button>
         <button className="btn" onClick={() => start("fno-sv4")} disabled={running}>Scanner v4 stock options</button>
         <button className="btn" onClick={() => start("crypto-sv5")} disabled={running}>Scanner v5 crypto 15m</button>
         <button className="btn" onClick={() => start("crypto-sv5-5m")} disabled={running}>Scanner v5 crypto 5m</button>
