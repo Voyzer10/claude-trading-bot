@@ -58,7 +58,7 @@ def chart_of(pos):
     if m == "NFO":
         under = (pos.get("v4_chart") or "").split(":")[-1] or sym.split("-")[0]
         return "INDEX", under.upper(), "NSE:%s" % under.upper(), False
-    if m == "USOPT":   # a US option: drawn on its ETF's chart (QQQ / SPY), no box (premiums)
+    if m == "USOPT":   # a US option: drawn on its ETF's chart (QQQ / SPY / DIA), no box (premiums)
         import us_options as UO
         try:
             under = UO.parse(sym)["underlying"]

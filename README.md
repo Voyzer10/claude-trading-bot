@@ -72,8 +72,8 @@ bot and its logs and restart the services, nothing else as root, and it cannot r
   Only yesterday's unswept BOS setups carry into today (NSE / US: the session; crypto: the day from 00:00 UTC). `v5`, `v3`, `v2` and `rules`
   are the older versions. The broker skips a setup of another version. Backtest first: Backtest > "Scanner v4 ...".
 - **Accounts**: INDIA (NSE stocks, Rs 50,000), FNO (Nifty 50 / Bank Nifty options, Rs 1,00,000), US (stocks,
-  $50,000), USFNO (QQQ / SPY ATM weekly options, $50,000; Alpaca options data, indicative feed; backtest
-  `research.py usopt-sv4`), CRYPTO ($1,000). All paper money. The US watch list includes the Nasdaq-100.
+  $50,000), USFNO (QQQ / SPY / DIA ATM weekly options, $50,000; Alpaca options data, indicative feed; backtest
+  `research.py usopt-sv4`), CRYPTO ($1,000). All paper money. The US watch list includes the Nasdaq-100 and the Dow 30.
 - **Bigger picture (POV)**: chips 1h / 4h / D / W / M next to each chart: the direction of the last complete v4
   setup on that timeframe (`pov.py`, hourly). Display only.
 - **Trade Manager** (Settings > Trade Manager): ONE set per market account, for every scanner's trades (v2 / v3 /

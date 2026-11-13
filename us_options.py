@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-us_options.py - US F&O (owner, 13 Nov 2026): a Scanner v4 setup on QQQ (Nasdaq-100) or SPY (S&P 500) turned into
+us_options.py - US F&O (owner, 13 Nov 2026): a Scanner v4 setup on QQQ (Nasdaq-100), SPY (S&P 500) or DIA (Dow) turned into
 the at-the-money option to BUY, paper only: a call for a long setup, a put for a short one. The same idea as
 fno_stock.py for India, with Alpaca's options data (paper key, market data only, the free "indicative" feed):
 
@@ -21,7 +21,7 @@ import fno as F
 MIN_DAYS = 2            # calendar days to expiry at least (owner: "India jaisa, ATM, weekly")
 MAX_DAYS = 10           # weekly: look no further than this
 MULTIPLIER = 100
-UNDERLYINGS = ("QQQ", "SPY")
+UNDERLYINGS = ("QQQ", "SPY", "DIA")   # DIA = the Dow (owner, 13 Nov 2026)
 RATE = 0.045            # US risk-free-ish rate for the model
 OCC = re.compile(r"^([A-Z]{1,6})(\d{2})(\d{2})(\d{2})([CP])(\d{8})$")
 

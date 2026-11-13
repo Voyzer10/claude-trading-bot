@@ -89,13 +89,13 @@ if __name__ == "__main__":
               and op["stop"] < 5.0 < op["target"], op)
         ops = UO.plan("SPY", dict(setup, side="short", price=499.7, stop=501.2, target=496.7), now=NOW)
         check("   short SPY setup -> the ATM PUT (bought, never sold)", ops["name"] == "SPY261118P00500000", ops)
-        for bad, why in (("AAPL", "only QQQ, SPY"),):
+        for bad, why in (("AAPL", "only QQQ, SPY, DIA"),):
             try:
                 UO.plan(bad, setup, now=NOW)
                 got = None
             except UO.NoOption as e:
                 got = str(e)
-            check("   not an F&O underlying: %s" % why, got and "only QQQ, SPY" in got, got)
+            check("   not an F&O underlying: %s" % why, got and "only QQQ, SPY, DIA" in got, got)
         check("   OCC symbols parse", UO.parse("SPY261120P00672500") == {"underlying": "SPY", "expiry": date(2026, 11, 20),
                                                                          "kind": "PE", "strike": 672.5})
         check("   a held contract is priced from its quote midpoint", UO.price("QQQ261118C00500000")[0] == 6.0)
@@ -107,10 +107,19 @@ if __name__ == "__main__":
                                            v4_setups=["v4_primary_long", "v4_primary_short"])}}, open(P.CONFIG, "w"))
         cfg = P.load_config()
         u = cfg["accounts"]["USFNO"]
-        check("3. USFNO account: $50,000, its own limits, US's scanner switches copied once, QQQ / SPY only",
+        check("3. USFNO account: $50,000, its own limits, US's scanner switches copied once, QQQ / SPY / DIA only",
               u["capital"] == 50000 and u["scanner_version"] == "v4" and u["v4_setups"] == ["v4_primary_long", "v4_primary_short"]
-              and u["usopt_underlyings"] == ["QQQ", "SPY"] and P.account_of("USOPT") == "USFNO"
+              and u["usopt_underlyings"] == ["QQQ", "SPY", "DIA"] and P.account_of("USOPT") == "USFNO"
               and P.lot_of("USOPT", "x") == 100 and P.kind_of("USOPT", "QQQ261118C00500000") == "options", u)
+        dia = UO.plan("DIA", dict(setup, price=500.3), now=NOW, chain=[dict(r, symbol=r["symbol"].replace("QQQ", "DIA"))
+                                                                        for r in A.option_chain("QQQ", "call")])
+        check("   DIA (the Dow) is a US F&O underlying too", dia["name"] == "DIA261118C00500000", dia)
+        prev = dict(cfg)
+        prev["accounts"] = dict(cfg["accounts"], USFNO=dict(u, usopt_underlyings=["QQQ", "SPY"]))
+        prev.pop("_usopt_dia", None)
+        json.dump(prev, open(P.CONFIG, "w"))
+        check("   an older USFNO (QQQ / SPY) gets DIA added once", P.load_config()["accounts"]["USFNO"]["usopt_underlyings"]
+              == ["QQQ", "SPY", "DIA"])
         P.session = lambda m, n: "open"
         P.past_flat_by = lambda m, a, n: False
         P.fetch_price = lambda m, t: (5.0, datetime.now(timezone.utc)) if m == "USOPT" else (190.0, datetime.now(timezone.utc))
@@ -148,9 +157,10 @@ if __name__ == "__main__":
         check("   View on chart draws an option on its ETF's chart (no box)",
               CH.chart_of({"market": "USOPT", "symbol": "QQQ261118C00500000"}) == ("US", "QQQ", "US:QQQ", False))
         import auto_us as AU
-        check("5. the US watch list has the Nasdaq-100 (no duplicates) and the index cards",
+        check("5. the US watch list has the Nasdaq-100 and the Dow 30 + DIA (no duplicates) and the four index cards",
               len(AU.NASDAQ_100) >= 100 and set(AU.NASDAQ_100) <= set(AU.US_WATCH) and len(AU.US_WATCH) == len(set(AU.US_WATCH))
-              and "QQQ" in AU.US_WATCH and [k for k, _, _ in AU.US_INDICES] == ["NDX", "IXIC", "SPX"], len(AU.US_WATCH))
+              and "QQQ" in AU.US_WATCH and "DIA" in AU.US_WATCH and set(AU.DOW_30) <= set(AU.US_WATCH) and len(AU.DOW_30) == 30
+              and [k for k, _, _ in AU.US_INDICES] == ["NDX", "IXIC", "SPX", "DJI"], len(AU.US_WATCH))
 
         # 6. the backtest's US option pricing (one trade, no data download)
         import research_fno_sv4 as R

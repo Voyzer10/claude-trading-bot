@@ -351,9 +351,14 @@ NASDAQ_100 = ("AAPL NVDA MSFT AMZN MU AMD TSLA META WMT GOOGL SPCX GOOG AVGO COS
               "MRNA ADBE INTU CSX MNST FTNT REGN CTAS CDNS SNPS MELI CMCSA CEG MDLZ ARM APP DASH ROST ORLY ABNB HON "
               "AEP NXPI DDOG MPWR FAST ADSK LITE PCAR IDXX PDD MSTR PYPL FANG CCEP XEL KDP HONA BKR ROP EXC TRI FER "
               "PAYX MCHP WDAY TER TTWO ALAB GEHC ODFL AXON NBIS DXCM RKLB CPRT CRWV ALNY").split()
-US_WATCH = list(dict.fromkeys(US_WATCH + NASDAQ_100))
+# the Dow Jones Industrial Average's 30 (owner, 13 Nov 2026: "DOW bhi issi m hi add kardo"); list as of July 2026
+# (topforeignstocks.com), with DIA, its ETF (US F&O trades DIA options too)
+DOW_30 = ("MMM GOOGL AMZN AXP AMGN AAPL BA CAT CVX CSCO KO GS HD HON IBM JNJ JPM MCD MRK MSFT NKE NVDA PG CRM SHW "
+          "TRV UNH V WMT DIS").split()
+US_WATCH = list(dict.fromkeys(US_WATCH + NASDAQ_100 + DOW_30 + ["DIA"]))
 # the indices on the US watch list (Yahoo, 5-minute closes): key, Yahoo symbol, name
-US_INDICES = [("NDX", "^NDX", "Nasdaq-100"), ("IXIC", "^IXIC", "Nasdaq Composite"), ("SPX", "^GSPC", "S&P 500")]
+US_INDICES = [("NDX", "^NDX", "Nasdaq-100"), ("IXIC", "^IXIC", "Nasdaq Composite"), ("SPX", "^GSPC", "S&P 500"),
+              ("DJI", "^DJI", "Dow Jones")]
 _SETUP_BAR = {"last": None}
 
 
