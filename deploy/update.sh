@@ -16,16 +16,17 @@ cd "$APP"
 sudo -u trader "$APP/.venv/bin/pip" install -q -r deploy/requirements.txt
 sudo -u trader npm ci --no-audit --no-fund --loglevel=error
 sudo -u trader env NEXT_TELEMETRY_DISABLED=1 npm run build
-# the dashboard moved from port 3000 to 8080 (owner, 13 Nov 2026): carry the firewall and Caddy over (no-op later)
-if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -qE '^3000/tcp +ALLOW'; then
-  ufw allow 8080/tcp >/dev/null
-  ufw delete allow 3000/tcp >/dev/null || true
-  echo "  firewall: 8080 opened, 3000 closed"
+# the dashboard is back on port 3000 (owner, 13 Nov 2026, after a short move to 8080): undo that move's firewall and
+# Caddy changes (no-op once done)
+if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -qE '^8080/tcp +ALLOW'; then
+  ufw allow 3000/tcp >/dev/null
+  ufw delete allow 8080/tcp >/dev/null || true
+  echo "  firewall: 3000 opened again, 8080 closed"
 fi
-if [ -f /etc/caddy/Caddyfile ] && grep -q '127\.0\.0\.1:3000' /etc/caddy/Caddyfile; then
-  sed -i 's/127\.0\.0\.1:3000/127.0.0.1:8080/' /etc/caddy/Caddyfile
+if [ -f /etc/caddy/Caddyfile ] && grep -q '127\.0\.0\.1:8080' /etc/caddy/Caddyfile; then
+  sed -i 's/127\.0\.0\.1:8080/127.0.0.1:3000/' /etc/caddy/Caddyfile
   systemctl reload caddy || systemctl restart caddy || true
-  echo "  caddy: now proxies to 127.0.0.1:8080"
+  echo "  caddy: proxies to 127.0.0.1:3000 again"
 fi
 cp deploy/trader-{runner,api,web,ticker,crypto-ticker,us-ticker,pov}.service /etc/systemd/system/ && systemctl daemon-reload
 systemctl enable trader-ticker trader-crypto-ticker trader-us-ticker trader-pov >/dev/null 2>&1 || true
@@ -33,6 +34,5 @@ systemctl restart trader-api trader-web trader-runner trader-ticker trader-crypt
 sleep 3
 for s in trader-runner trader-api trader-web trader-ticker trader-crypto-ticker trader-us-ticker trader-pov; do printf '  %-21s %s\n' "$s" "$(systemctl is-active $s)"; done
 if command -v ss >/dev/null; then
-  printf '  %-21s %s\n' "port 8080 (dashboard)" "$(ss -ltn 'sport = :8080' | grep -q LISTEN && echo listening || echo 'NOT listening')"
-  printf '  %-21s %s\n' "port 3000" "$(ss -ltn 'sport = :3000' | grep -q LISTEN && echo 'IN USE (should be free)' || echo free)"
+  printf '  %-21s %s\n' "port 3000 (dashboard)" "$(ss -ltn 'sport = :3000' | grep -q LISTEN && echo listening || echo 'NOT listening')"
 fi
