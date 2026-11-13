@@ -62,15 +62,15 @@ export function UsWatch({ snap, live }: { snap: Snapshot; live?: LiveTicks | nul
       ? `Last 5-minute close ${timeIST(w.as_of, true)} IST${live?.us_configured === false ? "; add the Alpaca paper key on the server for live prices" : ""}.`
       : "Filled from the first 5-minute candle of the US session.";
   // the indices (owner, 13 Nov 2026): Nasdaq-100, Nasdaq Composite, S&P 500 (Yahoo 5-minute closes), with the ETF the
-  // bot trades options on (QQQ / SPY) live from Alpaca
-  const idx: [string, string, string | null][] = [["NDX", "Nasdaq-100", "QQQ"], ["IXIC", "Nasdaq Composite", null], ["SPX", "S&P 500", "SPY"]];
+  // bot trades options on (QQQ / SPY / DIA) live from Alpaca
+  const idx: [string, string, string | null][] = [["NDX", "Nasdaq-100", "QQQ"], ["IXIC", "Nasdaq Composite", null], ["SPX", "S&P 500", "SPY"], ["DJI", "Dow Jones", "DIA"]];
   return (
     <>
       <section id="watch-us-idx" className="panel" aria-labelledby="watch-us-idx-h">
         <div className="panel-head">
           <div>
             <h2 id="watch-us-idx-h">US indices</h2>
-            <p>Index levels from the last 5-minute close{w.as_of ? ` (${timeIST(w.as_of, true)} IST)` : ""}; QQQ / SPY live{ul ? " from Alpaca" : " when the Alpaca feed runs"}. US F&amp;O trades QQQ and SPY options.</p>
+            <p>Index levels from the last 5-minute close{w.as_of ? ` (${timeIST(w.as_of, true)} IST)` : ""}; QQQ / SPY / DIA live{ul ? " from Alpaca" : " when the Alpaca feed runs"}. US F&amp;O trades QQQ, SPY and DIA options.</p>
           </div>
         </div>
         <div className="idx-grid">
@@ -95,7 +95,7 @@ export function UsWatch({ snap, live }: { snap: Snapshot; live?: LiveTicks | nul
           })}
         </div>
       </section>
-      <WatchList id="watch-us" title={`US watch list: ${symbols.length || "—"} names (liquid stocks + Nasdaq-100)${hits.length ? ` + breaks` : ""}`}
+      <WatchList id="watch-us" title={`US watch list: ${symbols.length || "—"} names (liquid stocks + Nasdaq-100 + Dow 30)${hits.length ? ` + breaks` : ""}`}
                  sub={sub} rows={rows} cur="$" />
     </>
   );

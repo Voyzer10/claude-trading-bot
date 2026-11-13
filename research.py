@@ -681,7 +681,7 @@ def main(argv=None):
     if a.mode == "usopt-sv4":  # US F&O: Scanner v4 on QQQ / SPY, bought as ATM weekly options (owner, 13 Nov 2026)
         import research_fno_sv4
         from zoneinfo import ZoneInfo
-        return research_fno_sv4.main(a, ["QQQ", "SPY"], "QQQ + SPY", fetch_all, stats, OUT, ZoneInfo("America/New_York"),
+        return research_fno_sv4.main(a, ["QQQ", "SPY", "DIA"], "QQQ + SPY + DIA", fetch_all, stats, OUT, ZoneInfo("America/New_York"),
                                      suffix="", lot_size=100, mode="usopt-sv4", spec=research_fno_sv4.SPEC_US)
     if a.mode == "nifty-sv4":  # Scanner v4 on the Nifty 50 index, bought as ATM options (owner, 12 Nov 2026)
         import research_fno_sv4

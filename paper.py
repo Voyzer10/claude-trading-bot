@@ -102,7 +102,7 @@ DEFAULT_CONFIG = {
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
                    "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
                    "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0,
-                   "usopt_underlyings": ["QQQ", "SPY"]},
+                   "usopt_underlyings": ["QQQ", "SPY", "DIA"]},
         "US":     {"capital": 50000, "max_loss_per_trade": 50, "max_position_pct": 25,
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
                    "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
@@ -227,6 +227,10 @@ def load_config():
         for acc in accs.values():
             tm_one_set(acc)
         cfg["_tm_global"] = changed = True
+    usf_old = accs.get("USFNO")
+    if usf_old and "DIA" not in (usf_old.get("usopt_underlyings") or []) and not cfg.get("_usopt_dia"):
+        usf_old["usopt_underlyings"] = list(usf_old.get("usopt_underlyings") or []) + ["DIA"]   # one-time: the Dow
+        cfg["_usopt_dia"] = changed = True
     if "USFNO" not in accs:   # one-time (owner, 13 Nov 2026): US F&O gets its own account, US's scanner switches
         usf = dict(DEFAULT_CONFIG["accounts"]["USFNO"])
         us = accs.get("US") or {}
