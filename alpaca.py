@@ -34,7 +34,11 @@ TICKS_FILE = os.path.join(LIVE_DIR, "us_ticks.json")
 FEED = "iex"
 
 # the only requests this module may send: GET to the market-data host, these paths. Nothing that trades is here.
-ALLOWED = [r"/v2/stocks/snapshots", r"/v2/stocks/trades/latest", r"/v2/stocks/bars"]
+ALLOWED = [r"/v2/stocks/snapshots", r"/v2/stocks/trades/latest", r"/v2/stocks/bars",
+           # options market data (owner, 13 Nov 2026: US F&O on QQQ / SPY, paper): the chain of one underlying, and
+           # snapshots of given contracts. The free plan gets the "indicative" feed (quotes modified, trades delayed).
+           r"/v1beta1/options/snapshots/[A-Z]{1,6}", r"/v1beta1/options/snapshots"]
+OPTIONS_FEED = "indicative"
 
 
 class AlpacaError(Exception):
@@ -117,6 +121,46 @@ def snapshots(symbols):
             rec["high"], rec["low"] = float(day["h"]), float(day["l"])
         out[s.upper()] = rec
     return out
+
+
+def _opt_rec(sym, d):
+    """One options snapshot -> {"symbol", "bid", "ask", "mid", "last", "t", "iv", "delta"} (None fields when absent)."""
+    q, tr, g = d.get("latestQuote") or {}, d.get("latestTrade") or {}, d.get("greeks") or {}
+    bid, ask = q.get("bp"), q.get("ap")
+    mid = round((float(bid) + float(ask)) / 2, 4) if bid and ask and float(ask) >= float(bid) > 0 else None
+    t = q.get("t") or tr.get("t")
+    return {"symbol": sym, "bid": bid, "ask": ask, "mid": mid, "last": tr.get("p"), "t": _iso(t).timestamp() if t else None,
+            "iv": d.get("impliedVolatility"), "delta": g.get("delta")}
+
+
+def option_chain(underlying, kind=None, exp_gte=None, exp_lte=None, strike_gte=None, strike_lte=None, pages=5):
+    """[contract snapshot] for one underlying's options (kind "call" / "put"; dates YYYY-MM-DD), indicative feed."""
+    params = {"feed": OPTIONS_FEED, "limit": 1000}
+    for k, v in (("type", kind), ("expiration_date_gte", exp_gte), ("expiration_date_lte", exp_lte),
+                 ("strike_price_gte", strike_gte), ("strike_price_lte", strike_lte)):
+        if v is not None:
+            params[k] = v
+    out, token = [], None
+    for _ in range(pages):
+        if token:
+            params["page_token"] = token
+        doc = _get("/v1beta1/options/snapshots/%s" % underlying.upper(), params) or {}
+        for sym, d in (doc.get("snapshots") or {}).items():
+            if isinstance(d, dict):
+                out.append(_opt_rec(sym, d))
+        token = doc.get("next_page_token")
+        if not token:
+            break
+    return out
+
+
+def option_snapshots(symbols):
+    """{occ symbol: contract snapshot} for given contracts (one request), indicative feed."""
+    syms = [s.upper() for s in symbols if s]
+    if not syms:
+        return {}
+    doc = _get("/v1beta1/options/snapshots", {"symbols": ",".join(syms), "feed": OPTIONS_FEED}) or {}
+    return {s: _opt_rec(s, d) for s, d in (doc.get("snapshots") or {}).items() if isinstance(d, dict)}
 
 
 def price(sym):

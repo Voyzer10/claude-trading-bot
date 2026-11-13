@@ -145,12 +145,13 @@ def notify_cycle(state, ledger_path=os.path.join("trader", "paper", "ledger.json
             todays = [c for c in closed if c.get("exit_date") == today]
             by = {}
             for c in todays:
-                acc = "INDIA" if c.get("market") in ("NSE", "BSE") else "FNO" if c.get("market") == "NFO" else c.get("market")
+                acc = ("INDIA" if c.get("market") in ("NSE", "BSE") else "FNO" if c.get("market") == "NFO"
+                       else "USFNO" if c.get("market") == "USOPT" else c.get("market"))
                 by.setdefault(acc, [0, 0.0])
                 by[acc][0] += 1
                 by[acc][1] += c.get("pnl") or 0
             lines = ["Daily summary %s (paper)" % today, "open positions: %d" % len(open_keys)]
-            lines += ["%s: %d trades, P&L %s%.2f" % (a, n, _cur("NSE" if a in ("INDIA", "FNO") else a), p)
+            lines += ["%s: %d trades, P&L %s%.2f" % (a, n, _cur("NSE" if a in ("INDIA", "FNO") else "US" if a == "USFNO" else a), p)
                       for a, (n, p) in sorted(by.items())] or ["no trades closed today"]
             send("daily", "\n".join(lines), cfg)
             st["daily_sent"] = today

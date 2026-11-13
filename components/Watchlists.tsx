@@ -15,7 +15,8 @@ type Quote = { price: number; prev_close?: number | null; chg_pct?: number | nul
 type Hit = { symbol: string; side?: string; price?: number; last?: number; time?: string; at?: string; holding?: boolean;
   pct_now?: number; pct_over?: number; vol_x?: number; gap_pct?: number; range_high?: number; range_low?: number;
   or_high?: number; or_low?: number };
-type Watch = { symbols?: string[]; quotes?: Record<string, Quote>; as_of?: string | null; hits?: Hit[]; hits_as_of?: string | null };
+type Watch = { symbols?: string[]; quotes?: Record<string, Quote>; as_of?: string | null; hits?: Hit[]; hits_as_of?: string | null;
+  indices?: Record<string, Quote & { name?: string }> };
 type Brk = { direction?: string | null; level?: number; or_high?: number; or_low?: number; close?: number; time?: string };
 
 type Row = { sym: string; key: string; price: number | null; chg: number | null; live: boolean; hit?: Hit; note?: string };
@@ -60,9 +61,43 @@ export function UsWatch({ snap, live }: { snap: Snapshot; live?: LiveTicks | nul
     : w.as_of
       ? `Last 5-minute close ${timeIST(w.as_of, true)} IST${live?.us_configured === false ? "; add the Alpaca paper key on the server for live prices" : ""}.`
       : "Filled from the first 5-minute candle of the US session.";
+  // the indices (owner, 13 Nov 2026): Nasdaq-100, Nasdaq Composite, S&P 500 (Yahoo 5-minute closes), with the ETF the
+  // bot trades options on (QQQ / SPY) live from Alpaca
+  const idx: [string, string, string | null][] = [["NDX", "Nasdaq-100", "QQQ"], ["IXIC", "Nasdaq Composite", null], ["SPX", "S&P 500", "SPY"]];
   return (
-    <WatchList id="watch-us" title={`US watch list: ${symbols.length || "—"} liquid names${hits.length ? ` + breaks` : ""}`}
-               sub={sub} rows={rows} cur="$" />
+    <>
+      <section id="watch-us-idx" className="panel" aria-labelledby="watch-us-idx-h">
+        <div className="panel-head">
+          <div>
+            <h2 id="watch-us-idx-h">US indices</h2>
+            <p>Index levels from the last 5-minute close{w.as_of ? ` (${timeIST(w.as_of, true)} IST)` : ""}; QQQ / SPY live{ul ? " from Alpaca" : " when the Alpaca feed runs"}. US F&amp;O trades QQQ and SPY options.</p>
+          </div>
+        </div>
+        <div className="idx-grid">
+          {idx.map(([k, name, etf]) => {
+            const q = w.indices?.[k];
+            const e = etf ? (ul ? live?.ticks["US:" + etf] : undefined) : undefined;
+            const eq = etf ? w.quotes?.[etf] : undefined;
+            const ePrice = e?.ltp ?? eq?.price ?? null;
+            const eChg = e ? (e.chg_pct ?? (e.close ? ((e.ltp - e.close) / e.close) * 100 : null)) : eq?.chg_pct ?? null;
+            return (
+              <div key={k} className="stat">
+                <span className="label">{name}</span>
+                <span className="value num" style={{ fontSize: 20 }}>{q ? q.price.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—"}</span>
+                <span className={`sub ${tone(q?.chg_pct ?? null)}`}>{q?.chg_pct != null ? `${pct(q.chg_pct)} today` : "fills from the first 5-minute candle of the session"}</span>
+                {etf && (
+                  <span className="sub">
+                    {etf} {ePrice !== null ? `$${ePrice.toFixed(2)}` : "—"} <span className={tone(eChg)}>{eChg !== null ? pct(eChg) : ""}</span>{e ? " · live" : ""}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+      <WatchList id="watch-us" title={`US watch list: ${symbols.length || "—"} names (liquid stocks + Nasdaq-100)${hits.length ? ` + breaks` : ""}`}
+                 sub={sub} rows={rows} cur="$" />
+    </>
   );
 }
 

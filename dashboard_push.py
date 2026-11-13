@@ -299,6 +299,7 @@ def _us_watch():
     wl = _json(os.path.join(os.path.dirname(os.path.abspath(__file__)), "us", "trader", "watchlist.json"), {}) or {}
     hits = wl.get("hits", []) if isinstance(wl, dict) else []
     return {"symbols": doc.get("symbols") or [], "quotes": doc.get("quotes") or {}, "as_of": doc.get("as_of"),
+            "indices": doc.get("indices") or {},
             "hits_as_of": wl.get("as_of") if isinstance(wl, dict) else None,
             "hits": [{k: h.get(k) for k in HIT_KEYS if h.get(k) is not None} for h in hits[:60]]}
 

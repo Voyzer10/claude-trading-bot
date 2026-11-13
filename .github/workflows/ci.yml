@@ -66,6 +66,8 @@ jobs:
         run: python tests/test_fno_sv4.py
       - name: Scanner v4 = only v4 (rules paths off per account), v4 setup ticks, every market's settings (offline)
         run: python tests/test_v4_only.py
+      - name: US F&O (QQQ / SPY options, USFNO account, Alpaca options data guard, Nasdaq-100, backtest; offline)
+        run: python tests/test_us_fno.py
       - name: Your opinion (questions, validation, versions, export; offline)
         run: python tests/test_opinion.py
       - name: View on chart API (candles, levels, broker links; offline)

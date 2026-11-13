@@ -344,6 +344,16 @@ US_WATCH = ("AAPL MSFT NVDA AMZN GOOGL META TSLA AVGO JPM V MA UNH HD PG COST JN
             "CAT DE BA GE HON LMT RTX UPS FDX GS MS C AXP BLK SCHW PYPL SQ SHOP COIN PLTR SNOW CRWD PANW NOW "
             "INTU ISRG LLY PFE TMO DHR AMGN GILD CVS CI T VZ TMUS CMCSA CHTR SPGI ICE CME MMM DOW LIN F GM RIVN "
             "SPY QQQ").split()
+# the Nasdaq-100 (owner, 13 Nov 2026: "NASDAQ as a index and uske stocks ko bhi watch list m add karo"); list as
+# published in Nov 2026 (stockanalysis.com); names already above are not repeated
+NASDAQ_100 = ("AAPL NVDA MSFT AMZN MU AMD TSLA META WMT GOOGL SPCX GOOG AVGO COST CSCO PLTR INTC AMAT TXN PANW LRCX "
+              "NFLX AMGN CRWD LIN GILD ADI KLAC PEP SHOP QCOM TMUS ISRG SNDK ASML MRVL VRTX BKNG STX SBUX ADP WDC MAR "
+              "MRNA ADBE INTU CSX MNST FTNT REGN CTAS CDNS SNPS MELI CMCSA CEG MDLZ ARM APP DASH ROST ORLY ABNB HON "
+              "AEP NXPI DDOG MPWR FAST ADSK LITE PCAR IDXX PDD MSTR PYPL FANG CCEP XEL KDP HONA BKR ROP EXC TRI FER "
+              "PAYX MCHP WDAY TER TTWO ALAB GEHC ODFL AXON NBIS DXCM RKLB CPRT CRWV ALNY").split()
+US_WATCH = list(dict.fromkeys(US_WATCH + NASDAQ_100))
+# the indices on the US watch list (Yahoo, 5-minute closes): key, Yahoo symbol, name
+US_INDICES = [("NDX", "^NDX", "Nasdaq-100"), ("IXIC", "^IXIC", "Nasdaq Composite"), ("SPX", "^GSPC", "S&P 500")]
 _SETUP_BAR = {"last": None}
 
 
@@ -361,8 +371,10 @@ def scan_setups(log):
     data, _ = S.fetch_many(US_WATCH, "1d", "5m", 8, "", True)
     try:   # the dashboard's US watch list (owner, 10 Nov 2026)
         quotes = {s: q for s in US_WATCH for q in [S.watch_quote(data.get(s))] if q}
+        idx, _ = S.fetch_many([y for _, y, _ in US_INDICES], "1d", "5m", 3, "", True)
+        indices = {k: dict(q, name=n, yahoo=y) for k, y, n in US_INDICES for q in [S.watch_quote(idx.get(y))] if q}
         with open(os.path.join(LIVE_DIR, "us_watch.json"), "w", encoding="utf-8") as fh:
-            json.dump({"as_of": last.isoformat(), "symbols": list(US_WATCH), "quotes": quotes}, fh)
+            json.dump({"as_of": last.isoformat(), "symbols": list(US_WATCH), "quotes": quotes, "indices": indices}, fh)
     except Exception as e:
         log("US watch list not saved: %s" % e)
     keep = lambda r: (9, 30) <= (r[0].hour, r[0].minute) < (16, 0)

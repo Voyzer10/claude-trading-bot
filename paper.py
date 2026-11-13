@@ -48,10 +48,12 @@ MARKETS = {
     "NSE":    {"suffix": ".NS",  "cur": "Rs", "open": "09:15", "close": "15:30", "fractional": False, "account": "INDIA"},
     "BSE":    {"suffix": ".BO",  "cur": "Rs", "open": "09:15", "close": "15:30", "fractional": False, "account": "INDIA"},
     "NFO":    {"suffix": None,   "cur": "Rs", "open": "09:15", "close": "15:30", "fractional": False, "account": "FNO"},
+    # US F&O (owner, 13 Nov 2026): QQQ / SPY options, OCC symbols (us_options.py), New York hours, own account
+    "USOPT":  {"suffix": None,   "cur": "$",  "open": "09:30", "close": "16:00", "fractional": False, "account": "USFNO"},
     "US":     {"suffix": "",     "cur": "$",  "open": "09:30", "close": "16:00", "fractional": False, "account": "US"},
     "CRYPTO": {"suffix": "-USD", "cur": "$",  "open": None,    "close": None,    "fractional": True,  "account": "CRYPTO"},
 }
-ACCOUNT_MARKET = {"INDIA": "NSE", "FNO": "NFO", "US": "US", "CRYPTO": "CRYPTO"}  # for currency formatting
+ACCOUNT_MARKET = {"INDIA": "NSE", "FNO": "NFO", "US": "US", "USFNO": "USOPT", "CRYPTO": "CRYPTO"}  # currency formatting
 INDIA_ACCOUNTS = ("INDIA", "FNO")   # Indian charges (india_charges), not fee_pct
 
 DEFAULT_CONFIG = {
@@ -86,6 +88,21 @@ DEFAULT_CONFIG = {
                    "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
                    "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0, "fno_stock_options": False,
                    "fno_underlyings": ["NIFTY", "BANKNIFTY"]},
+        # USFNO (owner, 13 Nov 2026): US F&O, its own $50,000, only QQQ / SPY ATM weekly options (us_options.py);
+        # strategy switches copied from US once when the account is made. fee_pct 0.5 per side stands for the
+        # contract fees and the bid / ask spread (the paper fill is the quote midpoint)
+        "USFNO":  {"capital": 50000, "max_loss_per_trade": 500, "max_loss_per_trade_fno": 500,
+                   "max_position_pct": 40, "max_position_pct_fno": 40, "daily_loss_limit": 1500,
+                   "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:50", "fee_pct": 0.5,
+                   "breakeven_at_r": 1.0, "allow_short": False,
+                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
+                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
+                   "v5_target": "leg",
+                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
+                   "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
+                   "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0,
+                   "usopt_underlyings": ["QQQ", "SPY"]},
         "US":     {"capital": 50000, "max_loss_per_trade": 50, "max_position_pct": 25,
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
                    "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
@@ -210,6 +227,14 @@ def load_config():
         for acc in accs.values():
             tm_one_set(acc)
         cfg["_tm_global"] = changed = True
+    if "USFNO" not in accs:   # one-time (owner, 13 Nov 2026): US F&O gets its own account, US's scanner switches
+        usf = dict(DEFAULT_CONFIG["accounts"]["USFNO"])
+        us = accs.get("US") or {}
+        for k in FNO_FROM_INDIA:
+            if k in us and k not in ("max_loss_per_trade_fno", "futures_margin_pct", "flat_by"):
+                usf[k] = us[k]
+        accs["USFNO"] = usf
+        changed = True
     for name, acc in DEFAULT_CONFIG["accounts"].items():
         merged = dict(acc)
         merged.update(cfg.get("accounts", {}).get(name, {}))
@@ -287,7 +312,7 @@ def parse_symbol(raw, cfg):
     if ":" in s:
         m, t = s.split(":", 1)
         if m not in MARKETS:
-            raise PaperError("unknown market %r (use NSE, BSE, NFO, US or CRYPTO)" % m)
+            raise PaperError("unknown market %r (use NSE, BSE, NFO, US, USOPT or CRYPTO)" % m)
         t = t.replace(".NS", "").replace(".BO", "")
         if m == "CRYPTO":
             t = t.replace("-USDT", "").replace("-USD", "")
@@ -296,6 +321,12 @@ def parse_symbol(raw, cfg):
             try:
                 fno.parse(t)
             except fno.FnoError as e:
+                raise PaperError(str(e))
+        if m == "USOPT":
+            import us_options
+            try:
+                us_options.parse(t)
+            except us_options.NoOption as e:
                 raise PaperError(str(e))
         return m, t
     if s.endswith(".NS"):
@@ -328,7 +359,7 @@ def us_offset(utc):
 def local_now(m, utc):
     if m in ("NSE", "BSE", "NFO"):
         return utc.astimezone(IST)
-    if m == "US":
+    if m in ("US", "USOPT"):
         return utc.astimezone(timezone(us_offset(utc)))
     return utc
 
@@ -363,6 +394,8 @@ def past_flat_by(m, acc, utc):
 
 def kind_of(m, t):
     """equity / options / futures (for charges, lots and margin)."""
+    if m == "USOPT":
+        return "options"
     if m != "NFO":
         return "equity"
     import fno
@@ -370,6 +403,8 @@ def kind_of(m, t):
 
 
 def lot_of(m, t):
+    if m == "USOPT":
+        return 100                       # one US equity / ETF option contract = 100 shares
     if m != "NFO":
         return 1
     k = kite_mod()
@@ -540,6 +575,15 @@ def fetch_price(m, t):
         cq = crypto_live_price(t)        # crypto: Coinbase live (CoinDCX blocks the VPS; 11 Nov 2026)
         if cq:
             return float(cq[0]), cq[1]
+    if m == "USOPT":                     # Alpaca options data, indicative feed (paper key, data only)
+        import us_options
+        try:
+            q = us_options.price(t)
+        except Exception as e:
+            raise PaperError("could not price %s: %s" % (t, str(e)[:200]))
+        if not q:
+            raise PaperError("no Alpaca option price for %s (paper key set? market open?)" % t)
+        return q
     if m == "NFO":
         import fno
         try:
@@ -620,7 +664,7 @@ def fetch_minutes(m, t, days=1):
                 return out
         except Exception:
             pass
-    if m == "NFO":
+    if m in ("NFO", "USOPT"):           # no 1-minute option candles: the checks use the live premium
         return []
     if m == "US":                        # Alpaca IEX 1-minute bars (paper key, data only)
         try:
@@ -1466,36 +1510,38 @@ if __name__ == "__main__":
 INDEX_UNDERLYINGS = ("NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY")
 
 
-def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields):
-    """setup_decision for an F&O stock with fno_stock_options on: the ATM option is paper bought."""
+def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields, mk="NFO"):
+    """setup_decision for an option trade: an Indian index / F&O stock (NFO) or QQQ / SPY (USOPT): the ATM option is
+    paper bought."""
+    word = {"CE": "call", "PE": "put"}[op["kind"]] if mk == "USOPT" else op["kind"]
     entry, stop = s["price"], s["stop"]
     target = s.get("target") or s.get("target_2r")
     name = s.get("name") or s["setup"]
     risk_u = op["premium"] - op["stop"]
-    st["4_exit"] = {"instrument": "NFO:" + op["name"], "why": "%s setup -> buy the ATM %s" % (s["side"], op["kind"]),
+    st["4_exit"] = {"instrument": mk + ":" + op["name"], "why": "%s setup -> buy the ATM %s" % (s["side"], word),
                     "premium": op["premium"], "premium_stop": op["stop"], "premium_target": op["target"],
                     "stock_entry": entry, "stock_stop": stop, "stock_target": target, "lot": op["lot"],
                     "iv": op["iv"], "delta": op["delta"], "expiry": op["expiry"],
                     "r_multiple": round((op["target"] - op["premium"]) / risk_u, 2)}
-    st["5_timemachine"] = "n/a (backtest: research.py fno-sv4)"
+    st["5_timemachine"] = "n/a (backtest: research.py %s)" % ("usopt-sv4" if mk == "USOPT" else "fno-sv4 / bnf-sv4")
     if not acc.get("trade_setups", True):
         st["6-8_budget_risk_broker"] = {"verdict": "pass, NOT sent to the broker (trade_setups off)"}
         st["9_alerts"] = "no trade, nothing to watch"
-        return done("LOG ONLY", "%s on %s: ATM %s %s recorded only (trade_setups is off)" % (name, symbol, op["kind"],
+        return done("LOG ONLY", "%s on %s: ATM %s %s recorded only (trade_setups is off)" % (name, symbol, word,
                                                                                             op["name"]))
     import contextlib
     import io
     if led is None:
         led = load_ledger(cfg)
-    key = "NFO:" + op["name"]
+    key = mk + ":" + op["name"]
     args = type("A", (), {"symbol": key, "stop": str(op["stop"]), "target": str(op["target"]), "qty": None,
                           "price": None, "note": "scanner %s: %s on %s (stock stop %s, target %s)" % (
                               version, name, symbol, stop, target), "force": False, "side": "long",
                           "setup": s["setup"], "setup_name": name, "scanner": version,
                           "liquidity": s.get("liquidity"),
                           "entry_reason": "Scanner %s %s on %s at %s: bought the ATM %s (IV %.0f%%, delta %.2f); "
-                                          "premium stop / target = the option's value at the stock's stop %s / target %s"
-                                          % (version, s["side"], symbol, entry, op["kind"], op["iv"] * 100,
+                                          "premium stop / target = the option's value at the underlying's stop %s / target %s"
+                                          % (version, s["side"], symbol, entry, word, op["iv"] * 100,
                                              op["delta"], stop, target), **v4_fields})()
     buf = io.StringIO()
     try:
@@ -1540,6 +1586,10 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     if market in ("NSE", "BSE") and symbol.upper() in INDEX_UNDERLYINGS:
         acc = cfg["accounts"].get("FNO", acc)   # an index setup is an F&O trade: the FNO account's switches
     fno_acc = cfg["accounts"].get("FNO", acc)
+    usf_acc = cfg["accounts"].get("USFNO") or {}
+    us_opt = market == "US" and symbol.upper() in [u.upper() for u in (usf_acc.get("usopt_underlyings") or [])]
+    if us_opt:
+        acc = usf_acc                            # QQQ / SPY setups are US F&O trades: the USFNO account's switches
     version = acc.get("scanner_version", "v3")
     st["1_scanner"]["scanner"] = version
     # versions never mix (owner, 5 and 7 Nov 2026): a setup of another version (switched after it was scanned) is
@@ -1599,6 +1649,15 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
                     return done("skipped", "option: %s" % e)
         if op:
             return _option_setup(st, done, cfg, fno_acc, symbol, s, op, version, led, v4_fields)
+    if us_opt:
+        # US F&O (owner, 13 Nov 2026): a QQQ / SPY setup buys its ATM weekly option, never the ETF's shares
+        import us_options as _UO
+        try:
+            op = _UO.plan(symbol, s)
+        except _UO.NoOption as e:
+            st["4_exit"] = {"underlying_entry": entry, "underlying_stop": stop, "underlying_target": target}
+            return done("skipped", "option: %s" % e)
+        return _option_setup(st, done, cfg, usf_acc, symbol, s, op, version, led, v4_fields, mk="USOPT")
     units = min(acc["max_loss_per_trade"] / risk, acc["capital"] * acc["max_position_pct"] / 100 / entry)
     qty = units if market == "CRYPTO" else int(units)
     cost = None

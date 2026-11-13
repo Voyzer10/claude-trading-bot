@@ -149,16 +149,16 @@ RISK_FIELDS = {
     "weekly_loss_x": {"type": "float", "min": 0, "max": 10},
     "max_same_side": {"type": "int", "min": 0, "max": 20, "accounts": ["CRYPTO"]},
     "max_loss_per_trade": {"type": "float", "min": 0.01},
-    "max_loss_per_trade_fno": {"type": "float", "min": 0.01, "accounts": ["FNO"]},
+    "max_loss_per_trade_fno": {"type": "float", "min": 0.01, "accounts": ["FNO", "USFNO"]},
     "daily_loss_limit": {"type": "float", "min": 0.01},
     "max_trades_per_day": {"type": "int", "min": 1, "max": 50},
     "max_position_pct": {"type": "float", "min": 1, "max": 100},
-    "fee_pct": {"type": "float", "min": 0.0, "max": 1.0, "accounts": ["CRYPTO"]},
+    "fee_pct": {"type": "float", "min": 0.0, "max": 1.0, "accounts": ["CRYPTO", "USFNO"]},
 }
 PREF_FIELDS = {"usd_inr": {"type": "float", "min": 50, "max": 200},
                "daily_goal_inr": {"type": "float", "min": 0, "max": 1e7}}
 PREF_DEFAULT = {"usd_inr": 88.0, "daily_goal_inr": 500.0}
-BACKTEST_MODES = ["crypto-sv5", "crypto-sv5-5m", "us-sv5", "nse-sv5", "gold-sv5", "bnf-sv4", "nifty-sv4", "fno-sv4", "us-tm", "nse-tm", "crypto-tm", "crypto-tm-5m", "crypto-sv4", "crypto-sv4-5m", "us-sv4", "nse-sv4", "crypto-v3", "crypto-v3-5m", "us-v3", "nse-v3", "us-orb", "crypto-abcd", "crypto-abcd-5m", "us-abcd", "nse-abcd", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-v4", "crypto-v4-short", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
+BACKTEST_MODES = ["crypto-sv5", "crypto-sv5-5m", "us-sv5", "nse-sv5", "gold-sv5", "bnf-sv4", "nifty-sv4", "usopt-sv4", "fno-sv4", "us-tm", "nse-tm", "crypto-tm", "crypto-tm-5m", "crypto-sv4", "crypto-sv4-5m", "us-sv4", "nse-sv4", "crypto-v3", "crypto-v3-5m", "us-v3", "nse-v3", "us-orb", "crypto-abcd", "crypto-abcd-5m", "us-abcd", "nse-abcd", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-v4", "crypto-v4-short", "crypto-v4-5m", "crypto-smc", "nse-v2", "crypto-live", "crypto", "crypto-5m", "crypto-short", "crypto-mr", "nse", "fno"]
 
 
 # ------------------------------------------------------------------ small helpers
@@ -624,7 +624,7 @@ def datacheck():
 # ------------------------------------------------------------------ performance
 
 def _acct(m):
-    return "INDIA" if m in ("NSE", "BSE") else "FNO" if m == "NFO" else m
+    return "INDIA" if m in ("NSE", "BSE") else "FNO" if m == "NFO" else "USFNO" if m == "USOPT" else m
 
 
 @router.get("/performance")
@@ -632,7 +632,7 @@ def performance():
     led = _read_json(LEDGER, {"accounts": {}, "open": [], "closed": []})
     prefs = dict(PREF_DEFAULT)
     prefs.update(_read_json(PREFS, {}))
-    fx = {"INDIA": 1.0, "FNO": 1.0, "US": prefs["usd_inr"], "CRYPTO": prefs["usd_inr"]}
+    fx = {"INDIA": 1.0, "FNO": 1.0, "US": prefs["usd_inr"], "USFNO": prefs["usd_inr"], "CRYPTO": prefs["usd_inr"]}
     today = _now().date()
     closed = led.get("closed") or []
     by_day = {}
@@ -770,7 +770,7 @@ DOWNLOADS = {"ledger.json": LEDGER, "log.txt": LOG, "decisions.jsonl": os.path.j
              "auto_config.json": RULES, "paper_config.json": PAPER_CFG}
 
 
-_ACCT = {"NSE": "INDIA", "BSE": "INDIA", "NFO": "FNO"}
+_ACCT = {"NSE": "INDIA", "BSE": "INDIA", "NFO": "FNO", "USOPT": "USFNO"}
 
 
 def _csv(rows, cols):
@@ -1366,7 +1366,7 @@ def agents():
         _accs = _paper_cfg().get("accounts", {})
     except Exception:
         _accs = {}
-    vers = {acc: (_accs.get(acc, {}).get("scanner_version") or "v3") for acc in ("CRYPTO", "INDIA", "FNO", "US")}
+    vers = {acc: (_accs.get(acc, {}).get("scanner_version") or "v3") for acc in ("CRYPTO", "INDIA", "FNO", "US", "USFNO")}
     for n, key, name, skill in AGENTS:
         if n == 1:   # the Scanner's version per account (Settings > Risk limits; v2 = the rollback)
             u = sorted(set(vers.values()))
