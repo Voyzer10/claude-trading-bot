@@ -48,7 +48,7 @@ function KitePaste({ onDone }: { onDone: (msg: string) => void }) {
         <li>Paste it here within 2 minutes:</li>
       </ol>
       <div className="kite-paste-row">
-        <input type="url" inputMode="url" autoComplete="off" spellCheck={false} placeholder="http://127.0.0.1:3000/...request_token=..."
+        <input type="url" inputMode="url" autoComplete="off" spellCheck={false} placeholder="http://127.0.0.1/...request_token=..."
                value={text} onChange={(e) => setText(e.target.value)} aria-label="Address after the Zerodha login" />
         <button className="btn primary" onClick={go} disabled={busy || !text.trim()}>{busy ? "Connecting…" : "Connect"}</button>
       </div>
