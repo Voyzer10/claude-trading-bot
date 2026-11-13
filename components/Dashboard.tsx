@@ -12,7 +12,7 @@ import Alerts from "@/components/Alerts";
 import Agents from "@/components/Agents";
 import SymbolIcon from "@/components/SymbolIcon";
 import PovChips from "@/components/Pov";
-import ChartView from "@/components/ChartView";
+import ChartView, { type ChartSource } from "@/components/ChartView";
 import Icon from "@/components/Icon";
 import Zerodha, { ZerodhaBanner } from "@/components/Zerodha";
 import { FnoWatch, NseWatch, UsWatch } from "@/components/Watchlists";
@@ -692,6 +692,7 @@ function DecisionsSection({ decisions }: { decisions: Decision[] }) {
   const [market, setMarket] = useState("all");
   const [result, setResult] = useState("all");
   const [q, setQ] = useState("");
+  const [chartOf, setChartOf] = useState<ChartSource | null>(null);
   const markets = useMemo(() => Array.from(new Set(decisions.map((d) => d.market))).sort(), [decisions]);
   const rows = useMemo(
     () =>
@@ -711,6 +712,7 @@ function DecisionsSection({ decisions }: { decisions: Decision[] }) {
   );
   return (
     <section id="decisions" className="panel" aria-labelledby="dec-h">
+      {chartOf && <ChartView src={chartOf} onClose={() => setChartOf(null)} />}
       <div className="panel-head">
         <div>
           <h2 id="dec-h">Agent decisions</h2>
@@ -773,6 +775,13 @@ function DecisionsSection({ decisions }: { decisions: Decision[] }) {
                     </div>
                   )}
                   <div className="muted small">{d.why}</div>
+                  {d.time && d.symbol && (
+                    <button className="btn small-btn chart-btn" style={{ marginLeft: 0, marginTop: 4 }}
+                            onClick={() => setChartOf({ kind: "decision", time: d.time!, symbol: d.symbol! })}
+                            aria-label={`View ${d.symbol} on chart: ${d.result === "PAPER BUY" || d.result === "PAPER SHORT" ? "the trade" : "why it was " + (d.result ?? "skipped")}`}>
+                      View on chart
+                    </button>
+                  )}
                 </td>
                 <td data-label="Price" className="num">{price(d.price)}</td>
                 <td data-label="Stop" className="num">
@@ -878,7 +887,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
   const wins = shown.filter((c) => (c.pnl ?? 0) > 0).length;
   const { cmds, send, available } = useCommands(onChange);
   const [err, setErr] = useState<string | null>(null);
-  const [chartOf, setChartOf] = useState<{ key: string; entry_time?: string } | null>(null);
+  const [chartOf, setChartOf] = useState<ChartSource | null>(null);
   const waiting = (key: string | null) =>
     cmds.pending.some((c) => (c.action === "close" && c.key === key) || c.action === "close_all");
   async function close(key?: string) {
@@ -891,7 +900,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
   const title = part === "open" ? "Open trades" : part === "closed" ? "Closed trades" : part === "accounts" ? "Paper accounts" : "Paper ledger";
   return (
     <>
-      {chartOf && <ChartView posKey={chartOf.key} entryTime={chartOf.entry_time} onClose={() => setChartOf(null)} />}
+      {chartOf && <ChartView src={chartOf} onClose={() => setChartOf(null)} />}
     <section id={part === "all" ? "ledger" : `ledger-${part}`} className={`panel ledger-${part}`} aria-labelledby={`led-h-${part}`}>
       {part !== "closed" && part !== "accounts" && (
       <div className="panel-head">
@@ -943,7 +952,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
                   <tr key={p.key}>
                     <td data-label="Instrument" className="num">
                       <span className="sym"><SymbolIcon id={p.key} />{p.key}</span><PovChips id={p.v4_chart ?? p.key} />
-                      <button className="btn small-btn chart-btn" onClick={() => setChartOf({ key: p.key, entry_time: p.entry_time })}
+                      <button className="btn small-btn chart-btn" onClick={() => setChartOf({ kind: "position", key: p.key, entryTime: p.entry_time })}
                               aria-label={`View ${p.key} on chart`}>View on chart</button>
                     </td>
                     <SetupCell p={p} />
@@ -1028,7 +1037,11 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
                   {c.r !== undefined ? `${c.r > 0 ? "+" : ""}${c.r}` : "—"}
                   {c.mfe_r !== undefined && <span className="small muted" title="How far the trade went in its favour (best) and against it (worst)"> best +{c.mfe_r.toFixed(1)} / worst {(c.mae_r ?? 0).toFixed(1)}</span>}
                 </td>
-                <td data-label="Exit">{c.reason}</td>
+                <td data-label="Exit">
+                  {c.reason}
+                  <button className="btn small-btn chart-btn" onClick={() => setChartOf({ kind: "position", key: c.key, entryTime: c.entry_time })}
+                          aria-label={`View the ${c.key} trade on chart: why it closed`}>View on chart</button>
+                </td>
               </tr>
             ))}
           </tbody>

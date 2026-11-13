@@ -80,6 +80,67 @@ if __name__ == "__main__":
         check("   with Kite instruments: a Kite chart link with the token",
               r["links"][0] == {"name": "Kite", "url": "https://kite.zerodha.com/chart/ext/ciq/NSE/TCS/2953217"}, r["links"])
         check("5. an unknown position: 404", cl.get("/api/py/chart/position", params={"key": "US:NOPE"}).status_code == 404)
+
+        # 6. closed trades and skipped candidates explained (owner, 13 Nov 2026)
+        T0 = int((now - timedelta(hours=6)).timestamp()) // 300 * 300
+        def bars(spec):   # [(o, h, l, c)] every 5 min from T0
+            return {"t": [T0 + 300 * i for i in range(len(spec))], "o": [b[0] for b in spec], "h": [b[1] for b in spec],
+                    "l": [b[2] for b in spec], "c": [b[3] for b in spec], "v": [1] * len(spec)}
+        iso = lambda i: datetime.fromtimestamp(T0 + 300 * i, timezone.utc).isoformat()   # noqa: E731
+        # a long: entry 100 at bar 3, stop 99, target 102; up to 100.6, down to the stop at bar 6, then up to 102.5
+        path = [(100, 100.2, 99.8, 100)] * 3 + [(100, 100.4, 99.9, 100.3), (100.3, 100.6, 100.1, 100.2),
+                (100.2, 100.3, 99.6, 99.7), (99.7, 99.8, 98.9, 99.0), (99.0, 100.5, 98.95, 100.4),
+                (100.4, 102.5, 100.3, 102.3), (102.3, 102.4, 102.0, 102.1)]
+        S.yahoo_chart = lambda sym, rng, interval, suffix="": bars(path)
+        led = P.load_ledger(P.load_config())
+        led["closed"] = [dict(base, key="US:AMD", market="US", symbol="AMD", side="long", entry=100.0, stop=99.0,
+                              risk_stop=99.0, target=102.0, entry_time=iso(3), exit_time=iso(6), exit=99.0, reason="stop",
+                              r=-1.0, pnl=-10, setup_name="v4 primary long", v4_signal_at=iso(2),
+                              tm_log=[{"t": iso(4), "text": "breakeven: price reached +1.0R"}])]
+        P.save_json(P.LEDGER, led)
+        os.makedirs("trader/live", exist_ok=True)
+        recs = [{"time": iso(3), "symbol": "US:AMD", "setup": "v4_primary_long", "result": "PAPER BUY", "why": "ok",
+                 "steps": {"1_scanner": {"scanner": "v4", "setup_name": "v4 primary long", "side": "long",
+                                         "BOS_at": iso(0), "sweep_at": iso(1), "swept_px": 99.8, "signal_at": iso(2),
+                                         "signal": "doji", "bar_end": iso(2), "price": 100.0},
+                           "4_exit": {"entry": 100.0, "stop": 99.0, "target": 102.0}}},
+                {"time": iso(3), "symbol": "US:INTC", "setup": "v4_primary_long", "result": "blocked",
+                 "why": "planned R:R 0.13 is below the account's minimum reward:risk 1.0",
+                 "steps": {"1_scanner": {"scanner": "v4", "setup_name": "v4 primary long", "side": "long",
+                                         "sweep_at": iso(1), "signal_at": iso(2), "signal": "doji", "bar_end": iso(3),
+                                         "price": 100.3},
+                           "4_exit": {"entry": 100.3, "stop": 98.8, "target": 102.0}}},
+                {"time": iso(4), "symbol": "US:MU", "setup": "v4_primary_long", "result": "skipped",
+                 "why": "price 99.0 is already past the stop 99.5",
+                 "steps": {"1_scanner": {"side": "long", "bar_end": iso(4), "price": 100.2},
+                           "4_exit": {"entry": 100.2, "stop": 99.9, "target": 101.0}}}]
+        with open("trader/live/decisions.jsonl", "w") as fh:
+            fh.write("\n".join(json.dumps(r) for r in recs) + "\n")
+        r = cl.get("/api/py/chart/position", params={"key": "US:AMD"}).json()
+        v, kinds = r["verdict"], [m["kind"] for m in r["markers"]]
+        check("6. a losing closed trade: Loss -1R, why (the stop), its best (+0.6R vs the +2R target), and that price "
+              "reached the target after the exit",
+              v["tone"] == "bad" and v["title"].startswith("Loss -1.00R") and any("original stop" in x for x in v["lines"])
+              and any(x.startswith("Best it went: +0.60R") and "+2.00R" in x for x in v["lines"])
+              and any(x.startswith("After the exit: price reached the target") for x in v["lines"]), v)
+        check("   setup markers from the decisions log (BOS, sweep, signal), entry, the Trade Manager action, the exit",
+              kinds[:3] == ["bos", "sweep", "signal"] and "entry" in kinds and "tm" in kinds and kinds[-1] == "loss"
+              and any(x.startswith("Setup: BOS") and "sweep" in x and "doji" in x for x in v["lines"]), (kinds, v["lines"][:1]))
+        r = cl.get("/api/py/chart/decision", params={"time": iso(3), "symbol": "US:INTC"}).json()
+        v = r["verdict"]
+        check("7. a blocked candidate: the planned box, the agents' reason in plain words, and what it would have done "
+              "(target first -> skipping missed a winner)",
+              r["box"] and r["pos"]["planned"] and r["pos"]["entry"] == 100.3 and r["pos"]["target"] == 102.0
+              and any("below the account's minimum" in x for x in v["lines"])
+              and any(x.startswith("In short: the reward : risk") for x in v["lines"])
+              and any(x.startswith("If taken: the target came first") for x in v["lines"])
+              and "So skipping it missed a winner" in v["lines"] and r["markers"][-1]["kind"] == "win", v)
+        r = cl.get("/api/py/chart/decision", params={"time": iso(4), "symbol": "US:MU"}).json()
+        check("   a skipped one that would have lost: stop first -> skipping saved a loss",
+              any(x.startswith("If taken: the stop came first") for x in r["verdict"]["lines"])
+              and "So skipping it saved a loss" in r["verdict"]["lines"]
+              and any("already moved past the stop" in x for x in r["verdict"]["lines"]), r["verdict"])
+        check("   an unknown decision: 404", cl.get("/api/py/chart/decision", params={"time": "x", "symbol": "US:X"}).status_code == 404)
     finally:
         os.chdir(old)
         shutil.rmtree(tmp, ignore_errors=True)
