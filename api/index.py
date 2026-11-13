@@ -420,3 +420,8 @@ if LOCAL:
     except ImportError:
         from _kite import router as _kite_router
     app.include_router(_kite_router)
+    try:
+        from api._chart import router as _chart_router
+    except ImportError:
+        from _chart import router as _chart_router
+    app.include_router(_chart_router)

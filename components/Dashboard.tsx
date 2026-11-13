@@ -12,6 +12,7 @@ import Alerts from "@/components/Alerts";
 import Agents from "@/components/Agents";
 import SymbolIcon from "@/components/SymbolIcon";
 import PovChips from "@/components/Pov";
+import ChartView from "@/components/ChartView";
 import Icon from "@/components/Icon";
 import Zerodha, { ZerodhaBanner } from "@/components/Zerodha";
 import { FnoWatch, NseWatch, UsWatch } from "@/components/Watchlists";
@@ -877,6 +878,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
   const wins = shown.filter((c) => (c.pnl ?? 0) > 0).length;
   const { cmds, send, available } = useCommands(onChange);
   const [err, setErr] = useState<string | null>(null);
+  const [chartOf, setChartOf] = useState<{ key: string; entry_time?: string } | null>(null);
   const waiting = (key: string | null) =>
     cmds.pending.some((c) => (c.action === "close" && c.key === key) || c.action === "close_all");
   async function close(key?: string) {
@@ -888,6 +890,8 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
   const acctOf = (m: string) => (m === "NSE" || m === "BSE" ? "INDIA" : m === "NFO" ? "FNO" : m);
   const title = part === "open" ? "Open trades" : part === "closed" ? "Closed trades" : part === "accounts" ? "Paper accounts" : "Paper ledger";
   return (
+    <>
+      {chartOf && <ChartView posKey={chartOf.key} entryTime={chartOf.entry_time} onClose={() => setChartOf(null)} />}
     <section id={part === "all" ? "ledger" : `ledger-${part}`} className={`panel ledger-${part}`} aria-labelledby={`led-h-${part}`}>
       {part !== "closed" && part !== "accounts" && (
       <div className="panel-head">
@@ -937,7 +941,11 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
               <tbody>
                 {open.map((p) => (
                   <tr key={p.key}>
-                    <td data-label="Instrument" className="num"><span className="sym"><SymbolIcon id={p.key} />{p.key}</span><PovChips id={p.v4_chart ?? p.key} /></td>
+                    <td data-label="Instrument" className="num">
+                      <span className="sym"><SymbolIcon id={p.key} />{p.key}</span><PovChips id={p.v4_chart ?? p.key} />
+                      <button className="btn small-btn chart-btn" onClick={() => setChartOf({ key: p.key, entry_time: p.entry_time })}
+                              aria-label={`View ${p.key} on chart`}>View on chart</button>
+                    </td>
                     <SetupCell p={p} />
                     <td data-label="Side">{p.side ?? "long"}</td>
                     <td data-label="Qty" className="num">{p.qty}</td>
@@ -1028,6 +1036,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
       </div>
       </>)}
     </section>
+    </>
   );
 }
 
