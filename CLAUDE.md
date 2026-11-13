@@ -8,7 +8,7 @@ Owner: Ansh. Replies in Hinglish, direct and candid.
 - Code and data: `/opt/trader` (read-only for you). Bot data: `/opt/trader/trader/`
   - `live/log.txt` runner log, `live/decisions.jsonl` every candidate and why it was traded or skipped,
     `live/state.json`, `paper/ledger.json` paper accounts and trades, `live/auto_config.json` crypto rules.
-- Services: `trader-runner` (live.py), `trader-api` (FastAPI on 127.0.0.1:8000), `trader-web` (Next.js :8080),
+- Services: `trader-runner` (live.py), `trader-api` (FastAPI on 127.0.0.1:8000), `trader-web` (Next.js :3000),
   `trader-ticker` (Zerodha prices), `trader-crypto-ticker` (Coinbase public crypto prices, no API key),
   `trader-us-ticker` (Alpaca IEX US prices, paper key, data only), `trader-pov` (hourly 1h/4h/D/W/M v4
   direction per chart, `live/pov.json`, display only).

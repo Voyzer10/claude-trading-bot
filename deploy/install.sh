@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Trader bot: one-command install on a fresh Ubuntu 22.04 / 24.04 or Debian 12 / 13 VPS.
 #
-#   sudo bash deploy/install.sh                          # dashboard on http://<VPS-IP>:8080 (password, plain HTTP)
+#   sudo bash deploy/install.sh                          # dashboard on http://<VPS-IP>:3000 (password, plain HTTP)
 #   sudo bash deploy/install.sh --tailscale              # dashboard only inside your Tailscale network (recommended)
 #   sudo bash deploy/install.sh --domain trader.you.com  # HTTPS with Caddy (point the domain's A record here first)
 #
@@ -110,11 +110,10 @@ SSH_PORT="${SSH_PORT:-22}"
 ufw allow "$SSH_PORT"/tcp >/dev/null
 echo "SSH stays open on port $SSH_PORT"
 case "$MODE" in
-  open) ufw allow 8080/tcp >/dev/null ;;
-  tailscale) ufw delete allow 8080/tcp >/dev/null 2>&1 || true ;;
-  domain) ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; ufw delete allow 8080/tcp >/dev/null 2>&1 || true ;;
+  open) ufw allow 3000/tcp >/dev/null ;;
+  tailscale) ufw delete allow 3000/tcp >/dev/null 2>&1 || true ;;
+  domain) ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; ufw delete allow 3000/tcp >/dev/null 2>&1 || true ;;
 esac
-ufw delete allow 3000/tcp >/dev/null 2>&1 || true   # the old dashboard port: nothing runs on 3000 any more
 
 if [ "$MODE" = tailscale ]; then
   say "Tailscale"
@@ -131,7 +130,7 @@ if [ "$MODE" = domain ]; then
     curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' > /etc/apt/sources.list.d/caddy-stable.list
     apt-get update -qq && apt-get install -y -qq caddy >/dev/null
   fi
-  printf '%s {\n\treverse_proxy 127.0.0.1:8080\n}\n' "$DOMAIN" > /etc/caddy/Caddyfile
+  printf '%s {\n\treverse_proxy 127.0.0.1:3000\n}\n' "$DOMAIN" > /etc/caddy/Caddyfile
   systemctl reload caddy || systemctl restart caddy
 fi
 ufw --force enable >/dev/null
@@ -145,8 +144,8 @@ for s in trader-runner trader-api trader-web trader-ticker trader-crypto-ticker 
 IP="$(curl -fsS https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')"
 echo
 case "$MODE" in
-  open) echo "  Dashboard: http://$IP:8080   (plain HTTP: use --tailscale or --domain for anything serious)" ;;
-  tailscale) echo "  Dashboard: http://$(tailscale ip -4 2>/dev/null | head -1):8080  (from devices on your Tailscale)" ;;
+  open) echo "  Dashboard: http://$IP:3000   (plain HTTP: use --tailscale or --domain for anything serious)" ;;
+  tailscale) echo "  Dashboard: http://$(tailscale ip -4 2>/dev/null | head -1):3000  (from devices on your Tailscale)" ;;
   domain) echo "  Dashboard: https://$DOMAIN" ;;
 esac
 echo "  Login: any username + password: $(grep '^DASHBOARD_PASSWORD=' "$ENVF" | cut -d= -f2-)"

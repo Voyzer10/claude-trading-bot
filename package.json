@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n next,api \"next dev -p 8080\" \"python -m uvicorn api.index:app --reload --port 8000\"",
+    "dev": "concurrently -n next,api \"next dev\" \"python -m uvicorn api.index:app --reload --port 8000\"",
     "next-dev": "next dev",
     "api-dev": "python -m uvicorn api.index:app --reload --port 8000",
     "build": "next build",
-    "start": "next start -p 8080"
+    "start": "next start"
   },
   "dependencies": {
     "next": "15.5.27",

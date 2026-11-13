@@ -16,7 +16,7 @@ claude-trading-bot              (this repo; on the VPS: /opt/trader)
 ```
 
 The bot runs 24x7 on the VPS (below). For development on a PC: `npm install`, `pip install -r requirements.txt`,
-then `python live.py` (runner) and `npm run dev` (dashboard at http://localhost:8080, API on 127.0.0.1:8000).
+then `python live.py` (runner) and `npm run dev` (dashboard at http://localhost:3000, API on 127.0.0.1:8000).
 
 ## Run it on a VPS (24x7, PC can be off)
 
@@ -26,7 +26,7 @@ and `git clone` it there), then from that folder:
 ```
 sudo bash deploy/install.sh --tailscale        # recommended: dashboard only on your Tailscale network
 sudo bash deploy/install.sh --domain t.you.com # or HTTPS on your own domain (A record -> VPS IP first)
-sudo bash deploy/install.sh                    # or plain http://<IP>:8080 with a password (not encrypted)
+sudo bash deploy/install.sh                    # or plain http://<IP>:3000 with a password (not encrypted)
 ```
 
 It installs Python, Node 20, a 2 GB swap file, builds the dashboard, and runs three systemd services as the
