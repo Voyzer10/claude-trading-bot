@@ -66,6 +66,8 @@ jobs:
         run: python tests/test_fno_sv4.py
       - name: Scanner v4 = only v4 (rules paths off per account), v4 setup ticks, every market's settings (offline)
         run: python tests/test_v4_only.py
+      - name: View on chart API (candles, levels, broker links; offline)
+        run: python tests/test_chart.py
       - name: Trade Manager settings (v4 trailing per account; engine, paper, backtest, API) (offline)
         run: python tests/test_tm_settings.py
       - name: F&O own paper account (FNO Rs 1,00,000, INDIA stocks Rs 50,000), one-time split, Nifty + Bank Nifty (offline)
