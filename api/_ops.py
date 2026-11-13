@@ -132,14 +132,13 @@ RISK_FIELDS = {
     "v4_setups": {"type": "setups", "allow_empty": True,
                   "choices": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"]},
     "trade_manager": {"type": "bool"},
-    # the v4 trades' Trade Manager (trailing only; scanner_v4.trail_lock_r), per account (owner, 13 Nov 2026)
-    "v4_trail": {"type": "bool"},
-    "v4_be_r": {"type": "float", "min": 0, "max": 5},
-    "v4_trail_step": {"type": "float", "min": 0.25, "max": 5},
-    "v4_trail_gap": {"type": "float", "min": 0.25, "max": 5},
+    # the Trade Manager: one set per account for every scanner (owner, 13 Nov 2026); 0 / off = that part off
+    "tm_trail": {"type": "bool"},
+    "tm_trail_step": {"type": "float", "min": 0.25, "max": 5},
+    "tm_trail_gap": {"type": "float", "min": 0.25, "max": 5},
     "fno_stock_options": {"type": "bool", "accounts": ["FNO"]},
-    "tm_be_r": {"type": "float", "min": 0.3, "max": 5},
-    "tm_lock_at": {"type": "float", "min": 0.3, "max": 0.99},
+    "tm_be_r": {"type": "float", "min": 0, "max": 5},
+    "tm_lock_at": {"type": "float", "min": 0, "max": 0.99},
     "tm_lock_keep": {"type": "float", "min": 0.1, "max": 0.95},
     "tm_reversal": {"type": "bool"},
     "tm_rev_min_r": {"type": "float", "min": 0.3, "max": 5},
@@ -1213,11 +1212,10 @@ def setups(limit: int = 300):
 
 
 def _tm_state(p):
-    if p.get("pdf_only"):
-        return "v4: PDF exits only"
     if p.get("trail_k"):
         return "trailing" if p.get("trailing") else "trailing exit"
-    return "profit locked" if p.get("locked") else "breakeven" if p.get("breakeven") else "watching"
+    return ("profit locked" if p.get("locked") else "trailing" if p.get("trailing") else
+            "breakeven" if p.get("breakeven") else "watching")
 
 
 def _tm_status(led, openpos, now):

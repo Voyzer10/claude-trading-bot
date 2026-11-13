@@ -75,13 +75,11 @@ bot and its logs and restart the services, nothing else as root, and it cannot r
   CRYPTO ($1,000). All paper money.
 - **Bigger picture (POV)**: chips 1h / 4h / D / W / M next to each chart: the direction of the last complete v4
   setup on that timeframe (`pov.py`, hourly). Display only.
-- **Trade Manager** (Settings > Trade Manager, per account). Scanner v4 trades: trailing stop only, by default +1R ->
-  entry, +2R -> +1R, then 1R higher per R; settable (on/off, breakeven R, step, gap) with a live preview, and the v4
-  backtests use the saved values. Other scanners (on by default): every open paper trade with a fixed
-  target is managed: stop to the entry at +1R, half the move locked once 80% of the way to the target is covered,
-  out on a reversal candle near the high (5-minute candles; 15 for crypto) after +1R, out when a trade goes nowhere
-  (60 min; crypto 4h). The crypto trailing exits are left alone. Each trade records mfe_r / mae_r. Backtest:
-  Backtest > "Trade Manager US / NSE / crypto" (also the US playbook backtest).
+- **Trade Manager** (Settings > Trade Manager): ONE set per market account, for every scanner's trades (v2 / v3 /
+  v4 / v5 / rules). Breakeven at +tm_be_r R; trailing (every tm_trail_step R the stop sits tm_trail_gap R behind
+  the best R); profit lock (tm_lock_at of the way to the target keeps tm_lock_keep); reversal-candle exit; no-
+  follow-through exit. Defaults: +1R -> entry, +2R -> +1R, then 1R per R, the rest off. A live preview spells it
+  out; the backtests use the saved values. The crypto rules' own trailing exits (trail_k) are separate.
 - **Why a trade was taken**: every paper position records its setup, the scanner that found it, the liquidity it
   swept (or the zone it retested) and the entry reason; Positions shows them and the downloads include them.
 - **Operations**: scan now, restart the runner, CPU / memory / disk, market-data check, downloads

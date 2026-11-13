@@ -34,7 +34,9 @@ def minutes(now, start_ago, closes, spread=0.05):
 def run(P, side, target, bars_fn, live, entry_ago=40, tm=True, extra=None, stop=99.0, pos_extra=None):
     cfg = P.load_config()
     acc = cfg["accounts"]["CRYPTO"]
-    acc.update({"fee_pct": 0.0, "trade_manager": tm, "tm_candle_min": 5, "tm_stale_min": 60})
+    # the full Trade Manager (profit lock, reversal and no-follow-through exits on; no trailing): tests 1-6
+    acc.update({"fee_pct": 0.0, "trade_manager": tm, "tm_candle_min": 5, "tm_stale_min": 60, "tm_lock_at": 0.8,
+                "tm_lock_keep": 0.5, "tm_reversal": True, "tm_trail": False, "tm_be_r": 1.0})
     acc.update(extra or {})
     P.save_json(P.CONFIG, cfg)
     led = P.load_ledger(cfg)
@@ -126,28 +128,33 @@ if __name__ == "__main__":
         P.check_once(cfg, led)
         check("6. the backtested crypto trailing exit is left alone (no stale exit at 90 min)", led["open"], led["closed"])
 
-        # Scanner v4 trades (owner, 11 Nov 2026): stop, target and the v4 trailing stop only (+1R -> entry, +2R -> +1R)
+        # one Trade Manager per account for every scanner (owner, 13 Nov 2026): a v4 trade gets the same exits
         v4 = {"scanner": "v4", "setup": "v4_primary_long"}
         pos, closed = run(P, "long", 102.0, lambda n: minutes(n, 30, up_then_down), 98.8, pos_extra=v4)
-        check("10. a v4 trade: +1.9R (95% to the target) then down -> out at the entry by the v4 trailing stop, "
-              "no profit lock or reversal exit",
+        check("10. a v4 trade under the same settings as test 1's trade: the profit lock -> out at 101.0 (+1R)",
+              closed and closed[0]["exit"] == 101.0 and closed[0]["reason"] == "profit lock stop", closed)
+        owner = {"tm_lock_at": 0.0, "tm_reversal": False, "tm_stale_min": 0, "tm_trail": True}   # the defaults
+        pos, closed = run(P, "long", 102.0, lambda n: minutes(n, 30, up_then_down), 98.8, pos_extra=v4, extra=owner)
+        check("    with the default Trade Manager (trailing only): out at the entry by the breakeven stop",
               closed and closed[0]["exit"] == 100.0 and closed[0]["reason"] == "breakeven stop"
-              and any("v4 trailing" in e["text"] for e in closed[0].get("tm_log", []))
               and not any("profit lock" in e["text"] or "reversal" in e["text"] for e in closed[0].get("tm_log", [])),
               closed)
+        pos, closed = run(P, "long", 102.0, lambda n: minutes(n, 30, up_then_down), 98.8, extra=owner)
+        check("    ... and a v2/v3 trade the same way (the scanner does not matter)",
+              closed and closed[0]["exit"] == 100.0 and closed[0]["reason"] == "breakeven stop", closed)
         pos, closed = run(P, "long", 103.0, lambda n: minutes(n, 30, [100.3, 100.7, 101.1, 101.3, 101.2]), 101.2,
-                          pos_extra=v4)
+                          pos_extra=v4, extra=owner)
         check("   +1.3R: the stop is at the entry (100)", pos and pos["stop"] == 100.0 and pos.get("breakeven"), pos)
         pos, closed = run(P, "long", 104.0, lambda n: minutes(n, 30, [100.6, 101.4, 102.1, 102.3, 102.2]), 102.2,
-                          pos_extra=v4)
+                          pos_extra=v4, extra=owner)
         check("   +2.3R: the stop trails to +1R (101)", pos and pos["stop"] == 101.0, pos)
         pos, closed = run(P, "long", 102.0, lambda n: minutes(n, 30, [100.1, 100.2, 100.0, 99.9, 100.1]), 100.1,
+                          entry_ago=75, pos_extra=v4, extra=owner)
+        check("   no-follow-through exit off (0): still open at 75 min", pos is not None and not closed, closed)
+        pos, closed = run(P, "long", 102.0, lambda n: minutes(n, 30, [100.1, 100.2, 100.0, 99.9, 100.1]), 100.1,
                           entry_ago=75, pos_extra=v4)
-        check("   no 'went nowhere' exit at 75 min: still open", pos is not None and not closed, closed)
-        pos, closed = run(P, "long", 102.0, lambda n: minutes(n, 30, up_then_down), 98.8, pos_extra=v4,
-                          extra={"v4_pdf_only": False})
-        check("   an old v4_pdf_only setting changes nothing (no profit lock for v4)",
-              closed and closed[0]["reason"] == "breakeven stop", closed)
+        check("   switched on (60 min), it closes the v4 trade too", closed and "no follow-through" in closed[0]["reason"],
+              closed)
         import auto_crypto as AC
         cfg = P.load_config()
         led = P.load_ledger(cfg)
