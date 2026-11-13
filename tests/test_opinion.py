@@ -89,7 +89,13 @@ if __name__ == "__main__":
 
         # 5. the export
         import api._ops as O
-        O.LIVE, O.LEDGER, O.T = os.path.abspath("trader/live"), os.path.abspath(P.LEDGER), os.path.abspath("trader")
+        # every path the export reads, in this temp folder (the repo's own trader/ may not exist, e.g. in CI)
+        T = os.path.abspath("trader")
+        O.T, O.LIVE, O.LEDGER = T, os.path.join(T, "live"), os.path.abspath(P.LEDGER)
+        O.PAPER_CFG, O.RULES = os.path.join(T, "paper", "config.json"), os.path.join(T, "live", "auto_config.json")
+        O.UNIVERSE, O.PREFS = os.path.join(T, "universe_crypto.txt"), os.path.join(T, "dashboard_prefs.json")
+        O.LOG, O.JOBS = os.path.join(T, "live", "log.txt"), os.path.join(T, "research", "jobs")
+        open(O.LOG, "w").write("")
         resp = O._download_all()
         z = zipfile.ZipFile(io.BytesIO(resp.body))
         csv_txt = z.read("opinions.csv").decode()
