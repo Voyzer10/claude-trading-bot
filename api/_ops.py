@@ -1004,6 +1004,16 @@ def _download_all():
         summary = _summary(led, decisions)
         z.writestr("summary.json", json.dumps(summary, indent=1, default=str))
         made = ["trades.csv", "open_positions.csv", "decisions.csv", "daily_summary.csv", "summary.json"]
+        try:   # the owner's reviews ("Your opinion"), latest per trade / candidate
+            try:
+                from api import _opinion as OP
+            except ImportError:
+                import _opinion as OP
+            OP.OPINIONS = os.path.join(LIVE, "opinions.jsonl")
+            z.writestr("opinions.csv", _csv(OP.opinion_rows(), OP.OPINION_COLS))
+            made.append("opinions.csv")
+        except Exception as e:   # never lose the export over the reviews
+            z.writestr("opinions_error.txt", str(e))
         state = _read_json(os.path.join(LIVE, "state.json"), {})
         readme = [
             "Trader bot export, %s IST" % now.strftime("%Y-%m-%d %H:%M"),
@@ -1023,6 +1033,9 @@ def _download_all():
             "decisions.csv       every candidate from decisions.jsonl flattened: setup, liquidity, result, the agent",
             "                    that stopped it (stopped_at_agent), reason, price / stop / target, R multiple, fee R",
             "daily_summary.csv   per day and account: trades, wins, win rate, P&L, total / average / best / worst R",
+            "opinions.csv        your reviews (Your opinion button): the latest answers per trade / skipped",
+            "                    candidate with a snapshot of it (setup, result, R, reason, levels);",
+            "                    every version is in live/opinions.jsonl",
             "summary.json        totals: closed trades by setup, scanner version, market | setup | side, exit reason",
             "                    and day; decisions by result, reason, stopping agent, setup and day",
             "paper/          ledger.json (accounts, open and closed trades), config.json (risk limits, fees)",

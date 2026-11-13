@@ -425,3 +425,8 @@ if LOCAL:
     except ImportError:
         from _chart import router as _chart_router
     app.include_router(_chart_router)
+    try:
+        from api._opinion import router as _opinion_router
+    except ImportError:
+        from _opinion import router as _opinion_router
+    app.include_router(_opinion_router)
