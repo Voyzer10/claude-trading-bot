@@ -24,8 +24,9 @@ PRIMARY BUY (SELL is the mirror)
   7. Target: the nearest untaken liquidity above the entry (a confirmed swing high, or the BOS move's high). The
      target must be above the entry; there is no minimum reward:risk (min_rr = 0; the backtest also tries 1 and 2).
   8. Trade Manager, trailing only: at +1R the stop goes to the entry, at +2R to +1R, then up 1R per R. No other
-     exit (intraday charts still close at the session's end). Settable per account (Settings > Trade Manager:
-     v4_trail, v4_be_r, v4_trail_step, v4_trail_gap; trail_lock_r()).
+     exit (intraday charts still close at the session's end). That is the default of the account's Trade Manager
+     (Settings > Trade Manager), which applies to every scanner's trades; it can add a profit lock, a reversal
+     exit and a no-follow-through exit (tm_settings / trail_lock_r / lock_stop_r / reversal_candle).
   Day rule (owner, 12 Nov 2026): at a new day only the previous day's BOS setups whose sweep has not happened stay
   active, and for that day only; today's BOS add up as they form. Setups that were swept but not traded, and older
   ones, end with their day. NSE / US 5-minute: the day = the trading session. Crypto (24h): the day starts at
@@ -56,11 +57,27 @@ def mirror(rows):
     return [(r[0], -r[1], -r[3], -r[2], -r[4], r[5]) for r in rows]
 
 
-# the v4 Trade Manager (trailing only), per account in Settings > Trade Manager (owner, 13 Nov 2026); defaults =
-# the owner's 11 Nov rule: +1R -> the entry, +2R -> +1R, then 1R higher per R
-TRAIL_KEYS = ("trail", "v4_be_r", "v4_trail_step", "v4_trail_gap")
-DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "v4_be_r": 1.0, "v4_trail_step": 1.0, "v4_trail_gap": 1.0, "doji_pct": 0.15,
-            "hammer_x": 1.0, "conf_max": 2, "max_hold": None, "trail": True,
+# The Trade Manager: ONE set per market account (Settings > Trade Manager), the same for every scanner (owner,
+# 13 Nov 2026: "scanner koii bhi selected ho jo trade manager pr settings apply hui h vahi chlni chahiye"). The engine
+# here and paper.py run the same rules. Defaults = the owner's 11 Nov v4 rule: +1R -> the entry, +2R -> +1R, then
+# 1R higher per R; profit lock, reversal and no-follow-through exits off.
+TM_DEFAULTS = {"trade_manager": True, "tm_be_r": 1.0, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0,
+               "tm_lock_at": 0.0, "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0,
+               "tm_stale_min": 0, "tm_candle_min": 5}
+TM_KEYS = tuple(TM_DEFAULTS)
+
+
+def tm_settings(acc):
+    """An account's Trade Manager settings (missing keys: the defaults), typed."""
+    out = {}
+    for k, d in TM_DEFAULTS.items():
+        v = (acc or {}).get(k, d)
+        out[k] = bool(v) if isinstance(d, bool) else float(v if v is not None else d)
+    return out
+
+
+DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
+            "hammer_x": 1.0, "conf_max": 2, "max_hold": None, **TM_DEFAULTS,
             # BOS by close only (owner, 12 Nov 2026): the weak-BOS check is off (0); the backtest can set 0.8 / 1.2
             "htf": False, "bos_body_atr": 0, "bos_vol_x": 0, "vol_n": 20,
             # off by the owner's choice (kept so older backtest settings still run)
@@ -341,19 +358,43 @@ class _Side:
 
 
 def trail_lock_r(gain_r, p):
-    """Where the v4 trailing stop goes, in R from the entry (0 = the entry), for a best price gain_r R in profit, or
-    None (not moved yet). Breakeven at +v4_be_r R (0 = no breakeven move); then for every whole v4_trail_step R the
-    stop sits v4_trail_gap R behind it (step 1, gap 1: +2R -> +1R, +3R -> +2R)."""
+    """Where the Trade Manager's stop goes, in R from the entry (0 = the entry), for a best price gain_r R in profit,
+    or None (not moved). Breakeven at +tm_be_r R (0 = no breakeven move); with tm_trail on, for every whole
+    tm_trail_step R the stop sits tm_trail_gap R behind it (step 1, gap 1: +2R -> +1R, +3R -> +2R)."""
+    if not p.get("trade_manager", True):
+        return None
     lock = None
-    be = float(p.get("v4_be_r", 1.0) or 0)
+    be = float(p.get("tm_be_r", 1.0) or 0)
     if be > 0 and gain_r + 1e-9 >= be:
         lock = 0.0
-    step, gap = float(p.get("v4_trail_step", 1.0) or 0), float(p.get("v4_trail_gap", 1.0) or 0)
-    if step > 0:
+    step, gap = float(p.get("tm_trail_step", 1.0) or 0), float(p.get("tm_trail_gap", 1.0) or 0)
+    if p.get("tm_trail", True) and step > 0:
         k = int(gain_r / step + 1e-9)
         if k >= 1 and k * step - gap > 1e-9:
             lock = max(lock or 0.0, k * step - gap)
     return lock
+
+
+def lock_stop_r(gain_r, rr, p):
+    """The profit lock, in R: once price has covered tm_lock_at of the way to the target (rr R away), the stop sits
+    at tm_lock_keep of that way. None when off or not reached."""
+    at = float(p.get("tm_lock_at") or 0)
+    if not p.get("trade_manager", True) or at <= 0 or rr <= 0 or gain_r / rr + 1e-9 < at:
+        return None
+    return float(p.get("tm_lock_keep", 0.5)) * rr
+
+
+def reversal_candle(prev, cur, peak, risk):
+    """A completed candle near the trade's best price (long terms) that is a bearish engulfing or a long upper-wick
+    rejection: the name, or None. The same test as paper.tm_react."""
+    _, po, ph, pl, pc = prev[:5]
+    _, o, h, l, c = cur[:5]
+    rng = h - l
+    engulf = pc > po and c < o and o >= pc and c <= po
+    reject = rng > 0 and (h - max(o, c)) / rng >= 0.6 and (c - l) / rng <= 0.4
+    if (engulf or reject) and h >= peak - 0.25 * risk:
+        return "engulfing" if engulf else "wick rejection"
+    return None
 
 
 def _exit_step(bars, k, tr, p, day, intraday):
@@ -365,14 +406,27 @@ def _exit_step(bars, k, tr, p, day, intraday):
         return (o if o < tr["cur_stop"] else tr["cur_stop"]), why
     if h >= tr["target"]:
         return (o if o > tr["target"] else tr["target"]), "target"
-    if p.get("trail"):
-        risk = tr["entry"] - tr["stop"]
-        lock = trail_lock_r((h - tr["entry"]) / risk, p) if risk > 0 else None
-        if lock is not None:
+    risk = tr["entry"] - tr["stop"]
+    if risk > 0 and p.get("trade_manager", True):
+        gain = (h - tr["entry"]) / risk
+        tr["mfe"] = max(tr.get("mfe", 0.0), gain)
+        moves = [(trail_lock_r(gain, p), None), (lock_stop_r(gain, (tr["target"] - tr["entry"]) / risk, p), "profit lock stop")]
+        for lock, kind in moves:
+            if lock is None:
+                continue
             ns = tr["entry"] + lock * risk
             if ns > tr["cur_stop"]:
                 tr["cur_stop"] = ns
-                tr["stop_kind"] = "breakeven stop" if lock == 0 else "trailing stop"
+                tr["stop_kind"] = kind or ("breakeven stop" if lock == 0 else "trailing stop")
+        # the Trade Manager's exits on the chart's candles (paper.py reads tm_candle_min candles)
+        if p.get("tm_reversal") and tr["mfe"] >= float(p.get("tm_rev_min_r", 1.0)) and k > tr["i"] + 1:
+            if reversal_candle(bars[k - 1], bars[k], tr["entry"] + tr["mfe"] * risk, risk):
+                return c, "trade manager: reversal"
+        stale = float(p.get("tm_stale_min") or 0)
+        if stale > 0 and len(bars) > 1:
+            mins = (bars[k][0] - bars[tr["i"]][0]).total_seconds() / 60
+            if mins >= stale and tr["mfe"] < 0.5 and abs((c - tr["entry"]) / risk) < 0.3:
+                return c, "trade manager: no follow-through"
     if intraday and k + 1 < len(bars) and day[k + 1] != day[k]:
         return c, "day end"
     if p.get("max_hold") and k - tr["i"] >= p["max_hold"]:

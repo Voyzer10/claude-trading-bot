@@ -91,18 +91,17 @@ const RISK_LABELS: Record<string, string> = {
   risk_limits: "Risk limits ON (daily loss, trades/day, cooldown, weekly, max per side). Off while paper testing; turn on before real money",
   trade_setups: "Paper trade the Scanner's setups (v4, v3 or v2, as chosen in Scanner version)",
   fno_stock_options: "F&O stocks: buy the ATM option instead of the shares, only for underlyings in the F&O list (Nifty 50 and Bank Nifty only, so stocks trade as shares, never as options)",
-  trade_manager: "Trade Manager on (breakeven, profit lock, reversal and no-follow-through exits)",
-  v4_trail: "Trailing stop on (off = only the stop and the target)",
-  v4_be_r: "Stop to the entry at (R; 0 = never)",
-  v4_trail_step: "Then move the stop every (R)",
-  v4_trail_gap: "Keeping it this far behind the best R reached (R)",
-  tm_be_r: "Trade Manager: stop to the entry at (R)",
-  tm_lock_at: "Trade Manager: lock profit once this share of the way to the target is covered (0.8 = 80%)",
-  tm_lock_keep: "Trade Manager: share of the way to the target the lock keeps (0.5 = half)",
-  tm_reversal: "Trade Manager: take profit on a reversal candle near the high",
-  tm_rev_min_r: "Trade Manager: reversal exit only after this many R in profit",
-  tm_stale_min: "Trade Manager: close a trade that went nowhere after (minutes, 0 = off)",
-  tm_candle_min: "Trade Manager: candle size for the reversal check (minutes)",
+  trade_manager: "Trade Manager on (off = stop and target only)",
+  tm_be_r: "Stop to the entry at (R in profit; 0 = never)",
+  tm_trail: "Trailing stop on",
+  tm_trail_step: "Trailing: move the stop every (R)",
+  tm_trail_gap: "Trailing: keep it this far behind the best R (R)",
+  tm_lock_at: "Lock profit once this share of the way to the target is covered (0.8 = 80%; 0 = off)",
+  tm_lock_keep: "Share of the way to the target the lock keeps (0.5 = half)",
+  tm_reversal: "Take profit on a reversal candle near the best price",
+  tm_rev_min_r: "Reversal exit only after this many R in profit",
+  tm_candle_min: "Candle size for the reversal check (minutes)",
+  tm_stale_min: "Close a trade that went nowhere after (minutes; 0 = off)",
   scanner_version: "Scanner version: only the selected one's rules run (rules = only the older rules: crypto 4h breakout / SMC / playbook hits, NSE / US / F&O opening-range breakouts; v5 = the 0.146 level; v4 = your 11 Nov rules (Final Trading Workflow + your answers): primary, then sequential OB/FVG; v3 = 5 Nov sweep reversal + FVG/OB retest; v2 = A-B-C-D, playbook, FVG / OB)",
   v5_constant: "Scanner v5: the constant C, from the move's start (reel 0.146; Fibonacci 0.236 / 0.382 / 0.5 / 0.618 and 1 - r: 0.854 / 0.764 / 0.214 / 0.114; ICT OTE 0.38 / 0.295 / 0.21; Gann 0.125 / 0.25 / 0.375). Above 0.5 only target 2R trades",
   v5_move: "Scanner v5: the move (swing = last swing low -> high; day = today's low -> high)",
@@ -410,20 +409,32 @@ function RiskForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) {
   );
 }
 
-const V4_TM = ["v4_trail", "v4_be_r", "v4_trail_step", "v4_trail_gap"];
-const OTHER_TM = ["trade_manager", "tm_be_r", "tm_lock_at", "tm_lock_keep", "tm_reversal", "tm_rev_min_r", "tm_stale_min", "tm_candle_min"];
-const isTmKey = (k: string) => V4_TM.includes(k) || OTHER_TM.includes(k);
-const TM_DEFAULTS: Record<string, number | boolean> = { v4_trail: true, v4_be_r: 1, v4_trail_step: 1, v4_trail_gap: 1 };
+const TM_KEYS = ["trade_manager", "tm_be_r", "tm_trail", "tm_trail_step", "tm_trail_gap", "tm_lock_at", "tm_lock_keep",
+  "tm_reversal", "tm_rev_min_r", "tm_stale_min", "tm_candle_min"];
+const isTmKey = (k: string) => TM_KEYS.includes(k) || k.startsWith("v4_trail") || k === "v4_be_r";
+const TM_GROUPS: [string, string[]][] = [
+  ["On / off", ["trade_manager"]],
+  ["Breakeven and trailing stop", ["tm_be_r", "tm_trail", "tm_trail_step", "tm_trail_gap"]],
+  ["Profit lock (0 = off)", ["tm_lock_at", "tm_lock_keep"]],
+  ["Exits (reversal candle, no follow-through: 0 min = off)", ["tm_reversal", "tm_rev_min_r", "tm_candle_min", "tm_stale_min"]],
+];
+// the owner's v4 rule (11 Nov): +1R -> entry, +2R -> +1R, then 1R per R; nothing else
+const TM_DEFAULTS: Record<string, number | boolean> = {
+  trade_manager: true, tm_be_r: 1, tm_trail: true, tm_trail_step: 1, tm_trail_gap: 1, tm_lock_at: 0, tm_lock_keep: 0.5,
+  tm_reversal: false, tm_rev_min_r: 1, tm_stale_min: 0,
+};
+const on = (x: unknown) => x === true || x === "true";
 
-/** The v4 trailing stop in words, from the form's values (the same rule as scanner_v4.trail_lock_r). */
-function trailPreview(v: Record<string, number | string | boolean>): string {
-  if (!(v.v4_trail === true || v.v4_trail === "true")) return "Trailing off: a v4 trade exits only at its stop or its target (or the session's end).";
-  const be = Number(v.v4_be_r), step = Number(v.v4_trail_step), gap = Number(v.v4_trail_gap);
-  if (!(step > 0) || !(gap > 0) || !(be >= 0)) return "";
+/** The Trade Manager in words, from the form's values (the same rules as scanner_v4 / paper.py). */
+function tmPreview(v: Record<string, number | string | boolean>): string {
+  if (!on(v.trade_manager)) return "Trade Manager off: every trade exits only at its stop or its target (or the session's end).";
+  const be = Number(v.tm_be_r), step = Number(v.tm_trail_step), gap = Number(v.tm_trail_gap), trail = on(v.tm_trail);
   const lock = (g: number) => {
     let l: number | null = be > 0 && g + 1e-9 >= be ? 0 : null;
-    const k = Math.floor(g / step + 1e-9);
-    if (k >= 1 && k * step - gap > 1e-9) l = Math.max(l ?? 0, k * step - gap);
+    if (trail && step > 0) {
+      const k = Math.floor(g / step + 1e-9);
+      if (k >= 1 && k * step - gap > 1e-9) l = Math.max(l ?? 0, k * step - gap);
+    }
     return l;
   };
   const marks: string[] = [];
@@ -432,7 +443,11 @@ function trailPreview(v: Record<string, number | string | boolean>): string {
     const l = lock(g);
     if (l !== null && l !== last) { marks.push(`+${+g.toFixed(2)}R \u2192 ${l === 0 ? "entry" : `+${+l.toFixed(2)}R`}`); last = l; }
   }
-  return marks.length ? `Stop moves: ${marks.join(", ")}, ...` : "The stop never moves with these values.";
+  const out = [marks.length ? `Stop: ${marks.join(", ")}${trail ? ", ..." : ""}` : "The stop never moves"];
+  if (Number(v.tm_lock_at) > 0) out.push(`profit lock at ${Math.round(Number(v.tm_lock_at) * 100)}% of the way to the target keeps ${Math.round(Number(v.tm_lock_keep) * 100)}%`);
+  if (on(v.tm_reversal)) out.push(`reversal-candle exit after +${v.tm_rev_min_r}R (${v.tm_candle_min}-min candles)`);
+  if (Number(v.tm_stale_min) > 0) out.push(`no-follow-through exit after ${v.tm_stale_min} min`);
+  return out.join(" · ") + ".";
 }
 
 function TradeManagerForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) {
@@ -442,17 +457,16 @@ function TradeManagerForm({ doc, onSaved, onError }: { doc: SettingsDoc } & Form
   const [busy, setBusy] = useState(false);
   useEffect(() => setV(doc.risk[acct] ?? {}), [doc.risk, acct]);
   const saved = doc.risk[acct] ?? {};
-  const keys = [...V4_TM, ...OTHER_TM].filter((k) => k in saved && doc.risk_fields[k]);
+  const keys = TM_KEYS.filter((k) => k in saved && doc.risk_fields[k]);
   const changed = keys.filter((k) => String(v[k]) !== String(saved[k]));
-  const offDefault = V4_TM.filter((k) => k in saved && String(v[k]) !== String(TM_DEFAULTS[k]));
-  const v4 = saved.scanner_version === "v4";
+  const offDefault = Object.keys(TM_DEFAULTS).filter((k) => k in saved && String(v[k]) !== String(TM_DEFAULTS[k]));
 
   async function save() {
     setBusy(true);
     try {
       const changes = Object.fromEntries(changed.map((k) => [k, v[k]]));
       const r = await postJSON<{ changed: string[] }>(`${OPS}/settings/risk`, { account: acct, changes });
-      onSaved(r.changed.length ? `${acct} Trade Manager saved: ${r.changed.join("; ")}. Open trades use it from the next check.` : "Nothing changed.");
+      onSaved(r.changed.length ? `${acct} Trade Manager saved: ${r.changed.join("; ")}. Every open ${acct} trade uses it from the next check.` : "Nothing changed.");
     } catch (e) { onError(`Not saved: ${errText(e)}`); } finally { setBusy(false); }
   }
 
@@ -462,8 +476,7 @@ function TradeManagerForm({ doc, onSaved, onError }: { doc: SettingsDoc } & Form
       <div key={k} className="field">
         <label htmlFor={`tm-${k}`} className="field-label">{RISK_LABELS[k] ?? k}</label>
         {f.type === "bool" ? (
-          <input id={`tm-${k}`} type="checkbox" checked={v[k] === true || v[k] === "true"}
-                 onChange={(e) => setV({ ...v, [k]: e.target.checked })} />
+          <input id={`tm-${k}`} type="checkbox" checked={on(v[k])} onChange={(e) => setV({ ...v, [k]: e.target.checked })} />
         ) : (
           <input id={`tm-${k}`} type="number" inputMode="decimal" step={f.type === "int" ? 1 : "any"} min={f.min} max={f.max}
                  value={String(v[k] ?? "")} onChange={(e) => setV({ ...v, [k]: e.target.value })} />
@@ -481,23 +494,26 @@ function TradeManagerForm({ doc, onSaved, onError }: { doc: SettingsDoc } & Form
             <button key={n} aria-pressed={n === acct} onClick={() => setAcct(n)}>{n}</button>
           ))}
         </div>
-        <span className="small muted">{v4 ? "This account runs Scanner v4: the first block applies." : "This account does not run v4: the second block applies."}</span>
+        <span className="small muted">One set per market: it manages every {acct} trade, whatever the scanner (v2 / v3 / v4 / v5 / rules).</span>
       </div>
-      <h3 className="small" style={{ margin: "4px 0 6px" }}>Scanner v4 trades (trailing stop only)</h3>
-      <div className={`form-grid compact${v4 ? "" : " dimmed"}`}>{V4_TM.filter((k) => keys.includes(k)).map(field)}</div>
-      <p className="small muted" aria-live="polite" style={{ margin: "6px 0 12px" }}>{trailPreview(v)}</p>
-      <h3 className="small" style={{ margin: "4px 0 6px" }}>Other scanners (v2 / v3 / v5 / rules)</h3>
-      <div className={`form-grid compact${v4 ? " dimmed" : ""}`}>{OTHER_TM.filter((k) => keys.includes(k)).map(field)}</div>
-      <p className="small muted" style={{ margin: "6px 0 0" }}>
-        The backtests (Scanner v4 ...) use these saved v4 values, so check a change there first.
-      </p>
+      {TM_GROUPS.map(([title, ks]) => {
+        const shown = ks.filter((k) => keys.includes(k));
+        return shown.length ? (
+          <div key={title}>
+            <h3 className="small" style={{ margin: "8px 0 6px" }}>{title}</h3>
+            <div className={`form-grid compact${title !== "On / off" && !on(v.trade_manager) ? " dimmed" : ""}`}>{shown.map(field)}</div>
+          </div>
+        ) : null;
+      })}
+      <p className="small muted" aria-live="polite" style={{ margin: "10px 0 0" }}>{tmPreview(v)}</p>
+      <p className="small muted" style={{ margin: "6px 0 0" }}>The backtests use these saved values, so check a change there first.</p>
       <div className="actions">
         <button className="btn primary" onClick={save} disabled={busy || changed.length === 0}>
           {changed.length ? `Save ${acct} Trade Manager` : "No changes"}
         </button>
         <button className="btn" onClick={() => setV(saved)} disabled={busy || changed.length === 0}>Undo</button>
         <button className="btn" onClick={() => setV({ ...v, ...TM_DEFAULTS })} disabled={busy || offDefault.length === 0}>
-          v4 defaults (+1R entry, +2R +1R)
+          Defaults (+1R entry, +2R +1R, nothing else)
         </button>
       </div>
     </fieldset>

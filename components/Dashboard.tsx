@@ -1036,7 +1036,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
 /** The Trade Manager agent above the open positions: what it is watching and what it last did. */
 function TradeManagerStrip({ open, closed }: { open: Position[]; closed: Position[] }) {
   const stateOf = (p: Position) =>
-    p.pdf_only ? "v4: PDF exits only" : p.trail_k ? (p.trailing ? "trailing" : "trailing exit") : p.locked ? "profit locked" : p.breakeven ? "breakeven" : "watching";
+    p.trail_k ? (p.trailing ? "trailing" : "trailing exit") : p.locked ? "profit locked" : p.trailing ? "trailing" : p.breakeven ? "breakeven" : "watching";
   const acts = [...open, ...closed]
     .flatMap((p) => (p.tm_log ?? []).map((x) => ({ ...x, key: p.key })))
     .sort((a, b) => (a.t < b.t ? 1 : -1))

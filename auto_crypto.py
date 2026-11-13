@@ -784,7 +784,7 @@ def time_stops(cfg, log):
     now = datetime.now(timezone.utc)
     changed = False
     for pos in list(led["open"]):
-        if pos["market"] != "CRYPTO" or P.pdf_only(pos):   # v4 trades: TP / SL only (the PDF)
+        if pos["market"] != "CRYPTO" or P.pdf_only(pos):   # the crypto rules' time stop is not for v4 trades
             continue
         age = now - datetime.fromisoformat(pos["entry_time"])
         if age >= timedelta(hours=cfg["max_hold_hours"]):

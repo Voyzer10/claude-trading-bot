@@ -68,9 +68,9 @@ DEFAULT_CONFIG = {
                    "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
-                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
-                   "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 60,
-                   "tm_candle_min": 5, "v4_trail": True, "v4_be_r": 1.0, "v4_trail_step": 1.0, "v4_trail_gap": 1.0},
+                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
+                   "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
+                   "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
         # FNO (owner, 12 Nov 2026): its own Rs 1,00,000 budget, apart from the Rs 50,000 INDIA stock account; F&O only
         # on Nifty 50 and Bank Nifty (index ATM options), no stock options. Strategy switches are copied from INDIA
         # once when the account is made, then set on their own (Settings > F&O).
@@ -82,9 +82,9 @@ DEFAULT_CONFIG = {
                    "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
-                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
-                   "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 60,
-                   "tm_candle_min": 5, "v4_trail": True, "v4_be_r": 1.0, "v4_trail_step": 1.0, "v4_trail_gap": 1.0, "fno_stock_options": False,
+                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
+                   "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
+                   "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0, "fno_stock_options": False,
                    "fno_underlyings": ["NIFTY", "BANKNIFTY"]},
         "US":     {"capital": 50000, "max_loss_per_trade": 50, "max_position_pct": 25,
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
@@ -93,9 +93,9 @@ DEFAULT_CONFIG = {
                    "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
-                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
-                   "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 60,
-                   "tm_candle_min": 5, "v4_trail": True, "v4_be_r": 1.0, "v4_trail_step": 1.0, "v4_trail_gap": 1.0},
+                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
+                   "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
+                   "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
         "CRYPTO": {"capital": 1000, "max_loss_per_trade": 10, "max_position_pct": 25,
                    "daily_loss_limit": 30, "max_trades_per_day": 10, "min_reward_risk": 1.0,
                    "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True,
@@ -103,11 +103,13 @@ DEFAULT_CONFIG = {
                    "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
-                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.8,
-                   "tm_lock_keep": 0.5, "tm_reversal": True, "tm_rev_min_r": 1.0, "tm_stale_min": 240,
-                   "tm_candle_min": 15, "v4_trail": True, "v4_be_r": 1.0, "v4_trail_step": 1.0, "v4_trail_gap": 1.0},
-        # trade_manager (owner, 7 Nov 2026: "agents should think and react"): manages every open paper trade that has
-        # a fixed target (not the crypto trailing exits): stop to the entry at +tm_be_r R; once price has covered
+                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
+                   "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
+                   "tm_candle_min": 15, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
+        # Trade Manager: ONE set per account, for every scanner's trades (owner, 13 Nov 2026). Defaults = the owner's
+        # v4 rule: stop to the entry at +tm_be_r R, then (tm_trail) every tm_trail_step R the stop sits tm_trail_gap R
+        # behind the best R; the exits below are off (0 / False) by default. Not the crypto trailing exits (trail_k).
+        # trade_manager (owner, 7 Nov 2026: "agents should think and react"): stop to the entry at +tm_be_r R; once price has covered
         # tm_lock_at of the way to the target, the stop locks tm_lock_keep of that way; after +tm_rev_min_r R a
         # reversal candle near the high (bearish engulfing / long upper-wick rejection on tm_candle_min candles)
         # takes the profit; a trade that has gone nowhere after tm_stale_min minutes (best < 0.5R, now within
@@ -141,9 +143,27 @@ DEFAULT_CONFIG = {
 
 # the strategy switches FNO starts with: INDIA's, so F&O keeps running the Scanner version it ran before the split
 FNO_FROM_INDIA = ("scanner_version", "v4_setups", "v5_setups", "v5_constant", "v5_move", "v5_target", "trade_setups",
-                  "risk_limits", "trade_manager", "tm_be_r", "tm_lock_at", "tm_lock_keep", "tm_reversal",
+                  "risk_limits", "trade_manager", "tm_be_r", "tm_trail", "tm_trail_step", "tm_trail_gap", "tm_lock_at",
+                  "tm_lock_keep", "tm_reversal",
                   "tm_rev_min_r", "tm_stale_min", "tm_candle_min", "max_loss_per_trade_fno", "futures_margin_pct",
                   "flat_by", "cooldown_losses", "cooldown_minutes", "weekly_loss_x")
+
+
+def tm_one_set(acc):
+    """Fold an account's two Trade Managers (v4: trailing only, v4_*; others: tm_*) into one set, keeping what its
+    trades ran with: on Scanner v4 the v4 trailing (and the other exits off); otherwise the tm_* exits (no trailing)."""
+    v4 = acc.get("scanner_version") == "v4"
+    if v4:
+        acc["tm_be_r"] = acc.get("v4_be_r", 1.0)
+        acc["tm_trail"] = bool(acc.get("v4_trail", True))
+        acc["tm_lock_at"], acc["tm_reversal"], acc["tm_stale_min"] = 0.0, False, 0
+        acc["trade_manager"] = True
+    else:
+        acc["tm_trail"] = False
+    acc["tm_trail_step"] = acc.get("v4_trail_step", 1.0)
+    acc["tm_trail_gap"] = acc.get("v4_trail_gap", 1.0)
+    for k in ("v4_trail", "v4_be_r", "v4_trail_step", "v4_trail_gap"):
+        acc.pop(k, None)
 
 
 class PaperError(Exception):
@@ -186,6 +206,10 @@ def load_config():
             for k in ("fno_underlyings", "fno_stock_options"):
                 india.pop(k, None)
         changed = True
+    if not cfg.get("_tm_global"):   # one-time (owner, 13 Nov 2026): one Trade Manager per account, every scanner
+        for acc in accs.values():
+            tm_one_set(acc)
+        cfg["_tm_global"] = changed = True
     for name, acc in DEFAULT_CONFIG["accounts"].items():
         merged = dict(acc)
         merged.update(cfg.get("accounts", {}).get(name, {}))
@@ -1006,29 +1030,25 @@ def tm_event(pos, text, now=None):
     pos["tm_log"] = pos["tm_log"][-8:]
 
 
-TM_KEYS = ("tm_be_r", "tm_lock_at", "tm_lock_keep", "tm_reversal", "tm_rev_min_r", "tm_stale_min", "tm_candle_min")
+TM_KEYS = ("tm_be_r", "tm_trail", "tm_trail_step", "tm_trail_gap", "tm_lock_at", "tm_lock_keep", "tm_reversal",
+           "tm_rev_min_r", "tm_stale_min", "tm_candle_min")
 
 
 def pdf_only(pos):
-    """A Scanner v4 trade: its stop, its target, the v4 trailing stop and the session's flat-by only (no other
-    Trade Manager exit, breakeven rule or time stop)."""
+    """A Scanner v4 trade (the crypto agent's own time stop skips it). Its exits are the account's Trade Manager,
+    like every other scanner's trades (13 Nov 2026)."""
     return pos.get("scanner") == "v4"
 
 
-def v4_trail(pos, best, sh, when=None, acc=None):
-    """Scanner v4's Trade Manager, trailing only (owner, 11 Nov 2026: "1:1 ya 1:2 nikal paye"): by default at +1R the
-    stop goes to the entry, at +2R to +1R, then 1R higher for every further R. The account's Settings > Trade Manager
-    (v4_trail, v4_be_r, v4_trail_step, v4_trail_gap) change it; the same rule as scanner_v4._exit_step."""
+def tm_trail(pos, best, sh, when, tm):
+    """The Trade Manager's breakeven + trailing stop (scanner_v4.trail_lock_r: the same rule as the backtest)."""
     import scanner_v4 as V4
-    p = {k: (acc or {}).get(k, V4.DEFAULTS.get(k, True)) for k in ("v4_trail", "v4_be_r", "v4_trail_step", "v4_trail_gap")}
-    if not p["v4_trail"]:
-        return
     rs = pos.get("risk_stop", pos["stop"])
     risk = abs(pos["entry"] - rs)
     if risk <= 0:
         return
     gain = ((pos["entry"] - best) if sh else (best - pos["entry"])) / risk
-    lock = V4.trail_lock_r(gain, p)
+    lock = V4.trail_lock_r(gain, dict(tm, trade_manager=True))
     if lock is None:
         return
     m = pos["market"]
@@ -1037,8 +1057,11 @@ def v4_trail(pos, best, sh, when=None, acc=None):
         pos["stop"], pos["breakeven"] = new, True
         if lock > 0:
             pos["trailing"] = True
-        tm_event(pos, "v4 trailing: price reached +%.1fR, stop moved to %s (%+.1fR)" % (gain, money(m, new), lock),
-                 when)
+            text = "trailing: price reached +%.1fR, stop moved to %s (%+.1fR)" % (gain, money(m, new), lock)
+        else:
+            text = "breakeven: price reached +%.1fR, stop moved to the entry %s" % (gain, money(m, new))
+        print("TM %-16s %s" % (pos["key"], text))
+        tm_event(pos, text, when)
 
 
 def tm_cfg(acc):
@@ -1156,24 +1179,13 @@ def step_bar(led, cfg, pos, acc, b, now, sh):
         return True
     best = l if sh else h
     _track_excursion(pos, best, h if sh else l, sh)
-    strict = pdf_only(pos)
-    if strict or pos.get("pdf_only"):
-        pos["pdf_only"] = strict           # shown on the dashboard's Trade Manager strip
-    if strict:
-        v4_trail(pos, best, sh, when, acc)  # v4: trailing only (owner, 11 Nov 2026), no other Trade Manager exit
-        return False
+    pos.pop("pdf_only", None)              # 13 Nov 2026: no v4-only exits any more
+    # the account's Trade Manager: one set for every scanner (owner, 13 Nov 2026); not the crypto trailing exits
     tm = tm_cfg(acc) if not pos.get("trail_k") else None
-    be = acc.get("breakeven_at_r") or (tm["tm_be_r"] if tm else None)
     rs = pos.get("risk_stop", pos["stop"])
-    be_hit = (best <= pos["entry"] - be * (rs - pos["entry"])) if (be and sh) else \
-             (be and best >= pos["entry"] + be * (pos["entry"] - rs))
-    if be and not pos.get("breakeven") and be_hit:
-        pos["stop"], pos["breakeven"] = pos["entry"], True
-        print("BREAKEVEN %-16s %s reached %gR: stop moved to the entry %s"
-              % (pos["key"], money(m, best), be, money(m, pos["entry"])))
-        tm_event(pos, "breakeven: price reached +%gR (%s), stop moved to the entry %s"
-                 % (be, money(m, best), money(m, pos["entry"])), when)
-    if tm and pos.get("target") and not pos.get("locked"):
+    if tm:
+        tm_trail(pos, best, sh, when, tm)
+    if tm and tm.get("tm_lock_at") and pos.get("target") and not pos.get("locked"):
         way = pos["target"] - pos["entry"]
         if way and (best - pos["entry"]) / way >= tm["tm_lock_at"]:
             lock = round_px(m, pos["entry"] + tm["tm_lock_keep"] * way, down=not sh)
@@ -1298,8 +1310,8 @@ def check_position(cfg, led, pos, price, bars, now):
     for b in path:
         if step_bar(led, cfg, pos, acc, b, now, sh):
             return
-    tm = tm_cfg(acc) if not pos.get("trail_k") and not pdf_only(pos) else None
-    if tm:   # the Trade Manager thinks about the trade after every check (7 Nov 2026)
+    tm = tm_cfg(acc) if not pos.get("trail_k") else None
+    if tm:   # the Trade Manager thinks about the trade after every check (7 Nov 2026), whatever the scanner
         why = tm_react(pos, bars, now, price, tm)
         if why:
             tm_event(pos, "exit at %s (%+.2fR): %s" % (money(m, price), r_of(pos, price), why), now)

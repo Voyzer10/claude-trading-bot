@@ -25,7 +25,7 @@ import scanner_v4 as V4
 
 UTC = timezone.utc
 FILTERS = {"all": {}, "with_weak_bos": {"bos_body_atr": 0.8, "bos_vol_x": 1.2},
-           "with_htf": {"htf": True}, "no_trailing": {"trail": False},
+           "with_htf": {"htf": True}, "no_trailing": {"tm_trail": False},
            "no_day_rule": {"day_carry": False}, "hammer_2x": {"hammer_x": 2.0},
            "old_candles": {"hammer_x": 2.0, "one_side": 1.01}}
 RRS = (0.0, 1.0, 2.0)
@@ -34,24 +34,31 @@ LIVE = {"side": "both", "trades": "both", "min_rr": 0.0, "filters": "all", "sess
 
 
 def trail_settings(account):
-    """The account's v4 Trade Manager settings (Settings > Trade Manager) as sequence() arguments: the backtest
-    trails the way the paper account does."""
+    """The account's Trade Manager (Settings > Trade Manager, the same for every scanner) as sequence() arguments:
+    the backtest manages trades the way the paper account does."""
     import paper as P
-    acc = P.load_config()["accounts"].get(account, {})
-    out = {"trail": bool(acc.get("v4_trail", True))}
-    for k in ("v4_be_r", "v4_trail_step", "v4_trail_gap"):
-        out[k] = float(acc.get(k, V4.DEFAULTS[k]))
-    return out
+    return V4.tm_settings(P.load_config()["accounts"].get(account, {}))
 
 
 def trail_text(tm):
-    if not tm.get("trail", True):
-        return "trailing off: stop / target only"
-    be, st, gp = tm["v4_be_r"], tm["v4_trail_step"], tm["v4_trail_gap"]
-    first = next((k * st for k in range(1, 50) if k * st - gp > 1e-9), None)
-    return "%s; then every %gR the stop sits %gR behind%s" % (
-        ("+%gR -> entry" % be) if be else "no breakeven move", st, gp,
-        (" (first at +%gR -> +%gR)" % (first, first - gp)) if first else "")
+    """The Trade Manager in words, for the report."""
+    if not tm.get("trade_manager", True):
+        return "Trade Manager off: stop / target only"
+    be, st, gp = tm["tm_be_r"], tm["tm_trail_step"], tm["tm_trail_gap"]
+    parts = ["+%gR -> entry" % be if be else "no breakeven move"]
+    if tm.get("tm_trail"):
+        first = next((k * st for k in range(1, 50) if k * st - gp > 1e-9), None)
+        parts.append("then every %gR the stop sits %gR behind%s" % (
+            st, gp, (" (first at +%gR -> +%gR)" % (first, first - gp)) if first else ""))
+    else:
+        parts.append("no trailing")
+    if tm.get("tm_lock_at"):
+        parts.append("profit lock at %d%% of the way keeps %d%%" % (tm["tm_lock_at"] * 100, tm["tm_lock_keep"] * 100))
+    if tm.get("tm_reversal"):
+        parts.append("reversal exit after +%gR" % tm["tm_rev_min_r"])
+    if tm.get("tm_stale_min"):
+        parts.append("no-follow-through exit after %d min" % tm["tm_stale_min"])
+    return "; ".join(parts)
 
 
 def events_v4(data, day_of, cost_fn, intraday=False, max_hold=48, entry_ok=None, tm=None):
@@ -216,7 +223,7 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
              "Scanner v4 (scanner_v4.py, the owner's rules of 11 Nov 2026): PRIMARY BUY = bullish BOS (close) -> a close "
              "below an old low -> classic / gravestone / long-legged doji or inverted hammer -> the next or next-to-next "
              "candle closes above its high (SELL: mirror, classic / dragonfly / long-legged doji or hammer); every BOS setup stays active until traded; stop below the sweep-to-signal "
-             "low; target = next liquidity; trailing stop per the account's Trade Manager settings (%s). SECONDARY = only after the primary "
+             "low; target = next liquidity; the account's Trade Manager (%s). SECONDARY = only after the primary "
              "closed: a reversal candle tapping the move's OB / FVG. One trade at a time per chart. Shorts = mirror." % trail_text(tm),
              "%s, %d days (%s..%s). Live-reading trades: %d primary, %d secondary; exits %s. R after costs (%s). "
              "Out-of-sample = days from %s." % (what, len(days), days[0], days[-1], n_p, len(base) - n_p, exits, costs,

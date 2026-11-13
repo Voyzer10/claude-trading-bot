@@ -189,8 +189,10 @@ if __name__ == "__main__":
     check("    +2.3R then down: out at +1R (trailing stop)",
           s10b and abs(s10b[0]["exit"] - (s10b[0]["entry"] + risk)) < 1e-9 and s10b[0]["exit_reason"] == "trailing stop",
           s10b)
-    check("    with trailing off (backtest setting) the same chart takes the full stop",
-          longs(build([SWEEP, INV, TRIG, up_2r, (101.2, 101.25, 99.2, 99.3)]), trail=False)[0]["exit_reason"] == "stop")
+    check("    with the Trade Manager off the same chart takes the full stop; trailing off keeps only the breakeven",
+          longs(build([SWEEP, INV, TRIG, up_2r, (101.2, 101.25, 99.2, 99.3)]), trade_manager=False)[0]["exit_reason"] == "stop"
+          and longs(build([SWEEP, INV, TRIG, up_2r, (101.2, 101.25, 99.2, 99.3)]), tm_trail=False)[0]["exit_reason"]
+          == "breakeven stop")
 
     # 11. the secondary: only after the primary closed, a reversal candle tapping the move's OB / FVG
     pull = [(103.0, 103.05, 101.5, 101.6), (101.6, 101.65, 100.9, 101.0)]
