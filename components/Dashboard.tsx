@@ -13,6 +13,7 @@ import Agents from "@/components/Agents";
 import SymbolIcon from "@/components/SymbolIcon";
 import PovChips from "@/components/Pov";
 import ChartView, { type ChartSource } from "@/components/ChartView";
+import { OpinionButton } from "@/components/Opinion";
 import Icon from "@/components/Icon";
 import Zerodha, { ZerodhaBanner } from "@/components/Zerodha";
 import { FnoWatch, NseWatch, UsWatch } from "@/components/Watchlists";
@@ -782,6 +783,10 @@ function DecisionsSection({ decisions }: { decisions: Decision[] }) {
                       View on chart
                     </button>
                   )}
+                  {d.time && d.symbol && (
+                    <OpinionButton src={{ kind: "decision", time: d.time, symbol: d.symbol }}
+                                   kind={d.result === "PAPER BUY" || d.result === "PAPER SHORT" ? "traded" : "skipped"} title={d.symbol} />
+                  )}
                 </td>
                 <td data-label="Price" className="num">{price(d.price)}</td>
                 <td data-label="Stop" className="num">
@@ -954,6 +959,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
                       <span className="sym"><SymbolIcon id={p.key} />{p.key}</span><PovChips id={p.v4_chart ?? p.key} />
                       <button className="btn small-btn chart-btn" onClick={() => setChartOf({ kind: "position", key: p.key, entryTime: p.entry_time })}
                               aria-label={`View ${p.key} on chart`}>View on chart</button>
+                      <OpinionButton src={{ kind: "position", key: p.key, entryTime: p.entry_time }} kind="open" title={p.key} />
                     </td>
                     <SetupCell p={p} />
                     <td data-label="Side">{p.side ?? "long"}</td>
@@ -1041,6 +1047,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
                   {c.reason}
                   <button className="btn small-btn chart-btn" onClick={() => setChartOf({ kind: "position", key: c.key, entryTime: c.entry_time })}
                           aria-label={`View the ${c.key} trade on chart: why it closed`}>View on chart</button>
+                  <OpinionButton src={{ kind: "position", key: c.key, entryTime: c.entry_time }} kind="closed" title={c.key} />
                 </td>
               </tr>
             ))}

@@ -574,3 +574,17 @@ a { text-underline-offset: 3px; }
 .chart-verdict.tone-good { border-left-color: var(--good); background: var(--good-bg); }
 .chart-verdict.tone-bad { border-left-color: var(--bad); background: var(--bad-bg); }
 .chart-verdict.tone-flat { border-left-color: var(--line-2, var(--muted)); }
+/* Your opinion (components/Opinion.tsx) */
+.chart-btn.answered { border-color: var(--good); color: var(--good); }
+.opinion-dialog { width: min(760px, 96vw); }
+.opinion-form { display: grid; gap: 10px; max-height: 72vh; overflow-y: auto; padding-right: 4px; }
+.op-q { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px 10px; margin: 0; }
+.op-q legend { font-size: 13px; font-weight: 600; padding: 0 4px; }
+.op-opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.op-opt { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px;
+  padding: 4px 10px; font-size: 13px; cursor: pointer; min-height: 32px; }
+.op-opt input { accent-color: var(--accent); margin: 0; }
+.op-opt.on { border-color: var(--accent); background: var(--accent-soft); }
+.op-opt.num { min-width: 44px; justify-content: center; }
+.op-opts.multi .op-opt { border-radius: 8px; }
+.op-q input[type="text"], .op-q input[type="number"], .op-q textarea { width: 100%; margin-top: 4px; }
