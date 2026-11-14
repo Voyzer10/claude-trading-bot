@@ -27,7 +27,7 @@ UTC = timezone.utc
 FILTERS = {"all": {}, "with_weak_bos": {"bos_body_atr": 0.8, "bos_vol_x": 1.2},
            "with_htf": {"htf": True}, "no_trailing": {"tm_trail": False},
            "no_day_rule": {"day_carry": False}, "hammer_2x": {"hammer_x": 2.0},
-           "old_candles": {"hammer_x": 2.0, "one_side": 1.01}}
+           "old_candles": {"hammer_x": 2.0, "one_side": 1.01}, "with_flip": {"flip_same_day": True}}
 RRS = (0.0, 1.0, 2.0)
 VARIANTS = [(rr, f) for rr in RRS for f in FILTERS]
 LIVE = {"side": "both", "trades": "both", "min_rr": 0.0, "filters": "all", "session": "all"}

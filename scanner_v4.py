@@ -81,7 +81,9 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             # BOS by close only (owner, 12 Nov 2026): the weak-BOS check is off (0); the backtest can set 0.8 / 1.2
             "htf": False, "bos_body_atr": 0, "bos_vol_x": 0, "vol_n": 20,
             # off by the owner's choice (kept so older backtest settings still run)
-            "chop_er": 0, "er_n": 20, "opp_zone": False, "opp_lookback": 48}
+            "chop_er": 0, "er_n": 20, "opp_zone": False, "opp_lookback": 48,
+            # the flip rule (owner, 14 Nov 2026): see _flip()
+            "flip_same_day": False}
 
 # The signal candle (owner, 12 Nov 2026, "Trading candlestick patterns for buying & selling"), any colour.
 #   BUY at the low:  classic doji, gravestone doji, long-legged doji, inverted hammer
@@ -263,6 +265,7 @@ class _Side:
         {"setup", "i", "signal", "entry" (close), "stop", "target", "atr", ...} (the oldest active setup)."""
         b, ctx, p = self.b, self.ctx, self.p
         c = b[j][4]
+        self.last_today = None    # the trigger of candle j from a setup whose BOS formed today (flip rule)
         if self.day is not None and j > 0 and self.day[j] != self.day[j - 1]:
             # a new session (owner, 12 Nov 2026, 5-minute intraday): only the previous day's BOS setups whose sweep
             # has not happened stay active, for this day only; swept-but-untraded and older setups end
@@ -301,13 +304,20 @@ class _Side:
                 return None
             liq = _targets(ctx, b, j, c)          # the swing-high liquidity, the same for every setup
             self.setups = [st for st in self.setups if not st["used"]]
+            first = None
             for st in self.setups:              # oldest BOS first
                 if st["used"] or st["sweep"] is None or st["sweep"] >= s:
                     continue
                 t = self._trade(st, s, j, a, liq)
-                if t:
-                    return t
-            break
+                if not t:
+                    continue
+                first = first or t
+                if self.day is not None and st["day"] == self.day[j]:
+                    self.last_today = t
+                    break
+                if self.day is None:
+                    break
+            return first
         return None
 
     def _trade(self, st, s, j, a, liq):
@@ -484,6 +494,21 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
                 open_tr = None
         cands = [(s, sides[s].step(k)) for s in (0, 1)]
         if open_tr is not None:
+            flip = _flip(open_tr, sides, srcs, day, carry_day, k, intraday, p)
+            if flip is None:
+                continue
+            s, t, fill = flip
+            if fill is None:       # live: the trigger is on the last candle; paper.py closes the old trade first
+                pend = dict(t, signal_close=t["entry"], exit_i=None, exit=None, exit_reason="open", pending=True,
+                            _side=s, flip=True, flip_from=_real(dict(open_tr), open_tr["_side"] == 1))
+                out.append(_real(pend, s == 1))
+                continue
+            old = srcs[open_tr["_side"]]
+            open_tr.update(exit_i=k, exit=old[k][4], exit_reason="flip: today's opposite BOS setup")
+            out.append(_real(open_tr, open_tr["_side"] == 1))
+            t["setup"]["used"] = True
+            sec = None
+            open_tr = dict(t, signal_close=t["entry"], entry=fill, cur_stop=t["stop"], _side=s, flipped=True)
             continue
         pick = None
         if sec is not None and k > sec[2]:
@@ -517,6 +542,25 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
     if open_tr is not None:
         out.append(_real(dict(open_tr, exit_i=None, exit=None, exit_reason="open"), open_tr["_side"] == 1))
     return sorted(out, key=lambda t: (t["i"], t["kind"]))
+
+
+def _flip(open_tr, sides, srcs, day, carry_day, k, intraday, p):
+    """The flip rule (owner, 14 Nov 2026), both ways: the open trade came from an earlier day's BOS setup (swept
+    today) and now a setup of the OPPOSITE side whose BOS formed today triggers: close the open trade at this
+    candle's close and take the new one. (side, trigger, fill) or None; fill None = the live, pending case."""
+    if not p.get("flip_same_day") or carry_day is None or open_tr.get("kind") != "primary":
+        return None
+    st = open_tr.get("setup") or {}
+    if st.get("day") is None or st["day"] == carry_day[k] or k <= open_tr["i"]:
+        return None
+    s = 1 - open_tr["_side"]
+    t = sides[s].last_today
+    if not t:
+        return None
+    fill, why = _fill(srcs[s], day, t, intraday)
+    if fill is None and why != "pending":
+        return None
+    return s, t, fill
 
 
 def chart_state(ledger, chart):
