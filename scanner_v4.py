@@ -38,6 +38,10 @@ PRIMARY BUY (SELL is the mirror)
   the OPPOSITE side whose BOS formed today triggers, the open trade is closed at that candle's close and the new one
   is taken. (Backtest, Nifty 50 5m, out-of-sample: same -0.36R a trade, ~15% more trades; the owner chose to test it
   live on paper. Switch: flip_same_day.)
+  Latest-BOS rule (owner, 14 Nov 2026): with a trade open, a setup whose BOS is newer than the open trades' BOS
+  (either side) that triggers is taken as well, up to max_open = 2 trades open on a chart (live: a second position,
+  key ...#2). (Backtest, Nifty 50 5m, out-of-sample: -0.34R a trade vs -0.36R, ~45% more trades in all with the
+  flip rule; the owner chose to test it live on paper. Switch: latest_bos.)
 
 SECONDARY (OB / FVG), strictly after the primary trade CLOSED:
   9. A real zone of the primary move must exist and be unbroken (not closed through): the order block (the last
@@ -87,7 +91,9 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             # off by the owner's choice (kept so older backtest settings still run)
             "chop_er": 0, "er_n": 20, "opp_zone": False, "opp_lookback": 48,
             # the flip rule (owner, 14 Nov 2026: on, tested live on paper): see _flip()
-            "flip_same_day": True}
+            "flip_same_day": True,
+            # the latest-BOS rule (owner, 14 Nov 2026): see _latest(); max_open = trades open at once on one chart
+            "latest_bos": True, "max_open": 2}
 
 # The signal candle (owner, 12 Nov 2026, "Trading candlestick patterns for buying & selling"), any colour.
 #   BUY at the low:  classic doji, gravestone doji, long-legged doji, inverted hammer
@@ -270,6 +276,7 @@ class _Side:
         b, ctx, p = self.b, self.ctx, self.p
         c = b[j][4]
         self.last_today = None    # the trigger of candle j from a setup whose BOS formed today (flip rule)
+        self.trig = []            # every setup that triggers on candle j, oldest BOS first (latest-BOS rule)
         if self.day is not None and j > 0 and self.day[j] != self.day[j - 1]:
             # a new session (owner, 12 Nov 2026, 5-minute intraday): only the previous day's BOS setups whose sweep
             # has not happened stay active, for this day only; swept-but-untraded and older setups end
@@ -308,20 +315,16 @@ class _Side:
                 return None
             liq = _targets(ctx, b, j, c)          # the swing-high liquidity, the same for every setup
             self.setups = [st for st in self.setups if not st["used"]]
-            first = None
             for st in self.setups:              # oldest BOS first
                 if st["used"] or st["sweep"] is None or st["sweep"] >= s:
                     continue
                 t = self._trade(st, s, j, a, liq)
                 if not t:
                     continue
-                first = first or t
-                if self.day is not None and st["day"] == self.day[j]:
+                self.trig.append(t)
+                if self.last_today is None and self.day is not None and st["day"] == self.day[j]:
                     self.last_today = t
-                    break
-                if self.day is None:
-                    break
-            return first
+            return self.trig[0] if self.trig else None
         return None
 
     def _trade(self, st, s, j, a, liq):
@@ -483,36 +486,41 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
         carry_day = cx["day"] if intraday else [r[0].astimezone(timezone.utc).date() for r in rows]
     sides = [_Side(srcs[s], cx["ctx"][s], cx["htf"][s] if p.get("htf") else None, p, carry_day) for s in (0, 1)]
     day, n = cx["day"], len(rows)
-    out, open_tr, sec = [], None, None       # sec: (side, primary trade, exit candle) while a secondary is looked for
+    out, opens, sec = [], [], None       # sec: (side, primary trade, exit candle) while a secondary is looked for
     for k in range(31, n):
-        if open_tr is not None and k > open_tr["i"]:
-            src = srcs[open_tr["_side"]]
-            got = _exit_step(src, k, open_tr, p, day, intraday)
+        still = []
+        for tr in opens:
+            got = _exit_step(srcs[tr["_side"]], k, tr, p, day, intraday) if k > tr["i"] else None
             if got:
-                open_tr.update(exit_i=k, exit=got[0], exit_reason=got[1])
-                out.append(_real(open_tr, open_tr["_side"] == 1))
-                if open_tr["kind"] == "primary":
-                    sec = (open_tr["_side"], open_tr, k)
-                else:
-                    sec = None
-                open_tr = None
+                tr.update(exit_i=k, exit=got[0], exit_reason=got[1])
+                out.append(_real(tr, tr["_side"] == 1))
+                sec = (tr["_side"], tr, k) if tr["kind"] == "primary" else None
+            else:
+                still.append(tr)
+        opens = still
         cands = [(s, sides[s].step(k)) for s in (0, 1)]
-        if open_tr is not None:
-            flip = _flip(open_tr, sides, srcs, day, carry_day, k, intraday, p)
-            if flip is None:
+        if opens:
+            extra = _flip(opens, sides, srcs, day, carry_day, k, intraday, p)
+            how = "flip"
+            if extra is None:
+                extra, how = _latest(opens, sides, srcs, day, k, intraday, p), "latest"
+            if extra is None:
                 continue
-            s, t, fill = flip
-            if fill is None:       # live: the trigger is on the last candle; paper.py closes the old trade first
+            s, t, fill, olds = extra
+            if fill is None:       # live: the trigger is on the last candle; paper.py acts on it
                 pend = dict(t, signal_close=t["entry"], exit_i=None, exit=None, exit_reason="open", pending=True,
-                            _side=s, flip=True, flip_from=_real(dict(open_tr), open_tr["_side"] == 1))
+                            _side=s, **({"flip": True, "flip_from": _real(dict(olds[0]), olds[0]["_side"] == 1)}
+                                        if how == "flip" else {"latest_bos": True}))
                 out.append(_real(pend, s == 1))
                 continue
-            old = srcs[open_tr["_side"]]
-            open_tr.update(exit_i=k, exit=old[k][4], exit_reason="flip: today's opposite BOS setup")
-            out.append(_real(open_tr, open_tr["_side"] == 1))
+            for old in olds:
+                old.update(exit_i=k, exit=srcs[old["_side"]][k][4], exit_reason="flip: today's opposite BOS setup")
+                out.append(_real(old, old["_side"] == 1))
+                opens.remove(old)
             t["setup"]["used"] = True
             sec = None
-            open_tr = dict(t, signal_close=t["entry"], entry=fill, cur_stop=t["stop"], _side=s, flipped=True)
+            opens.append(dict(t, signal_close=t["entry"], entry=fill, cur_stop=t["stop"], _side=s,
+                              **({"flipped": True} if how == "flip" else {"latest_bos": True})))
             continue
         pick = None
         if sec is not None and k > sec[2]:
@@ -539,32 +547,54 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
             continue
         if t["kind"] == "primary":
             t["setup"]["used"] = True
-            sec = None
-        else:
-            sec = None
-        open_tr = dict(t, signal_close=t["entry"], entry=fill, cur_stop=t["stop"], _side=s)
-    if open_tr is not None:
-        out.append(_real(dict(open_tr, exit_i=None, exit=None, exit_reason="open"), open_tr["_side"] == 1))
+        sec = None
+        opens.append(dict(t, signal_close=t["entry"], entry=fill, cur_stop=t["stop"], _side=s))
+    for tr in opens:
+        out.append(_real(dict(tr, exit_i=None, exit=None, exit_reason="open"), tr["_side"] == 1))
     return sorted(out, key=lambda t: (t["i"], t["kind"]))
 
 
-def _flip(open_tr, sides, srcs, day, carry_day, k, intraday, p):
-    """The flip rule (owner, 14 Nov 2026), both ways: the open trade came from an earlier day's BOS setup (swept
-    today) and now a setup of the OPPOSITE side whose BOS formed today triggers: close the open trade at this
-    candle's close and take the new one. (side, trigger, fill) or None; fill None = the live, pending case."""
-    if not p.get("flip_same_day") or carry_day is None or open_tr.get("kind") != "primary":
+def _flip(opens, sides, srcs, day, carry_day, k, intraday, p):
+    """The flip rule (owner, 14 Nov 2026), both ways: open primary trades that came from an earlier day's BOS setup
+    (swept today) and a setup of the OPPOSITE side whose BOS formed today triggers: close those at this candle's
+    close and take the new one. (side, trigger, fill, trades to close) or None; fill None = the live, pending case."""
+    if not p.get("flip_same_day") or carry_day is None:
         return None
-    st = open_tr.get("setup") or {}
-    if st.get("day") is None or st["day"] == carry_day[k] or k <= open_tr["i"]:
+    for s in (0, 1):
+        t = sides[s].last_today
+        if not t:
+            continue
+        olds = [tr for tr in opens if tr["_side"] != s and tr.get("kind") == "primary" and k > tr["i"]
+                and (tr.get("setup") or {}).get("day") is not None and tr["setup"]["day"] != carry_day[k]]
+        if not olds or len(opens) - len(olds) >= int(p.get("max_open") or 1):
+            continue
+        fill, why = _fill(srcs[s], day, t, intraday)
+        if fill is None and why != "pending":
+            continue
+        return s, t, fill, olds
+    return None
+
+
+def _latest(opens, sides, srcs, day, k, intraday, p):
+    """The latest-BOS rule (owner, 14 Nov 2026): with a trade open, a setup whose BOS is newer than the open trades'
+    BOS triggers: take it as well (either side), up to max_open trades on the chart. (side, trigger, fill, []) or
+    None; the oldest of the newer setups first."""
+    if not p.get("latest_bos") or len(opens) >= int(p.get("max_open") or 1):
         return None
-    s = 1 - open_tr["_side"]
-    t = sides[s].last_today
-    if not t:
+    newest = max(tr.get("bos", tr["i"]) for tr in opens)
+    best = None
+    for s in (0, 1):
+        for t in sides[s].trig:
+            if t["bos"] > newest and (best is None or t["bos"] < best[1]["bos"]):
+                best = (s, t)
+                break
+    if best is None:
         return None
+    s, t = best
     fill, why = _fill(srcs[s], day, t, intraday)
     if fill is None and why != "pending":
         return None
-    return s, t, fill
+    return s, t, fill, []
 
 
 def chart_state(ledger, chart):
@@ -588,16 +618,32 @@ def chart_state(ledger, chart):
     return opened, closed
 
 
+def chart_open(ledger, chart):
+    """Every open v4 position of this chart (the latest-BOS rule can hold max_open at once)."""
+    market, _, symbol = chart.partition(":")
+    out = []
+    for pos in ledger["open"]:
+        if pos.get("scanner") != "v4":
+            continue
+        if pos.get("v4_chart") == chart or (not pos.get("v4_chart") and pos.get("key") == chart):
+            out.append(pos)
+    return out
+
+
 
 def live_candidate(rows, day_of, ledger, chart, intraday=False):
     """The v4 entry on the last closed candle, if any: the chart's own simulated sequence (the same code as the
     backtest) gives the signal; the paper ledger blocks it while a v4 trade is open on this chart. paper.py's
     setup_decision checks the rest (fresh signal, a secondary's primary really closed)."""
     opened, _ = chart_state(ledger, chart)
+    opens = chart_open(ledger, chart) or ([opened] if opened else [])
     last = len(rows) - 1
     seq = [t for t in sequence(rows, day_of, intraday=intraday) if t.get("pending") and t["i"] == last]
-    if opened:   # only the flip rule's trade: the opposite side, from a setup whose BOS formed today
-        return [t for t in seq if t.get("flip") and t["kind"] == "primary" and t["side"] != direction(opened)]
+    if opens:   # only the flip rule's trade (the opposite side) or the latest-BOS rule's (room for one more)
+        dirs = {direction(o) for o in opens}
+        return [t for t in seq if t["kind"] == "primary" and (
+            (t.get("flip") and any(d != t["side"] for d in dirs))
+            or (t.get("latest_bos") and len(opens) < int(DEFAULTS["max_open"])))]
     return seq
 
 

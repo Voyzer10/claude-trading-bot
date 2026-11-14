@@ -869,7 +869,7 @@ function SetupCell({ p }: { p: Position }) {
 function withLive(open: Position[], live: LiveTicks | null): (Position & { live?: boolean })[] {
   if (!live?.live && !live?.crypto_live && !live?.us_live) return open;
   return open.map((p) => {
-    const t = liveFor(p.market, live) ? live.ticks[p.key] : undefined;
+    const t = liveFor(p.market, live) ? live.ticks[`${p.market}:${p.symbol}`] : undefined;   // a 2nd v4 trade's key ends in #2
     if (!t) return p;
     const dir = p.side === "short" ? -1 : 1;
     return { ...p, last: t.ltp, open_pnl: (t.ltp - p.entry) * p.qty * dir, quote_time: new Date().toISOString(), live: true };
