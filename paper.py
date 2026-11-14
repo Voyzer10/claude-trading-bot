@@ -936,7 +936,12 @@ def cmd_buy(a, cfg, led):
     lot = lot_of(m, t)
     fno_trade = kind != "equity"
     if any(p["key"] == k for p in led["open"]):
-        raise PaperError("%s is already open; sell it first" % k)
+        if not getattr(a, "allow_second", False):
+            raise PaperError("%s is already open; sell it first" % k)
+        n = 2                       # the v4 latest-BOS rule: a second trade on the chart gets its own key
+        while any(p["key"] == "%s#%d" % (k, n) for p in led["open"]):
+            n += 1
+        k = "%s#%d" % (k, n)
     sess = session(m, now)
     if sess == "closed" and not force:
         raise PaperError("%s is closed right now (a paper fill at a stale price teaches nothing). "
@@ -1583,12 +1588,11 @@ def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields, mk
     buf = io.StringIO()
     try:
         with contextlib.redirect_stdout(buf):
-            cmd_buy(args, cfg, led)
+            pos = cmd_buy(args, cfg, led)
         save_json(LEDGER, led)
     except PaperError as e:
         st["6-8_budget_risk_broker"] = "BLOCK: %s" % e
         return done("blocked", str(e))
-    pos = next(p for p in led["open"] if p["key"] == key)
     st["6-8_budget_risk_broker"] = {"verdict": "PASS, paper option bought", "qty": pos["qty"], "entry": pos["entry"],
                                     "stop": pos["stop"], "target": pos["target"],
                                     "max_loss": round(abs(pos["entry"] - pos["stop"]) * pos["qty"]
@@ -1596,7 +1600,7 @@ def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields, mk
                                     "report": buf.getvalue().strip().splitlines()}
     st["9_alerts"] = "live.py / Trade Manager watch the premium: stop %s, target %s" % (pos["stop"], pos["target"])
     return done("PAPER BUY", "%s %s @ %s, stop %s, target %s (Scanner %s: %s on %s)" % (
-        pos["qty"], key, pos["entry"], pos["stop"], pos["target"], version, name, symbol))
+        pos["qty"], pos["key"], pos["entry"], pos["stop"], pos["target"], version, name, symbol))
 
 
 def setup_decision(market, symbol, s, news=None, now_iso=None):
@@ -1614,6 +1618,8 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     st["2_news"] = news if news is not None else "not fetched for stock setups (hundreds a day)"
 
     def done(result, why):
+        if rec.get("flipped_from"):
+            why = "flip, closed %s first: %s" % (rec["flipped_from"], why)
         rec["result"], rec["why"] = result, why
         return rec
 
@@ -1645,11 +1651,45 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
         chart = key(market, symbol)
         led = load_ledger(cfg)
         opened, closed = V4.chart_state(led, chart)
-        if opened:
-            return done("skipped", "v4: wait for the open trade on this chart to close")
         signal = _iso(s.get("v4_signal_at"))
+        flipped = None
+        opens = V4.chart_open(led, chart) or ([opened] if opened else [])
+        if opens:
+            det = s.get("details") or {}
+            prim = s["setup"].startswith("v4_primary_")
+            olds = [o for o in opens if (o.get("setup") or "").startswith("v4_primary_")
+                    and V4.direction(o) != s["side"]]
+            if prim and det.get("flip") and olds:
+                # the flip rule (owner, 14 Nov 2026): an open trade came from an earlier day's BOS setup and the
+                # opposite side's setup of today's BOS triggered: close it at the current price, then take this one
+                import contextlib
+                import io
+                done_flip = []
+                for o in olds:
+                    try:
+                        px, _ = fetch_price(o["market"], o["symbol"])
+                        with contextlib.redirect_stdout(io.StringIO()):
+                            done_flip.append(close_position(led, cfg, o, px, "v4 flip: today's opposite BOS setup (%s)"
+                                                            % s["side"], datetime.now(timezone.utc)))
+                        save_json(LEDGER, led)
+                    except Exception as e:
+                        return done("blocked", "v4 flip: could not close %s first: %s" % (o["key"], str(e)[:160]))
+                flipped = done_flip[0]
+                rec["flipped_from"] = ", ".join(c["key"] for c in done_flip)
+                st["0_flip"] = {"closed": rec["flipped_from"], "side": V4.direction(olds[0]),
+                                "exit": flipped["exit"], "pnl": round(sum(c["pnl"] for c in done_flip), 4),
+                                "r": round(sum(c["r"] for c in done_flip), 2),
+                                "why": "previous day's BOS trade closed: today's opposite BOS setup triggered"}
+                opens = [o for o in opens if o not in olds]
+            elif prim and det.get("latest_bos") and len(opens) < int(V4.DEFAULTS["max_open"]):
+                # the latest-BOS rule (owner, 14 Nov 2026): a setup of a BOS newer than the open trade's triggered:
+                # take it as well (its own position, key ...#2)
+                st["0_latest_bos"] = {"open": [o["key"] for o in opens],
+                                      "why": "a newer BOS's setup triggered while a trade is open: taken as well"}
+            else:
+                return done("skipped", "v4: wait for the open trade on this chart to close")
         exited = _iso(closed.get("exit_time")) if closed else None
-        if signal is None or (exited is not None and signal <= exited):
+        if signal is None or (not flipped and exited is not None and signal <= exited):
             return done("skipped", "v4: no fresh confirmed signal after the last exit")
         if s["setup"].startswith("v4_secondary_"):
             details = s.get("details") or {}
@@ -1660,6 +1700,8 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
                     or exited is None or tap is None or not exited < tap <= signal):
                 return done("skipped", "v4: secondary needs a matching closed primary and a later confirmed zone tap")
         v4_fields = {"v4_chart": chart, "v4_signal_at": signal.isoformat()}
+        if opens:
+            v4_fields["allow_second"] = True
     entry, stop, short = s["price"], s.get("stop"), s["side"] == "short"
     target = s.get("target") or s.get("target_2r")
     st["3_entry"] = {"side": s["side"], "price_now": entry, "note": "entry = the close of the candle that completed it"}
@@ -1734,12 +1776,11 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     buf = io.StringIO()
     try:
         with contextlib.redirect_stdout(buf):
-            cmd_buy(args, cfg, led)
+            pos = cmd_buy(args, cfg, led)
         save_json(LEDGER, led)
     except PaperError as e:
         st["6-8_budget_risk_broker"] = "BLOCK: %s" % e
         return done("blocked", str(e))
-    pos = next(p for p in led["open"] if p["key"] == "%s:%s" % (market, symbol))
     st["6-8_budget_risk_broker"] = {"verdict": "PASS, paper %s filled" % ("short" if short else "buy"), "qty": pos["qty"],
                                     "entry": pos["entry"], "stop": pos["stop"], "target": pos["target"],
                                     "max_loss": round(abs(pos["entry"] - pos["stop"]) * pos["qty"] + pos.get("entry_fee", 0), 2),

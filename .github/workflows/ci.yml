@@ -90,6 +90,8 @@ jobs:
         run: python tests/test_pov.py
       - name: Scanner v4 acceptance tests (primary, sequential OB/FVG secondary, version gate) (offline)
         run: python tests/test_scanner_v4.py
+      - name: Scanner v4 flip rule (previous day's BOS trade -> today's opposite BOS setup) (offline)
+        run: python tests/test_v4_flip.py
       - name: Scanner v3 sweep reversal + FVG/OB retest acceptance tests, v2 rollback (offline)
         run: python tests/test_sweep_reversal.py
       - name: Intraday margin (5x India / 4x US) + v4 time machine + its logs API (offline)

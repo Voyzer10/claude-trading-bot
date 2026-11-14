@@ -11,7 +11,7 @@ export default function SymbolIcon({ id, market, symbol, size = 18 }: { id?: str
   let s = (symbol ?? "").toUpperCase();
   if (id && id.includes(":")) [m, s] = id.toUpperCase().split(":", 2);
   else if (id) s = id.toUpperCase();
-  const base = s.replace(/-USD$/, "").replace(/\.(NS|BO)$/, "");
+  const base = s.replace(/#\d+$/, "").replace(/-USD$/, "").replace(/\.(NS|BO)$/, "");
   const src = !failed ? logoUrl(m, base) : null;
   const style = { width: size, height: size, flex: "none" } as const;
   if (src) {

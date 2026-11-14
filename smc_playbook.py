@@ -624,6 +624,11 @@ def v4_setups(rows, day_of, i, intraday=False, ledger=None, chart=None):
                    "sweep_at": rows[t["sweep"]][0].isoformat(), "signal": t["signal_pattern"],
                    "signal_at": rows[t["signal"]][0].isoformat(), "trigger_px": _r(t["trigger_px"]),
                    "rr": round(V4.rr(t), 2)}
+            if t.get("latest_bos"):
+                det["latest_bos"] = True
+            if t.get("flip"):
+                fr = t.get("flip_from") or {}
+                det.update(flip=True, flip_from_side=fr.get("side"), flip_from_entry=_r(fr["entry"]) if fr.get("entry") else None)
         else:
             lo, hi = sorted((t["zone_top"], t["zone_bottom"]))
             liq = "%s tap %s-%s after the primary closed" % (t["zone"], _r(lo), _r(hi))
