@@ -34,6 +34,10 @@ PRIMARY BUY (SELL is the mirror)
   (pov.py passes day_carry=False).
   One trade at a time per chart. A setup that triggers while a trade is open is skipped but stays active; when two
   trigger on the same candle, the oldest BOS is taken. One trade per setup.
+  Flip rule (owner, 14 Nov 2026, both ways): when the open trade came from an earlier day's BOS setup and a setup of
+  the OPPOSITE side whose BOS formed today triggers, the open trade is closed at that candle's close and the new one
+  is taken. (Backtest, Nifty 50 5m, out-of-sample: same -0.36R a trade, ~15% more trades; the owner chose to test it
+  live on paper. Switch: flip_same_day.)
 
 SECONDARY (OB / FVG), strictly after the primary trade CLOSED:
   9. A real zone of the primary move must exist and be unbroken (not closed through): the order block (the last
@@ -82,8 +86,8 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             "htf": False, "bos_body_atr": 0, "bos_vol_x": 0, "vol_n": 20,
             # off by the owner's choice (kept so older backtest settings still run)
             "chop_er": 0, "er_n": 20, "opp_zone": False, "opp_lookback": 48,
-            # the flip rule (owner, 14 Nov 2026): see _flip()
-            "flip_same_day": False}
+            # the flip rule (owner, 14 Nov 2026: on, tested live on paper): see _flip()
+            "flip_same_day": True}
 
 # The signal candle (owner, 12 Nov 2026, "Trading candlestick patterns for buying & selling"), any colour.
 #   BUY at the low:  classic doji, gravestone doji, long-legged doji, inverted hammer
@@ -590,10 +594,21 @@ def live_candidate(rows, day_of, ledger, chart, intraday=False):
     backtest) gives the signal; the paper ledger blocks it while a v4 trade is open on this chart. paper.py's
     setup_decision checks the rest (fresh signal, a secondary's primary really closed)."""
     opened, _ = chart_state(ledger, chart)
-    if opened:
-        return []
     last = len(rows) - 1
-    return [t for t in sequence(rows, day_of, intraday=intraday) if t.get("pending") and t["i"] == last]
+    seq = [t for t in sequence(rows, day_of, intraday=intraday) if t.get("pending") and t["i"] == last]
+    if opened:   # only the flip rule's trade: the opposite side, from a setup whose BOS formed today
+        return [t for t in seq if t.get("flip") and t["kind"] == "primary" and t["side"] != direction(opened)]
+    return seq
+
+
+def direction(pos):
+    """long / short of a v4 position: its setup name (an option bought on a short setup is still a short view)."""
+    s = pos.get("setup") or ""
+    if s.endswith("_short"):
+        return "short"
+    if s.endswith("_long"):
+        return "long"
+    return pos.get("side", "long")
 
 
 def _real(t, short):

@@ -1581,6 +1581,8 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     st["2_news"] = news if news is not None else "not fetched for stock setups (hundreds a day)"
 
     def done(result, why):
+        if rec.get("flipped_from"):
+            why = "flip, closed %s first: %s" % (rec["flipped_from"], why)
         rec["result"], rec["why"] = result, why
         return rec
 
@@ -1612,11 +1614,31 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
         chart = key(market, symbol)
         led = load_ledger(cfg)
         opened, closed = V4.chart_state(led, chart)
-        if opened:
-            return done("skipped", "v4: wait for the open trade on this chart to close")
         signal = _iso(s.get("v4_signal_at"))
+        flipped = None
+        if opened:
+            det = s.get("details") or {}
+            if not (det.get("flip") and s["setup"].startswith("v4_primary_")
+                    and (opened.get("setup") or "").startswith("v4_primary_") and V4.direction(opened) != s["side"]):
+                return done("skipped", "v4: wait for the open trade on this chart to close")
+            # the flip rule (owner, 14 Nov 2026): the open trade came from an earlier day's BOS setup and the
+            # opposite side's setup of today's BOS triggered: close it at the current price, then take this one
+            import contextlib
+            import io
+            try:
+                px, _ = fetch_price(opened["market"], opened["symbol"])
+                with contextlib.redirect_stdout(io.StringIO()):
+                    flipped = close_position(led, cfg, opened, px, "v4 flip: today's opposite BOS setup (%s)"
+                                             % s["side"], datetime.now(timezone.utc))
+                save_json(LEDGER, led)
+            except Exception as e:
+                return done("blocked", "v4 flip: could not close %s first: %s" % (opened["key"], str(e)[:160]))
+            rec["flipped_from"] = opened["key"]
+            st["0_flip"] = {"closed": opened["key"], "side": V4.direction(opened), "exit": flipped["exit"],
+                            "pnl": flipped["pnl"], "r": flipped["r"],
+                            "why": "previous day's BOS trade closed: today's opposite BOS setup triggered"}
         exited = _iso(closed.get("exit_time")) if closed else None
-        if signal is None or (exited is not None and signal <= exited):
+        if signal is None or (not flipped and exited is not None and signal <= exited):
             return done("skipped", "v4: no fresh confirmed signal after the last exit")
         if s["setup"].startswith("v4_secondary_"):
             details = s.get("details") or {}
