@@ -125,13 +125,42 @@ export default function ChartView({ src, onClose }: { src: ChartSource; onClose:
   const dlg = useRef<HTMLDialogElement>(null);
   const [doc, setDoc] = useState<ChartDoc | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [updated, setUpdated] = useState<Date | null>(null);
+  // where the person had scrolled / zoomed, kept across live refreshes
+  const view = useRef<{ from: number; to: number; n: number } | null>(null);
 
   useEffect(() => {
     dlg.current?.showModal();
+    view.current = null;
     const url = src.kind === "position"
       ? `/api/py/chart/position?${new URLSearchParams({ key: src.key, ...(src.entryTime ? { entry_time: src.entryTime } : {}) })}`
       : `/api/py/chart/${src.kind}?${new URLSearchParams({ time: src.time, symbol: src.symbol })}`;
-    getJSON<ChartDoc>(url).then(setDoc).catch((e) => setErr(String(e?.message ?? e)));
+    let stop = false, timer: ReturnType<typeof setTimeout> | undefined;
+    const load = (first: boolean) => {
+      getJSON<ChartDoc>(url)
+        .then((d) => {
+          if (stop) return;
+          if (first) view.current = null;
+          setDoc(d); setUpdated(new Date()); setErr(null);
+          // live: an open trade every 20 s; a chart whose last candle is fresh (a skip, a time machine run) every 60 s
+          const last = d.candles.length ? d.candles[d.candles.length - 1][0] : 0;
+          const fresh = Date.now() / 1000 - last < 15 * 60;
+          const every = d.open ? 20000 : fresh ? 60000 : 0;
+          if (every) timer = setTimeout(() => load(false), every);
+        })
+        .catch((e) => {
+          if (stop) return;
+          if (first) setErr(String(e?.message ?? e));
+          else timer = setTimeout(() => load(false), 30000);    // a failed refresh keeps the last chart, tries again
+        });
+    };
+    load(true);
+    const onVis = () => {               // a hidden tab does not poll; coming back refreshes at once
+      if (document.hidden) { clearTimeout(timer); timer = undefined; }
+      else if (!stop) { clearTimeout(timer); load(false); }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { stop = true; clearTimeout(timer); document.removeEventListener("visibilitychange", onVis); };
   }, [src]);
 
   useEffect(() => {
@@ -231,12 +260,21 @@ export default function ChartView({ src, onClose }: { src: ChartSource; onClose:
     }
     const firstMark = marks.length ? (marks[0].time as number) : null;
     const startAt = firstMark !== null && tEntry !== null ? Math.min(firstMark, tEntry as number) : (tEntry as number | null);
-    if (startAt !== null) {   // open on the setup: a little before its first marker to the end
+    const was = view.current;
+    if (was) {                // a live refresh: keep the person's view; at the right edge, follow the new candles
+      const added = times.length - was.n;
+      const follow = was.to >= was.n - 2;
+      chart.timeScale().setVisibleLogicalRange(follow ? { from: was.from + added, to: was.to + added } : { from: was.from, to: was.to });
+    } else if (startAt !== null) {   // open on the setup: a little before its first marker to the end
       const before = (box.current?.clientWidth ?? 800) < 600 ? 10 : 30;   // fewer candles before it on a phone
       const i = Math.max(0, times.indexOf(startAt) - before);
       chart.timeScale().setVisibleLogicalRange({ from: i, to: times.length + 5 });
     }
-    return () => chart.remove();
+    return () => {
+      const r = chart.timeScale().getVisibleLogicalRange();
+      if (r) view.current = { from: r.from, to: r.to, n: times.length };
+      chart.remove();
+    };
   }, [doc]);
 
   const p = doc?.pos;
@@ -254,6 +292,13 @@ export default function ChartView({ src, onClose }: { src: ChartSource; onClose:
               {p.entry != null ? ` · entry ${p.entry}` : ""}{p.risk_stop ?? p.stop ? ` · stop ${p.risk_stop ?? p.stop}` : ""}
               {p.target != null && !p.trail_k ? ` · target ${p.target}` : ""}
               {rr ? ` · ${rr.toFixed(1)}R` : ""} · {doc?.tf} candles, IST
+            </p>
+          )}
+          {updated && (
+            <p className="small muted chart-live" style={{ margin: "2px 0 0" }}>
+              {doc?.open ? <><span className="chart-live-dot" aria-hidden="true" />live · </> : null}
+              updated {updated.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
+              {doc?.open ? " · refreshes every 20 s" : ""}
             </p>
           )}
         </div>
