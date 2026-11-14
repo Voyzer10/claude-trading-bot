@@ -611,3 +611,12 @@ a { text-underline-offset: 3px; }
 .tmx-verdict { margin: 0; overflow-wrap: anywhere; }
 .tmx-run p { margin: 0; }
 @media (max-width: 640px) { .tmx-steps li::after { display: none; } }
+
+/* time machine replays under the chart */
+.tmr { margin-top: 8px; display: grid; gap: 8px; }
+.tmr-hist { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; height: 80px; max-width: 640px; align-items: end; }
+.tmr-col { display: grid; grid-template-rows: 1fr auto auto; height: 100%; text-align: center; min-width: 0; }
+.tmr-bar { align-self: end; width: 100%; min-height: 2px; border-radius: 3px 3px 0 0; background: var(--line-2); }
+.tmr-bar[data-tone="bad"] { background: var(--bad); }
+.tmr-bar[data-tone="good"] { background: var(--good); }
+.tmr-l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

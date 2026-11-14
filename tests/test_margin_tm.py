@@ -203,6 +203,39 @@ if __name__ == "__main__":
         check("   runs(): limit counts all but lists only the newest", len(A.runs(1, path)["runs"]) == 1
               and A.runs(1, path)["counts"] == {"us-pack": 1, "v4": 1})
         check("   runs(): no decisions file -> empty", A.runs(5, os.path.join(tmp, "none.jsonl"))["runs"] == [])
+
+        # ---------------------------------------------------------------- 5. the replays on a chart
+        k = TM.replay(flat, "long", 1000.0, 990.0, 1020.0, 30, paths=300, seed=4, keep=25)
+        plain = TM.replay(flat, "long", 1000.0, 990.0, 1020.0, 30, paths=300, seed=4)
+        check("5. replay keep=25: 25 sample paths, same odds as without keep",
+              len(k["samples"]) == 25 and all(k[x] == plain[x] for x in ("p_target", "p_stop", "avg_r")), k.get("p_target"))
+        okp = all(p["c"][0] == 1000.0 and (p["end"] != "stop" or p["c"][-1] == 990.0)
+                  and (p["end"] != "target" or p["c"][-1] == 1020.0) and len(p["c"]) <= 31 for p in k["samples"])
+        check("   each path starts at the entry and ends at the stop / target it hit", okp)
+        check("   the R histogram counts every path", sum(k["r_hist"]["counts"]) == 300, k["r_hist"])
+        check("   run() saves its seed (the chart redraws the same paths)", isinstance(res.get("seed"), int), res.get("seed"))
+
+        from api import _chart as CH
+        bar_t = flat[1400][0]
+        rec = {"time": bar_t.isoformat(), "symbol": "NSE:FLAT", "result": "PAPER BUY", "why": "ok",
+               "steps": {"1_scanner": {"setup_name": "v4 primary long", "side": "long", "bar_end": bar_t.isoformat()},
+                         "4_exit": {"entry": 1000.0, "stop": 990.0, "target": 1020.0}, "5_timemachine": r1}}
+        CH._decisions = lambda: [rec]
+        A._history_rows = lambda m, s, upto: [r[:5] for r in flat if r[0].timestamp() + 300 <= upto]
+        CH.candles = lambda m, s, since: [(int(r[0].timestamp()), r[1], r[2], r[3], r[4]) for r in flat[1300:]]
+        doc = A.chart_timemachine(rec["time"], "NSE:FLAT", show=40)
+        rp = doc["replay"]
+        check("   /api/py/chart/timemachine: candles, levels, 40 paths starting after the decision candle",
+              len(doc["candles"]) == 200 and doc["pos"]["entry"] == 1000.0 and len(rp["paths"]) == 40
+              and rp["start"] == int(bar_t.timestamp()) + 300 and rp["stats"]["paths"] == TM.PATHS, rp["stats"])
+        check("   the verdict explains the run, the redraw, the decision and what really happened",
+              any(l.startswith("Ran: Scanner v4") for l in doc["verdict"]["lines"])
+              and any(l.startswith("On the chart:") for l in doc["verdict"]["lines"])
+              and any(l.startswith("Decision:") for l in doc["verdict"]["lines"])
+              and any(l.startswith("What really happened") for l in doc["verdict"]["lines"]), doc["verdict"]["lines"])
+        hist_now = A._history_rows("NSE", "FLAT", int(bar_t.timestamp()) + 300)
+        check("   no look-ahead: the replays use only candles closed by the decision",
+              hist_now[-1][0] <= bar_t, hist_now[-1][0])
     finally:
         os.chdir(old)
 

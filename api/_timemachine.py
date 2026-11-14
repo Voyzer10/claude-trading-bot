@@ -96,3 +96,145 @@ def runs(limit=200, path=None):
 @router.get("/api/py/timemachine")
 def timemachine(limit: int = 200):
     return runs(max(1, min(int(limit), 1000)))
+
+
+# ---------------------------------------------------------------------------------------------- one run on a chart
+
+def _day_fn(market):
+    from datetime import timezone as _tz
+    from zoneinfo import ZoneInfo
+    if market == "CRYPTO":
+        return (lambda t: t.astimezone(_tz.utc).date()), False
+    zone = ZoneInfo("America/New_York") if market == "US" else ZoneInfo("Asia/Kolkata")
+    return (lambda t: t.astimezone(zone).date()), True
+
+
+def _history_rows(market, sym, upto):
+    """60 days of 5-minute candles of the chart, only those that had CLOSED by `upto` (no look-ahead)."""
+    from datetime import datetime, timezone as _tz
+    import scan_nse as S
+    try:
+        from api._chart import INDEX_YAHOO
+    except ImportError:
+        from _chart import INDEX_YAHOO
+    if market == "CRYPTO":
+        import scan_crypto as C
+        d = C.crypto_chart(sym, "60d", "5m")
+    elif market == "INDEX":
+        d = S.yahoo_chart(INDEX_YAHOO.get(sym, sym), "60d", "5m", "")
+    else:
+        d = S.yahoo_chart(sym, "60d", "5m", ".NS" if market == "NSE" else ".BO" if market == "BSE" else "")
+    if not d or not d.get("t"):
+        return []
+    rows = [(datetime.fromtimestamp(int(t), _tz.utc), o, h, l, c) for t, o, h, l, c in
+            zip(d["t"], d["o"], d["h"], d["l"], d["c"]) if None not in (o, h, l, c)]
+    return [r for r in rows if r[0].timestamp() + 300 <= upto]
+
+
+ENGINE_WORDS = {"v4": "Scanner v4's time machine: information only, it never blocks a v4 trade",
+                "us-pack": "the US ORB time machine: a gate, a negative edge skipped the trade",
+                "india": "the India breakout time machine: a gate, a negative edge skipped the trade",
+                "crypto": "the crypto rules' time machine: a gate, a negative edge skipped the trade",
+                "other": "an older time machine"}
+
+
+@router.get("/api/py/chart/timemachine")
+def chart_timemachine(time: str, symbol: str, show: int = 60):
+    """One time machine run on its chart: the real candles, the levels, and `show` of the replayed paths drawn from
+    the decision candle on, redrawn with the same method (and the run's seed, when it saved one) on the chart's own
+    candles up to that moment."""
+    from datetime import datetime, timezone as _tz
+    from fastapi import HTTPException
+    try:
+        from api import _chart as CH
+    except ImportError:
+        import _chart as CH
+    import timemachine_v4 as TM
+    rec = next((r for r in reversed(CH._decisions()) if r.get("time") == time and r.get("symbol") == symbol), None)
+    if not rec:
+        raise HTTPException(404, "no decision %s at %s" % (symbol, time))
+    st = rec.get("steps") or {}
+    tm = st.get("5_timemachine")
+    if not isinstance(tm, dict):
+        raise HTTPException(404, "the time machine did not run for this decision")
+    n = normalise(tm)
+    sc, ex = st.get("1_scanner") or {}, st.get("4_exit") or {}
+    side = sc.get("side") or "long"
+    entry = _f(ex.get("stock_entry", ex.get("entry")))
+    stop = _f(ex.get("stock_stop", ex.get("stop")))
+    target = _f(ex.get("stock_target", ex.get("target")))
+    if entry is None:
+        entry = _f(sc.get("price"))
+    if entry is None or stop is None or entry == stop:
+        raise HTTPException(422, "no entry / stop recorded for this decision")
+    entry, stop = float("%.6g" % entry), float("%.6g" % stop)
+    target = float("%.6g" % target) if target is not None else None
+    market, sym = symbol.split(":", 1) if ":" in symbol else ("US", symbol)
+    m2, s2, chart, _box = CH.chart_of({"key": symbol, "market": market, "symbol": sym})
+    bar = CH._ts(sc.get("bar_end")) or CH._ts(rec["time"])
+    try:
+        hist = _history_rows(m2, s2, bar + 300)
+        cs = CH.candles(m2, s2, datetime.fromtimestamp(bar, _tz.utc))
+    except Exception as e:
+        raise HTTPException(502, "candles for %s: %s" % (chart, str(e)[:200]))
+    day_of, intraday = _day_fn(market if m2 != "INDEX" else "NSE")
+    show = max(0, min(int(show), 200))
+    redraw, bars = None, None
+    if len(hist) >= 50:
+        bars = n["bars"] or TM.bars_left(hist, day_of, intraday)
+        seed = tm.get("seed")
+        if seed is None:      # an older run saved no seed: a fixed one per run, so the chart is the same every time
+            import zlib
+            seed = zlib.crc32(("%s|%s" % (symbol, time)).encode())
+        redraw = TM.replay(hist, side, entry, stop, target, int(bars), TM.PATHS, seed, keep=show)
+    start = (hist[-1][0].timestamp() if hist else bar) + 300     # the replays start after the last closed candle
+    marks, _ = CH.setup_markers(rec)
+    marks.append({"t": bar, "kind": "entry" if str(rec.get("result", "")).startswith("PAPER") else "skip",
+                  "text": "time machine ran"})
+    risk = abs(entry - stop)
+    lines = ["Ran: %s." % ENGINE_WORDS.get(n["engine"], n["engine"])]
+    if n["p_target"] is not None:
+        lines.append("Recorded then: target first %.0f%%, stop first %.0f%%, neither by the end %.0f%%, average %+.2fR "
+                     "a path%s." % (100 * n["p_target"], 100 * (n["p_stop"] or 0), 100 * (n["p_neither"] or 0),
+                                    n["avg_r"] or 0, " (%s paths x %s candles)" % (n["paths"], n["bars"]) if n["paths"] else ""))
+    if n["hist_trades"] is not None:
+        lines.append("History on this chart: %s trades%s, %s a trade." % (
+            n["hist_trades"], ", %.0f%% won" % (100 * n["hist_win"]) if n["hist_win"] is not None else "",
+            "%+.2fR" % n["hist_avg_r"] if n["hist_avg_r"] is not None else "?"))
+    if redraw:
+        lines.append("On the chart: %d of %d replays redrawn from %d candles before the decision (green = target "
+                     "first, red = stop first, grey = neither); their odds are under the chart." % (
+                         len(redraw.get("samples", [])), redraw["paths"], len(hist)))
+    else:
+        lines.append("Could not redraw the replays: too few candles before the decision came back.")
+    if rec.get("why"):
+        lines.append("Decision: %s: %s" % (rec.get("result"), rec["why"]))
+    if n["verdict"]:
+        lines.append("Verdict then: %s" % n["verdict"])
+    w = CH.walk(cs, bar + 1, side, entry, stop, target, until=bar + 24 * 3600) if cs else None
+    if w:
+        how, at, r, best, _bt = w
+        lines.append("What really happened: %s" % (
+            "the target came first at %s (%+.2fR)" % (CH._hm(at), r) if how == "target" else
+            "the stop came first at %s (-1R)" % CH._hm(at) if how == "stop" else
+            "neither yet, %+.2fR at the last candle" % r))
+        marks.append({"t": at, "kind": "win" if how == "target" else "loss" if how == "stop" else "exit",
+                      "text": "really: target" if how == "target" else "really: stop" if how == "stop" else "now"})
+    res = str(rec.get("result") or "")
+    out = CH._base({"key": symbol, "market": market, "symbol": sym}, m2, s2, chart, True, cs, False)
+    out["markers"] = sorted(marks, key=lambda m: m["t"])
+    out["verdict"] = {"tone": "good" if (n["avg_r"] or 0) > 0.1 else "bad" if (n["avg_r"] or 0) < -0.1 else "flat",
+                      "title": "Time machine: %s %s %s" % (symbol, side, sc.get("setup_name") or rec.get("setup") or ""),
+                      "lines": lines}
+    out["pos"] = {"key": symbol, "market": market, "symbol": sym, "side": side, "entry": entry, "stop": stop,
+                  "risk_stop": stop, "target": target, "entry_time": datetime.fromtimestamp(bar, _tz.utc).isoformat(),
+                  "setup_name": sc.get("setup_name") or rec.get("setup"), "reason": res, "planned": True,
+                  "rr": round(abs(target - entry) / risk, 2) if target is not None and risk else None}
+    out["replay"] = {"start": int(start), "step": 300, "bars": bars,
+                     "paths": [{"end": p["end"], "r": p["r"], "c": p["c"]} for p in (redraw or {}).get("samples", [])],
+                     "r_hist": (redraw or {}).get("r_hist"),
+                     "stats": {k: (redraw or {}).get(k) for k in ("paths", "p_target", "p_stop", "p_neither", "avg_r")}}
+    out["note"] = ("The exact 1,000 paths are not stored; they are redrawn here with the same method%s, so the odds can "
+                   "differ a little from the recorded ones (the 60-day window of candles has moved since)." % (
+                       " and the run's seed" if tm.get("seed") is not None else ""))
+    return out

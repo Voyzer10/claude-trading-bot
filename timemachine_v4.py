@@ -49,7 +49,9 @@ def bars_left(rows, day_of, intraday):
     return max(3, typical - per_day[today])
 
 
-def replay(rows, side, entry, stop, target, bars, paths=PATHS, seed=None):
+def replay(rows, side, entry, stop, target, bars, paths=PATHS, seed=None, keep=0):
+    """keep > 0: also return the first `keep` paths ("samples": each its closes candle by candle, how it ended and
+    its R) to draw on a chart, and "r_hist" (how many paths ended in each R bucket)."""
     moves = _moves(rows)
     risk = abs(entry - stop)
     if not moves or risk <= 0:
@@ -57,28 +59,45 @@ def replay(rows, side, entry, stop, target, bars, paths=PATHS, seed=None):
     rnd = random.Random(seed)
     sh = side == "short"
     tgt_n = stop_n = 0
-    rs = []
-    for _ in range(paths):
+    rs, samples = [], []
+    for k in range(paths):
         p = entry
-        out = None
+        out, how = None, "neither"
+        line = [entry] if k < keep else None
         for _ in range(bars):
             dh, dl, dc = moves[rnd.randrange(len(moves))]
             h, l, c = p * (1 + dh), p * (1 + dl), p * (1 + dc)
             if (h >= stop) if sh else (l <= stop):
-                out = -1.0
+                out, how = -1.0, "stop"
                 stop_n += 1
+                if line is not None:
+                    line.append(stop)
                 break
             if target is not None and ((l <= target) if sh else (h >= target)):
-                out = abs(target - entry) / risk
+                out, how = abs(target - entry) / risk, "target"
                 tgt_n += 1
+                if line is not None:
+                    line.append(target)
                 break
             p = c
+            if line is not None:
+                line.append(c)
         if out is None:
             out = ((entry - p) if sh else (p - entry)) / risk
         rs.append(out)
+        if line is not None:
+            samples.append({"end": how, "r": round(out, 2), "c": [round(x, 6) for x in line]})
     n = float(paths)
-    return {"paths": paths, "bars": bars, "p_target": round(tgt_n / n, 3), "p_stop": round(stop_n / n, 3),
-            "p_neither": round(1 - (tgt_n + stop_n) / n, 3), "avg_r": round(sum(rs) / n, 3)}
+    res = {"paths": paths, "bars": bars, "p_target": round(tgt_n / n, 3), "p_stop": round(stop_n / n, 3),
+           "p_neither": round(1 - (tgt_n + stop_n) / n, 3), "avg_r": round(sum(rs) / n, 3)}
+    if keep:
+        res["samples"] = samples
+        edges = [-1.0, -0.5, 0.0, 0.5, 1.0, 2.0]
+        hist = [0] * (len(edges) + 1)
+        for r in rs:
+            hist[sum(1 for e in edges if r > e + 1e-9)] += 1
+        res["r_hist"] = {"edges": edges, "counts": hist}
+    return res
 
 
 def history(rows, day_of, intraday, tm=None, chart=None):
@@ -122,8 +141,10 @@ def run(rows, day_of, intraday, side, entry, stop, target, tm=None, chart=None, 
     """{"replay": {...}, "history": {...}, "verdict": str, "gate": "info only"} or None (too few candles)."""
     if not rows or len(rows) < MIN_ROWS:
         return None
+    if seed is None:          # repeatable: the chart view redraws these replays with the same seed
+        seed = abs(hash((chart or "", str(rows[-1][0])))) % (2 ** 31)
     bars = bars_left(rows, day_of, intraday)
     rep = replay(rows, side, float(entry), float(stop), float(target) if target is not None else None, bars, paths, seed)
     hist = history(rows, day_of, intraday, tm, chart)
     return {"replay": rep, "history": hist, "verdict": verdict(rep, hist), "gate": "info only (never blocks a v4 trade)",
-            "candles": len(rows)}
+            "candles": len(rows), "seed": seed}
