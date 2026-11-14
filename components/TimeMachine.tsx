@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, errText } from "@/lib/api";
 import { ago, timeIST } from "@/lib/format";
+import ChartView, { type ChartSource } from "@/components/ChartView";
 
 type Run = {
   time: string; symbol: string; setup?: string; side?: string; result?: string; why?: string;
@@ -58,6 +59,7 @@ export default function TimeMachine({ refreshKey }: { refreshKey: number }) {
   const [err, setErr] = useState("");
   const [eng, setEng] = useState("all");
   const [showAll, setShowAll] = useState(false);
+  const [chartOf, setChartOf] = useState<ChartSource | null>(null);
   useEffect(() => {
     getJSON<Resp>("/api/py/timemachine?limit=300").then((x) => { setD(x); setErr(""); }).catch((e) => setErr(errText(e)));
   }, [refreshKey]);
@@ -98,7 +100,7 @@ export default function TimeMachine({ refreshKey }: { refreshKey: number }) {
                   <div className="tmx-head">
                     <b className="mono">{r.symbol}</b>
                     <span className="small muted">{r.setup ?? ""}{r.side ? ` · ${r.side}` : ""} · {timeIST(r.time, true)}</span>
-                    <span className={`chip ${r.result === "traded" ? "c-good" : "c-warn"}`}>{r.result ?? "?"}</span>
+                    <span className={`chip ${String(r.result ?? "").startsWith("PAPER") ? "c-good" : "c-warn"}`}>{r.result ?? "?"}</span>
                     <span className="chip plain c-off">{ENGINE[r.engine] ?? r.engine}</span>
                   </div>
                   <Odds r={r} />
@@ -115,7 +117,14 @@ export default function TimeMachine({ refreshKey }: { refreshKey: number }) {
                     <div className="small muted num">entry {r.entry} · stop {r.stop} · target {r.target ?? "–"}</div>
                   )}
                   {r.verdict && <p className="small tmx-verdict">{r.verdict}</p>}
-                  {r.result !== "traded" && r.why && <p className="small muted">why: {r.why}</p>}
+                  {!String(r.result ?? "").startsWith("PAPER") && r.why && <p className="small muted">why: {r.why}</p>}
+                  {r.entry !== undefined && r.entry !== null && r.stop !== undefined && r.stop !== null && (
+                    <div className="lr-actions">
+                      <button className="btn small" onClick={() => setChartOf({ kind: "timemachine", time: r.time, symbol: r.symbol })}>
+                        View on chart
+                      </button>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
@@ -125,6 +134,7 @@ export default function TimeMachine({ refreshKey }: { refreshKey: number }) {
           )}
         </>
       )}
+      {chartOf && <ChartView src={chartOf} onClose={() => setChartOf(null)} />}
     </section>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  CandlestickSeries, ColorType, LineStyle, createChart, createSeriesMarkers,
+  CandlestickSeries, ColorType, LineSeries, LineStyle, createChart, createSeriesMarkers,
   type IChartApi, type ISeriesApi, type ISeriesPrimitive, type SeriesAttachedParameter, type SeriesMarker, type Time, type UTCTimestamp,
 } from "lightweight-charts";
 import type { CanvasRenderingTarget2D } from "fancy-canvas";
@@ -18,11 +18,17 @@ type ChartPos = {
 type Marker = { t: number; kind: string; text: string };
 type Verdict = { tone: "good" | "bad" | "flat"; title: string; lines: string[] };
 /** What to chart: a paper position (open or closed) or a scanner candidate from the decisions log. */
-export type ChartSource = { kind: "position"; key: string; entryTime?: string } | { kind: "decision"; time: string; symbol: string };
+export type ChartSource = { kind: "position"; key: string; entryTime?: string } | { kind: "decision"; time: string; symbol: string }
+  | { kind: "timemachine"; time: string; symbol: string };
+type Replay = {
+  start: number; step: number; bars: number | null; paths: { end: "target" | "stop" | "neither"; r: number; c: number[] }[];
+  r_hist: { edges: number[]; counts: number[] } | null;
+  stats: { paths?: number; p_target?: number; p_stop?: number; p_neither?: number; avg_r?: number };
+};
 type ChartDoc = {
   chart: string; tf: string; open: boolean; box: boolean; note?: string | null;
   candles: [number, number, number, number, number][]; links: { name: string; url: string }[]; pos: ChartPos;
-  markers?: Marker[]; verdict?: Verdict;
+  markers?: Marker[]; verdict?: Verdict; replay?: Replay;
 };
 
 const IST = 19800; // the chart's clock: IST, like the rest of the dashboard
@@ -81,8 +87,40 @@ class PositionBox implements ISeriesPrimitive<Time> {
   }
 }
 
+/** How the 1,000 replays ended: the three outcomes and the spread of R. */
+function ReplaySummary({ rp }: { rp: Replay }) {
+  const s = rp.stats;
+  if (!s.paths) return null;
+  const pc = (x?: number) => `${Math.round((x ?? 0) * 100)}%`;
+  const h = rp.r_hist;
+  const labels = h ? h.counts.map((_, i) => i === 0 ? `≤${h.edges[0]}R` : i === h.edges.length ? `>${h.edges[h.edges.length - 1]}R`
+    : `${h.edges[i - 1]}…${h.edges[i]}R`) : [];
+  const max = h ? Math.max(1, ...h.counts) : 1;
+  return (
+    <div className="tmr">
+      <div className="tmr-odds small num">
+        <b>{s.paths} replays</b> × {rp.bars} candles:
+        <span className="pos"> target first {pc(s.p_target)}</span> ·
+        <span className="neg"> stop first {pc(s.p_stop)}</span> ·
+        <span className="muted"> neither {pc(s.p_neither)}</span> · average <b>{(s.avg_r ?? 0) >= 0 ? "+" : ""}{(s.avg_r ?? 0).toFixed(2)}R</b>
+      </div>
+      {h && (
+        <div className="tmr-hist" role="img" aria-label="How the replays ended, by R">
+          {h.counts.map((n, i) => (
+            <div key={i} className="tmr-col">
+              <span className="tmr-bar" style={{ height: `${(n / max) * 100}%` }} data-tone={i === 0 ? "bad" : i >= 5 ? "good" : "flat"} />
+              <span className="tmr-n small num">{n}</span>
+              <span className="tmr-l small muted">{labels[i]}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ChartView({ src, onClose }: { src: ChartSource; onClose: () => void }) {
-  const title = src.kind === "position" ? src.key : src.symbol;
+  const title = (src.kind === "position" ? src.key : src.symbol) + (src.kind === "timemachine" ? " · time machine" : "");
   const box = useRef<HTMLDivElement>(null);
   const dlg = useRef<HTMLDialogElement>(null);
   const [doc, setDoc] = useState<ChartDoc | null>(null);
@@ -92,7 +130,7 @@ export default function ChartView({ src, onClose }: { src: ChartSource; onClose:
     dlg.current?.showModal();
     const url = src.kind === "position"
       ? `/api/py/chart/position?${new URLSearchParams({ key: src.key, ...(src.entryTime ? { entry_time: src.entryTime } : {}) })}`
-      : `/api/py/chart/decision?${new URLSearchParams({ time: src.time, symbol: src.symbol })}`;
+      : `/api/py/chart/${src.kind}?${new URLSearchParams({ time: src.time, symbol: src.symbol })}`;
     getJSON<ChartDoc>(url).then(setDoc).catch((e) => setErr(String(e?.message ?? e)));
   }, [src]);
 
@@ -178,6 +216,19 @@ export default function ChartView({ src, onClose }: { src: ChartSource; onClose:
       }
     }
     createSeriesMarkers(s, marks);
+    // the time machine's replayed paths, from the decision candle on: green = target first, red = stop, grey = neither
+    const rp = doc.replay;
+    if (rp && rp.paths.length) {
+      const col = { target: good, stop: bad, neither: muted } as const;
+      const order = [...rp.paths].sort((a, b) => (a.end === "neither" ? 0 : 1) - (b.end === "neither" ? 0 : 1));
+      for (const path of order) {
+        const ls = chart.addSeries(LineSeries, {
+          color: rgba(col[path.end], path.end === "neither" ? 0.35 : 0.55), lineWidth: 1,
+          lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false,
+        });
+        ls.setData(path.c.map((v, k) => ({ time: (rp.start + k * rp.step + IST) as UTCTimestamp, value: v })));
+      }
+    }
     const firstMark = marks.length ? (marks[0].time as number) : null;
     const startAt = firstMark !== null && tEntry !== null ? Math.min(firstMark, tEntry as number) : (tEntry as number | null);
     if (startAt !== null) {   // open on the setup: a little before its first marker to the end
@@ -218,6 +269,7 @@ export default function ChartView({ src, onClose }: { src: ChartSource; onClose:
       {!doc && !err && <p className="muted small">Loading candles…</p>}
       {doc && !doc.candles.length && <div className="notice bad">No candles came back for {doc.chart}.</div>}
       <div ref={box} className="chart-box" />
+      {doc?.replay && <ReplaySummary rp={doc.replay} />}
       {doc?.note && <p className="small muted" style={{ margin: "6px 0 0" }}>{doc.note}</p>}
       <p className="small muted chart-legend" style={{ margin: "6px 0 0" }}>
         Markers: ■ BOS · ▼▲ sweep · ● signal / Trade Manager · arrow = entry · red ■ = skipped · exit in green (win) / red (loss)
