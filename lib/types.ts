@@ -94,6 +94,10 @@ export type Position = {
   locked?: boolean;
   /** a Scanner v4 trade managed by the PDF's exits only (stop / target / flat-by) */
   pdf_only?: boolean;
+  /** cash the trade ties up: futures margin, or the intraday margin of a leveraged stock trade (paper.py) */
+  margin?: number;
+  /** intraday leverage used (owner, 14 Nov 2026: 5x INDIA, 4x US by default) */
+  leverage?: number;
   /** the v4 chart an option position came from (e.g. NSE:BANKNIFTY) */
   v4_chart?: string;
   /** the Trade Manager's last actions on this trade (paper.py tm_event), oldest first */

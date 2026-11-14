@@ -150,6 +150,8 @@ RISK_FIELDS = {
     "max_same_side": {"type": "int", "min": 0, "max": 20, "accounts": ["CRYPTO"]},
     "max_loss_per_trade": {"type": "float", "min": 0.01},
     "max_loss_per_trade_fno": {"type": "float", "min": 0.01, "accounts": ["FNO", "USFNO"]},
+    # intraday margin on stock trades (owner, 14 Nov 2026); SEBI allows at most 5x on Indian cash equity
+    "intraday_leverage": {"type": "float", "min": 1, "max": 5, "accounts": ["INDIA", "US"]},
     "daily_loss_limit": {"type": "float", "min": 0.01},
     "max_trades_per_day": {"type": "int", "min": 1, "max": 50},
     "max_position_pct": {"type": "float", "min": 1, "max": 100},

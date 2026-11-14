@@ -438,6 +438,10 @@ def scanner_version(market):
         return "v3"
 
 
+# the candles each chart's v4 setups came from (owner, 14 Nov 2026): paper.py's v4 time machine replays them
+LAST_ROWS = {}
+
+
 def owner_setups(rows, day_of, ctx=None, version="v3", intraday=False, market=None, symbol=None, ledger=None):
     """The owner's setups that complete on the LAST row (closed candles, oldest first), for one scanner version:
       v4: only the 7 Nov final workflow (scanner_v4.py): primary, then a sequential OB / FVG secondary.
@@ -455,6 +459,10 @@ def owner_setups(rows, day_of, ctx=None, version="v3", intraday=False, market=No
         out = v5_setups(rows, day_of, i, intraday, v5_params(market) if market else {})
     elif version == "v4":
         out = v4_setups(rows, day_of, i, intraday, ledger, "%s:%s" % (market, symbol))
+        if out:
+            if len(LAST_ROWS) > 400:
+                LAST_ROWS.clear()
+            LAST_ROWS["%s:%s" % (market, symbol)] = (rows, day_of, intraday)
     elif version == "v3":
         out = v3_setups(rows, day_of, i, ctx)
     else:

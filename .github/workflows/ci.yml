@@ -92,6 +92,8 @@ jobs:
         run: python tests/test_scanner_v4.py
       - name: Scanner v3 sweep reversal + FVG/OB retest acceptance tests, v2 rollback (offline)
         run: python tests/test_sweep_reversal.py
+      - name: Intraday margin (5x India / 4x US) + v4 time machine + its logs API (offline)
+        run: python tests/test_margin_tm.py
 
   shell:
     name: Shellcheck (deploy scripts)
