@@ -430,3 +430,8 @@ if LOCAL:
     except ImportError:
         from _opinion import router as _opinion_router
     app.include_router(_opinion_router)
+    try:
+        from api._timemachine import router as _tm_router
+    except ImportError:
+        from _timemachine import router as _tm_router
+    app.include_router(_tm_router)

@@ -91,6 +91,7 @@ const RISK_LABELS: Record<string, string> = {
   risk_limits: "Risk limits ON (daily loss, trades/day, cooldown, weekly, max per side). Off while paper testing; turn on before real money",
   trade_setups: "Paper trade the Scanner's setups (v4, v3 or v2, as chosen in Scanner version)",
   fno_stock_options: "F&O stocks: buy the ATM option instead of the shares, only for underlyings in the F&O list (Nifty 50 and Bank Nifty only, so stocks trade as shares, never as options)",
+  intraday_leverage: "Intraday leverage on stock trades (1 = none; 5 = 20% margin, the SEBI maximum)",
   trade_manager: "Trade Manager on (off = stop and target only)",
   tm_be_r: "Stop to the entry at (R in profit; 0 = never)",
   tm_trail: "Trailing stop on",

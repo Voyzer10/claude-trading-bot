@@ -588,3 +588,26 @@ a { text-underline-offset: 3px; }
 .op-opt.num { min-width: 44px; justify-content: center; }
 .op-opts.multi .op-opt { border-radius: 8px; }
 .op-q input[type="text"], .op-q input[type="number"], .op-q textarea { width: 100%; margin-top: 4px; }
+/* phones: the closed-trade buttons under each row (View on chart, Your opinion) */
+.lr-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 10px; }
+.lr-actions .btn, .lr-actions .chart-btn { margin-left: 0; min-height: 36px; }
+
+/* time machine (Bot > Time machine) */
+.tmx-steps { list-style: none; margin: 12px 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; counter-reset: none; }
+.tmx-steps li { display: flex; flex-direction: column; gap: 4px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2, var(--bg)); position: relative; }
+.tmx-steps li:not(:last-child)::after { content: "→"; position: absolute; right: -8px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 12px; }
+.tmx-legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 6px 0 12px; color: var(--muted); }
+.tmx-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.tmx-t { background: var(--good); }
+.tmx-s { background: var(--bad); }
+.tmx-n { background: var(--line-2); }
+.tmx-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.tmx-filter .btn.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.tmx-runs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.tmx-run { border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: grid; gap: 5px; min-width: 0; }
+.tmx-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tmx-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--line); }
+.tmx-bar span { display: block; height: 100%; }
+.tmx-verdict { margin: 0; overflow-wrap: anywhere; }
+.tmx-run p { margin: 0; }
+@media (max-width: 640px) { .tmx-steps li::after { display: none; } }

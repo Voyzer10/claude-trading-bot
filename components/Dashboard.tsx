@@ -10,6 +10,7 @@ import Operations, { useCommands } from "@/components/Operations";
 import Backtest from "@/components/Backtest";
 import Alerts from "@/components/Alerts";
 import Agents from "@/components/Agents";
+import TimeMachine from "@/components/TimeMachine";
 import SymbolIcon from "@/components/SymbolIcon";
 import PovChips from "@/components/Pov";
 import ChartView, { type ChartSource } from "@/components/ChartView";
@@ -96,9 +97,10 @@ export default function Dashboard() {
 
         {/* Bot: control, the agents, the runner */}
         <div className="pane" hidden={nav.tab !== "bot"}>
-          <Seg value={nav.sub.bot} onChange={(v) => nav.go("bot", v)} items={[["control", "Control"], ["agents", "Agents"], ["runner", "Runner"]]} label="Bot" />
+          <Seg value={nav.sub.bot} onChange={(v) => nav.go("bot", v)} items={[["control", "Control"], ["agents", "Agents"], ["timemachine", "Time machine"], ["runner", "Runner"]]} label="Bot" />
           <div className="pane" hidden={nav.sub.bot !== "control"}>{snap && <ControlPanel />}</div>
           <div className="pane" hidden={nav.sub.bot !== "agents"}>{snap && <Agents refreshKey={refreshKey} />}</div>
+          <div className="pane" hidden={nav.sub.bot !== "timemachine"}>{snap && <TimeMachine refreshKey={refreshKey} />}</div>
           <div className="pane" hidden={nav.sub.bot !== "runner"}>
             {snap && <RunnerSection snap={snap} ageSec={ageSec} />}
             {data && <Operations onChange={changed} part="runner" />}
@@ -167,7 +169,7 @@ const MORE: [string, string, string][] = [
 // the old one-page anchors (#control, #logs ...) and the Zerodha login redirect still land in the right place
 const LEGACY: Record<string, [TabKey, string?]> = {
   performance: ["home"], ledger: ["home"], positions: ["home"], control: ["bot", "control"], runner: ["bot", "runner"],
-  agents: ["bot", "agents"], operations: ["more", "data"], coins: ["markets", "crypto"], zerodha: ["markets"], reasons: ["trades", "skipped"],
+  agents: ["bot", "agents"], timemachine: ["bot", "timemachine"], operations: ["more", "data"], coins: ["markets", "crypto"], zerodha: ["markets"], reasons: ["trades", "skipped"],
   decisions: ["trades", "decisions"], logs: ["more", "log"], settings: ["more", "settings"], backtest: ["more", "backtest"],
   alerts: ["more", "alerts"],
 };
@@ -805,6 +807,26 @@ function DecisionsSection({ decisions }: { decisions: Decision[] }) {
 
 // ------------------------------------------------------------------ ledger
 
+/** The money a trade ties up (owner, 14 Nov 2026): the margin when leveraged (or futures), else qty x entry (an
+ *  option: the premium paid). The % return is the P&L on that. */
+function investedOf(p: Position): number {
+  return p.margin ?? p.qty * p.entry;
+}
+function retPct(pnl: number | undefined, p: Position): string {
+  const inv = investedOf(p);
+  if (pnl === undefined || !inv) return "";
+  const v = (pnl / inv) * 100;
+  return `${v > 0 ? "+" : ""}${v.toFixed(2)}%`;
+}
+function InvestedCell({ p, cur }: { p: Position; cur: "$" | "₹" }) {
+  return (
+    <td data-label="Invested" className="num">
+      {money(investedOf(p), cur)}
+      {p.margin !== undefined && p.leverage ? <span className="small muted" title={`Intraday margin: ${p.leverage}x leverage on ${money(p.qty * p.entry, cur)} of stock`}> margin {p.leverage}x</span> : null}
+    </td>
+  );
+}
+
 /** The setup behind a paper trade: its own fields, or (older trades) the agent's note. */
 function setupOf(p: Position): { name: string; liq?: string; why?: string; scanner?: string } {
   if (p.setup_name || p.setup) return { name: p.setup_name ?? p.setup ?? "", liq: p.liquidity, why: p.entry_reason, scanner: p.scanner };
@@ -814,7 +836,8 @@ function setupOf(p: Position): { name: string; liq?: string; why?: string; scann
 }
 
 /** Phones: closed trades as compact rows (symbol, setup · time, P&L, R); a tap opens the details. */
-function ClosedList({ trades, acctOf, empty }: { trades: Position[]; acctOf: (m: string) => string; empty: string }) {
+function ClosedList({ trades, acctOf, empty, onChart }: { trades: Position[]; acctOf: (m: string) => string; empty: string;
+  onChart: (c: Position) => void }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   return (
     <div className="closed-list narrow-only">
@@ -833,12 +856,13 @@ function ClosedList({ trades, acctOf, empty }: { trades: Position[]; acctOf: (m:
               </span>
               <span className="lr-side">
                 <b className={`num ${tone}`}>{money(c.pnl, currencyOf(acctOf(c.market)))}</b>
-                <span className={`small num ${tone}`}>{c.r !== undefined ? `${c.r > 0 ? "+" : ""}${c.r}R` : "—"}</span>
+                <span className={`small num ${tone}`}>{c.r !== undefined ? `${c.r > 0 ? "+" : ""}${c.r}R` : "—"} · {retPct(c.pnl, c)}</span>
               </span>
             </button>
             {isOpen && (
               <dl className="kv lr-detail">
                 <dt>Instrument</dt><dd className="num">{c.key}</dd>
+                <dt>Invested</dt><dd className="num">{money(investedOf(c), currencyOf(acctOf(c.market)))}{c.leverage ? ` (margin, ${c.leverage}x)` : ""} · return {retPct(c.pnl, c)}</dd>
                 <dt>Entry → exit</dt><dd className="num">{price(c.entry)} → {price(c.exit)}</dd>
                 {c.mfe_r !== undefined && (<><dt>Best / worst</dt><dd className="num">+{c.mfe_r.toFixed(1)} / {(c.mae_r ?? 0).toFixed(1)}R</dd></>)}
                 {s.liq && (<><dt>Liquidity</dt><dd>{s.liq}</dd></>)}
@@ -846,6 +870,10 @@ function ClosedList({ trades, acctOf, empty }: { trades: Position[]; acctOf: (m:
                 <dt>Exit</dt><dd>{c.reason}</dd>
               </dl>
             )}
+            <div className="lr-actions">
+              <button className="btn small-btn" onClick={() => onChart(c)} aria-label={`View the ${c.key} trade on chart: why it closed`}>View on chart</button>
+              <OpinionButton src={{ kind: "position", key: c.key, entryTime: c.entry_time }} kind="closed" title={c.key} />
+            </div>
           </div>
         );
       })}
@@ -950,7 +978,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
           <div className="tablewrap" style={{ marginBottom: 14 }}>
             <table className="rtable">
               <thead>
-                <tr><th>Instrument</th><th>Setup · liquidity</th><th>Side</th><th>Qty</th><th>Entry</th><th>Now</th><th>Stop</th><th>Target</th><th>Opened</th>{available && <th><span className="sr-only">Action</span></th>}</tr>
+                <tr><th>Instrument</th><th>Setup · liquidity</th><th>Side</th><th>Qty</th><th>Invested</th><th>Entry</th><th>Now</th><th>Stop</th><th>Target</th><th>Opened</th>{available && <th><span className="sr-only">Action</span></th>}</tr>
               </thead>
               <tbody>
                 {open.map((p) => (
@@ -964,6 +992,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
                     <SetupCell p={p} />
                     <td data-label="Side">{p.side ?? "long"}</td>
                     <td data-label="Qty" className="num">{p.qty}</td>
+                    <InvestedCell p={p} cur={currencyOf(acctOf(p.market)) as "$" | "₹"} />
                     <td data-label="Entry" className="num">{price(p.entry)}</td>
                     <td data-label="Now" className="num">
                       {p.last !== undefined ? price(p.last) : "—"}
@@ -974,7 +1003,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
                       })()}
                       {p.open_pnl !== undefined && (
                         <span className={`small ${p.open_pnl > 0 ? "pos" : p.open_pnl < 0 ? "neg" : ""}`}>
-                          {" "}{money(p.open_pnl, currencyOf(acctOf(p.market)))}
+                          {" "}{money(p.open_pnl, currencyOf(acctOf(p.market)))} ({retPct(p.open_pnl, p)})
                         </span>
                       )}
                     </td>
@@ -1022,23 +1051,27 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
           {rsum > 0 ? "+" : ""}{rsum.toFixed(1)}R · newest first
         </p>
       )}
-      <ClosedList trades={shown.slice().reverse()} acctOf={acctOf} empty={closed.length ? "No closed trades in this market." : "No closed paper trades yet."} />
+      <ClosedList trades={shown.slice().reverse()} acctOf={acctOf} empty={closed.length ? "No closed trades in this market." : "No closed paper trades yet."}
+                  onChart={(c) => setChartOf({ kind: "position", key: c.key, entryTime: c.entry_time })} />
       <div className="scroll wide-only">
         <table className="rtable">
           <thead>
-            <tr><th>Closed</th><th>Instrument</th><th>Setup · liquidity</th><th>Entry → exit</th><th>P&amp;L</th><th>R</th><th>Exit</th></tr>
+            <tr><th>Closed</th><th>Instrument</th><th>Setup · liquidity</th><th>Invested</th><th>Entry → exit</th><th>P&amp;L</th><th>R</th><th>Exit</th></tr>
           </thead>
           <tbody>
             {shown.length === 0 && (
-              <tr><td colSpan={7} className="muted">{closed.length ? "No closed trades in this market." : "No closed paper trades yet."}</td></tr>
+              <tr><td colSpan={8} className="muted">{closed.length ? "No closed trades in this market." : "No closed paper trades yet."}</td></tr>
             )}
             {shown.slice().reverse().map((c, i) => (
               <tr key={i}>
                 <td data-label="Closed" className="num">{timeIST(c.exit_time, true)}</td>
                 <td data-label="Instrument" className="num"><span className="sym"><SymbolIcon id={c.key} />{c.key}</span></td>
                 <SetupCell p={c} />
+                <InvestedCell p={c} cur={currencyOf(acctOf(c.market)) as "$" | "₹"} />
                 <td data-label="Entry → exit" className="num">{price(c.entry)} → {price(c.exit)}</td>
-                <td data-label="P&L" className={`num ${(c.pnl ?? 0) > 0 ? "pos" : "neg"}`}>{money(c.pnl, currencyOf(acctOf(c.market)))}</td>
+                <td data-label="P&L" className={`num ${(c.pnl ?? 0) > 0 ? "pos" : "neg"}`}>
+                  {money(c.pnl, currencyOf(acctOf(c.market)))} <span className="small">{retPct(c.pnl, c)}</span>
+                </td>
                 <td data-label="R" className={`num ${(c.r ?? 0) > 0 ? "pos" : "neg"}`}>
                   {c.r !== undefined ? `${c.r > 0 ? "+" : ""}${c.r}` : "—"}
                   {c.mfe_r !== undefined && <span className="small muted" title="How far the trade went in its favour (best) and against it (worst)"> best +{c.mfe_r.toFixed(1)} / worst {(c.mae_r ?? 0).toFixed(1)}</span>}

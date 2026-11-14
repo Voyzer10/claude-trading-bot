@@ -62,7 +62,10 @@ DEFAULT_CONFIG = {
              "brokerage calculator and correct them).",
     "default_market": "NSE",
     "accounts": {
-        "INDIA":  {"capital": 50000, "max_loss_per_trade": 500, "max_loss_per_trade_fno": 1500,
+        # intraday_leverage (owner, 14 Nov 2026: "margin k according trade lo"): an intraday stock trade ties up
+        # only qty x price / leverage of cash (the broker's intraday margin: SEBI allows at most 5x on Indian cash
+        # equity, FINRA 4x intraday in the US). The risk per trade stays max_loss_per_trade; 1 = no leverage.
+        "INDIA":  {"capital": 50000, "max_loss_per_trade": 500, "max_loss_per_trade_fno": 1500, "intraday_leverage": 5,
                    "max_position_pct": 25, "max_position_pct_fno": 40, "daily_loss_limit": 2500,
                    "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
                    "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": True,
@@ -103,7 +106,7 @@ DEFAULT_CONFIG = {
                    "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
                    "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0,
                    "usopt_underlyings": ["QQQ", "SPY", "DIA"]},
-        "US":     {"capital": 50000, "max_loss_per_trade": 50, "max_position_pct": 25,
+        "US":     {"capital": 50000, "max_loss_per_trade": 50, "max_position_pct": 25, "intraday_leverage": 4,
                    "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
                    "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
@@ -975,7 +978,12 @@ def cmd_buy(a, cfg, led):
     max_loss = acc.get("max_loss_per_trade_fno", acc["max_loss_per_trade"]) if fno_trade else acc["max_loss_per_trade"]
     pos_pct = acc.get("max_position_pct_fno", acc["max_position_pct"]) if fno_trade else acc["max_position_pct"]
     equity = book["cash"] + sum(held_value(p) for p in led["open"] if account_of(p["market"]) == account_of(m))
-    unit_cost = entry * acc.get("futures_margin_pct", 12) / 100 if kind == "futures" else entry
+    lev = float(acc.get("intraday_leverage") or 1) if (kind == "equity" and m in ("NSE", "BSE", "US")) else 1.0
+    lev = max(1.0, min(lev, 5.0))
+    if kind == "futures":
+        unit_cost = entry * acc.get("futures_margin_pct", 12) / 100
+    else:
+        unit_cost = entry / lev           # intraday margin: the cash one unit ties up
     # charges for one unit, round trip at the stop (the loss case), used in sizing
     open_side, close_side = ("sell", "buy") if short else ("buy", "sell")  # a short sells first (STT), buys back
     fee_unit_stop = (charges(cfg, m, t, open_side, entry * lot) + charges(cfg, m, t, close_side, stop * lot)) / lot
@@ -986,8 +994,10 @@ def cmd_buy(a, cfg, led):
                                                                 money(m, risk_ps)))
     caps = {
         "max loss per trade (%s)" % money(m, max_loss): max_loss / (risk_ps + fee_unit_stop),
-        "position cap (%g%% of account)" % pos_pct: equity * pos_pct / 100 / (entry if kind != "futures" else unit_cost),
-        "cash" + (" (futures margin %g%%)" % acc.get("futures_margin_pct", 12) if kind == "futures" else ""):
+        "position cap (%g%% of account%s)" % (pos_pct, " in margin" if kind == "futures" or lev > 1 else ""):
+            equity * pos_pct / 100 / unit_cost,
+        "cash" + (" (futures margin %g%%)" % acc.get("futures_margin_pct", 12) if kind == "futures" else
+                  " (intraday margin, %gx)" % lev if lev > 1 else ""):
             book["cash"] / (unit_cost + fee_unit_stop),
     }
     limiter = min(caps, key=caps.get)
@@ -1027,7 +1037,7 @@ def cmd_buy(a, cfg, led):
                          "position (%s); skipped until a position closes" % (
                              money(m, book["cash"]), account_of(m), fmt_qty(m, q), fmt_qty(m, full)))
     fee = charges(cfg, m, t, open_side, q * entry)
-    margin = round(q * unit_cost, 2) if kind == "futures" else None
+    margin = round(q * unit_cost, 2) if (kind == "futures" or lev > 1) else None
     book["cash"] -= (margin if margin is not None else q * entry) + fee
     pos = {"key": k, "market": m, "symbol": t, "qty": q, "entry": round(entry, 6), "stop": stop, "risk_stop": stop,
            "target": target, "entry_fee": round(fee, 4), "entry_time": now.isoformat(),
@@ -1037,6 +1047,8 @@ def cmd_buy(a, cfg, led):
         pos["lots"], pos["lot_size"] = int(q // lot), lot
     if margin is not None:
         pos["margin"] = margin
+        if lev > 1:
+            pos["leverage"] = lev
     # why this trade was taken (dashboard, downloads): the setup, the scanner that found it, the liquidity it
     # swept / the zone it retested, and the entry reason in words. Optional: callers that know them pass them.
     for f in ("setup", "setup_name", "scanner", "liquidity", "entry_reason", "v4_chart", "v4_signal_at"):
@@ -1514,6 +1526,26 @@ if __name__ == "__main__":
 INDEX_UNDERLYINGS = ("NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY")
 
 
+def v4_timemachine(market, symbol, s, acc, entry, stop, target):
+    """The v4 time machine (timemachine_v4.py) on the candles the scanner just read: history of the rule on this
+    chart + replays of the rest of the session. Information only (owner, 14 Nov 2026): never blocks a trade."""
+    if s.get("scanner") != "v4":
+        return None
+    try:
+        import smc_playbook as PB
+        import scanner_v4 as V4
+        import timemachine_v4 as TM
+        got = PB.LAST_ROWS.get("%s:%s" % (market, symbol))
+        if not got:
+            return "not run: the scanner's candles for this chart are not in memory (setup came from elsewhere)"
+        rows, day_of, intraday = got
+        res = TM.run(rows, day_of, intraday, s["side"], entry, stop, target, V4.tm_settings(acc),
+                     chart="%s:%s" % (market, symbol))
+        return res or "not run: too few candles"
+    except Exception as e:   # never lose the decision over the time machine
+        return "not run: %s" % str(e)[:160]
+
+
 def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields, mk="NFO"):
     """setup_decision for an option trade: an Indian index / F&O stock (NFO) or QQQ / SPY (USOPT): the ATM option is
     paper bought."""
@@ -1527,7 +1559,8 @@ def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields, mk
                     "stock_entry": entry, "stock_stop": stop, "stock_target": target, "lot": op["lot"],
                     "iv": op["iv"], "delta": op["delta"], "expiry": op["expiry"],
                     "r_multiple": round((op["target"] - op["premium"]) / risk_u, 2)}
-    st["5_timemachine"] = "n/a (backtest: research.py %s)" % ("usopt-sv4" if mk == "USOPT" else "fno-sv4 / bnf-sv4")
+    st["5_timemachine"] = v4_timemachine("US" if mk == "USOPT" else "NSE", symbol, s, acc, entry, stop, target) or \
+        "n/a (backtest: research.py %s)" % ("usopt-sv4" if mk == "USOPT" else "fno-sv4 / bnf-sv4")
     if not acc.get("trade_setups", True):
         st["6-8_budget_risk_broker"] = {"verdict": "pass, NOT sent to the broker (trade_setups off)"}
         st["9_alerts"] = "no trade, nothing to watch"
@@ -1673,7 +1706,8 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
         cost = (entry + target) * float(acc.get("fee_pct") or 0) / 100 / risk
     st["4_exit"] = {"entry": entry, "stop": stop, "target": target, "r_multiple": round(abs(target - entry) / risk, 2),
                     "stop_pct": round(risk / entry * 100, 3), "fee_r": round(cost, 3) if cost is not None else None}
-    st["5_timemachine"] = "n/a (these setups are backtested instead: research_v3 / research_smcp / research_abcd)"
+    st["5_timemachine"] = v4_timemachine(market, symbol, s, acc, entry, stop, target) or \
+        "n/a (these setups are backtested instead: research_v3 / research_smcp / research_abcd)"
     if qty <= 0 or (market != "CRYPTO" and qty < 1):
         return done("skipped", "0 units fit: the stop is %s away and the max loss is %s" % (round(risk, 6),
                                                                                       acc["max_loss_per_trade"]))
