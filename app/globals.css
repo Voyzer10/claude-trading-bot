@@ -620,3 +620,8 @@ a { text-underline-offset: 3px; }
 .tmr-bar[data-tone="bad"] { background: var(--bad); }
 .tmr-bar[data-tone="good"] { background: var(--good); }
 .tmr-l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* chart dialog: live refresh */
+.chart-live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--good); margin-right: 5px; vertical-align: 1px; animation: chart-pulse 2s ease-in-out infinite; }
+@keyframes chart-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .chart-live-dot { animation: none; } }
