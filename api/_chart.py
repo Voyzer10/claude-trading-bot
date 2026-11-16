@@ -86,9 +86,98 @@ def candles(market, sym, since):
         return []
     out = [(int(t), o, h, l, c) for t, o, h, l, c in zip(d["t"], d["o"], d["h"], d["l"], d["c"])
            if None not in (o, h, l, c)]
+    if market != "CRYPTO" and out:
+        try:
+            out = top_up(market, sym, out)
+        except Exception:
+            pass
     if since:   # keep about 1.5 sessions before the entry for context
         lo = int((since - timedelta(hours=30)).timestamp())
         out = [r for r in out if r[0] >= lo] or out
+    return out
+
+
+# ---------------------------------------------------------------------------------- live candles, India and US
+# Yahoo's 5-minute candles for NSE and US stocks come late (often 10-20 minutes behind) while the bot has live
+# feeds: Kite (Zerodha: minute candles + the ticker's prices) and Alpaca (IEX minute bars + the US ticker's prices).
+# top_up() rebuilds the candles from the last Yahoo one on from those minute bars, then moves the forming candle
+# to the latest tick. Crypto needs none of this (Coinbase is live).
+
+TICK_KEY = {"NIFTY": "NSE:NIFTY50", "NIFTY50": "NSE:NIFTY50", "BANKNIFTY": "NSE:BANKNIFTY"}
+_FORMING = {}     # chart -> (5-minute bucket, o, h, l) seen across refreshes, so ticks between polls keep the range
+
+
+def _five(rows):
+    """1-minute bars [(utc datetime or epoch, o, h, l, c)] -> {5-minute bucket: [o, h, l, c]}."""
+    out = {}
+    for r in rows:
+        t = int(r[0].timestamp() if hasattr(r[0], "timestamp") else r[0])
+        b = t - t % 300
+        o, h, l, c = r[1:5]
+        if b in out:
+            x = out[b]
+            x[1], x[2], x[3] = max(x[1], h), min(x[2], l), c
+        else:
+            out[b] = [o, h, l, c]
+    return out
+
+
+def _tick(market, sym):
+    """(price, epoch) from the live ticker files (written every second), or None."""
+    try:
+        if market == "US":
+            import alpaca as AL
+            got = AL.tick_price(sym, max_age=15.0)
+        else:
+            import kite as K
+            got = K.tick_price(TICK_KEY.get(sym.upper(), "%s:%s" % ("BSE" if market == "BSE" else "NSE", sym)),
+                               max_age=15.0)
+        return (got[0], got[1].timestamp()) if got else None
+    except Exception:
+        return None
+
+
+def top_up(market, sym, out, now=None):
+    """Candles [(t, o, h, l, c)] brought up to now from the live feeds (see above). Never raises."""
+    import time as _t
+    now = now or _t.time()
+    last = out[-1][0]
+    if now - last > 12 * 3600:            # Yahoo has nothing of today: the market is closed, nothing live to add
+        return out
+    mins = []
+    if now - last > 300:                  # Yahoo is behind: the minute bars from its last candle on
+        start = datetime.fromtimestamp(last, timezone.utc)
+        try:
+            if market == "US":
+                import alpaca as AL
+                if AL.configured():
+                    mins = AL.minutes(sym, start, datetime.fromtimestamp(now, timezone.utc))
+            else:
+                import kite as K
+                if K.connected():
+                    key = TICK_KEY.get(sym.upper(), "%s:%s" % ("BSE" if market == "BSE" else "NSE", sym))
+                    mins = K.minutes(key, start)
+        except Exception:
+            mins = []
+    if mins:
+        five = _five(mins)
+        first = min(five)
+        out = [r for r in out if r[0] < first] + [(b, *five[b]) for b in sorted(five)]
+    tk = _tick(market, sym)
+    if tk:
+        px, tt = tk
+        b = int(tt) - int(tt) % 300
+        chart = "%s:%s" % (market, sym)
+        if b == out[-1][0]:
+            t0, o, h, l, _c = out[-1]
+            out[-1] = (t0, o, max(h, px), min(l, px), px)
+        elif b > out[-1][0] and b - out[-1][0] <= 3 * 3600:     # a new candle (not across a night)
+            prev = out[-1][4]
+            f = _FORMING.get(chart)
+            o, h, l = (f[1], max(f[2], px), min(f[3], px)) if f and f[0] == b else (prev, max(prev, px), min(prev, px))
+            out.append((b, o, h, l, px))
+        if out[-1][0] == b:
+            _FORMING[chart] = (b, out[-1][1], out[-1][2], out[-1][3])
     return out
 
 
