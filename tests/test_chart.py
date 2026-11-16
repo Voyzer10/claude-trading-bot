@@ -141,6 +141,45 @@ if __name__ == "__main__":
               and "So skipping it saved a loss" in r["verdict"]["lines"]
               and any("already moved past the stop" in x for x in r["verdict"]["lines"]), r["verdict"])
         check("   an unknown decision: 404", cl.get("/api/py/chart/decision", params={"time": "x", "symbol": "US:X"}).status_code == 404)
+
+        # 8. live candles for India and US (owner, 16 Nov 2026: "indian market and usa market m live chart data nahi")
+        import alpaca as AL
+        import kite as K
+        now = 1_800_000_000 - 1_800_000_000 % 300 + 130          # 2 min 10 s into a 5-minute candle
+        yh = [(now - 130 - 300 * k, 100.0, 101.0, 99.0, 100.0) for k in range(20, 3, -1)]   # Yahoo stops 4 candles back
+        mins = [(datetime.fromtimestamp(yh[-1][0] + 60 * j, timezone.utc), 100.0 + j * 0.1, 100.2 + j * 0.1,
+                 99.9 + j * 0.1, 100.1 + j * 0.1) for j in range(0, 22)]                     # minute bars up to now
+        AL.configured, AL.minutes = (lambda: True), (lambda s, a, b: [m for m in mins if m[0] >= a])
+        AL.tick_price = lambda s, max_age=10.0: (103.5, datetime.fromtimestamp(now, timezone.utc))
+        got = CH.top_up("US", "AAPL", list(yh), now=now)
+        five = [r[0] for r in got]
+        check("8. US: Yahoo 4 candles behind -> filled from Alpaca minute bars up to the forming candle",
+              five == sorted(set(five)) and five[-1] == now - 130 and len(got) == len(yh) + 4, (len(got), five[-3:]))
+        check("   the forming candle closes at the live tick and its range takes it in",
+              got[-1][4] == 103.5 and got[-1][2] >= 103.5, got[-1])
+        b = got[-2]
+        check("   a filled candle = its 5 minute bars (open of the first, high / low of all, close of the last)",
+              b[1] == mins[15][1] and abs(b[2] - max(m[2] for m in mins[15:20])) < 1e-9 and b[4] == mins[19][4], (b, mins[15]))
+        AL.minutes = lambda s, a, b: (_ for _ in ()).throw(RuntimeError("no network"))
+        CH._FORMING.clear()     # (the forming candle is remembered across refreshes; a fresh chart here)
+        got = CH.top_up("US", "AAPL", list(yh), now=now)
+        check("   no minute bars (feed down): the live tick still adds the forming candle, nothing raises",
+              got[-1][0] == now - 130 and got[-1][4] == 103.5 and got[-1][1] == yh[-1][4], got[-1])
+        AL.tick_price = lambda s, max_age=10.0: None
+        check("   no feed at all: Yahoo's candles unchanged", CH.top_up("US", "AAPL", list(yh), now=now) == yh)
+        check("   market closed (Yahoo's last candle is from yesterday): unchanged",
+              CH.top_up("US", "AAPL", list(yh), now=now + 20 * 3600) == yh)
+        K.connected = lambda: False
+        seen = {}
+        def kt(key, max_age=5.0):
+            seen["key"] = key
+            return (24050.0, datetime.fromtimestamp(now, timezone.utc))
+        K.tick_price = kt
+        got = CH.top_up("INDEX", "NIFTY", list(yh), now=now)
+        check("   India: the Nifty chart reads the ticker's NSE:NIFTY50 price (Kite minute bars off: tick only)",
+              seen.get("key") == "NSE:NIFTY50" and got[-1][4] == 24050.0, (seen, got[-1]))
+        CH.top_up("NSE", "TCS", list(yh), now=now)
+        check("   a stock reads NSE:<symbol>", seen.get("key") == "NSE:TCS", seen)
     finally:
         os.chdir(old)
         shutil.rmtree(tmp, ignore_errors=True)
