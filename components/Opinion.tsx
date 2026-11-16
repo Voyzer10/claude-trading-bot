@@ -55,6 +55,84 @@ export function OpinionButton({ src, kind, title }: { src: ChartSource; kind: Ki
   );
 }
 
+const MAX_IMAGES = 6;
+const MAX_SIDE = 1600;
+
+/** A picked / pasted / dropped image as a base64 data URL: big or odd ones redrawn as a JPEG of at most MAX_SIDE px. */
+async function toDataURL(file: File): Promise<string> {
+  const read = (b: Blob) => new Promise<string>((ok, bad) => {
+    const fr = new FileReader(); fr.onload = () => ok(String(fr.result)); fr.onerror = () => bad(fr.error); fr.readAsDataURL(b);
+  });
+  const small = file.size <= 1.5 * 1024 * 1024 && ["image/png", "image/jpeg", "image/webp"].includes(file.type);
+  let bmp: ImageBitmap | null = null;
+  try { bmp = await createImageBitmap(file); } catch { if (small) return read(file); throw new Error("not an image this browser can read"); }
+  if (small && Math.max(bmp.width, bmp.height) <= MAX_SIDE) { bmp.close(); return read(file); }
+  const k = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement("canvas");
+  cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+  cv.getContext("2d")!.drawImage(bmp, 0, 0, cv.width, cv.height);
+  bmp.close();
+  const blob = await new Promise<Blob | null>((ok) => cv.toBlob(ok, "image/jpeg", 0.85));
+  if (!blob) throw new Error("could not shrink the image");
+  return read(blob);
+}
+
+/** Screenshots with the opinion: pick (camera / gallery on a phone), paste (Ctrl+V) or drop. */
+function ImagePicker({ names, setNames, setErr }: { names: string[]; setNames: (f: (x: string[]) => string[]) => void; setErr: (e: string | null) => void }) {
+  const [busy, setBusy] = useState(0);
+  const [over, setOver] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const add = async (files: File[]) => {
+    const imgs = files.filter((f) => f.type.startsWith("image/"));
+    if (!imgs.length) return;
+    const room = MAX_IMAGES - names.length;
+    if (room <= 0) { setErr(`At most ${MAX_IMAGES} images per opinion.`); return; }
+    setErr(null);
+    for (const f of imgs.slice(0, room)) {
+      setBusy((n) => n + 1);
+      try {
+        const r = await postJSON<{ name: string }>("/api/py/opinion/image", { data: await toDataURL(f) });
+        setNames((x) => (x.includes(r.name) || x.length >= MAX_IMAGES ? x : [...x, r.name]));
+      } catch (e) {
+        setErr(`Image not added: ${String((e as Error)?.message ?? e)}`);
+      } finally { setBusy((n) => n - 1); }
+    }
+  };
+  useEffect(() => {      // paste anywhere in the dialog
+    const onPaste = (e: ClipboardEvent) => {
+      const files = Array.from(e.clipboardData?.files ?? []);
+      if (files.some((f) => f.type.startsWith("image/"))) { e.preventDefault(); add(files); }
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  });
+  return (
+    <fieldset className="op-q">
+      <legend>Screenshots (optional, up to {MAX_IMAGES})</legend>
+      <div className={`op-drop${over ? " over" : ""}`}
+           onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
+           onDrop={(e) => { e.preventDefault(); setOver(false); add(Array.from(e.dataTransfer.files)); }}>
+        {names.map((n) => (
+          <figure key={n} className="op-thumb">
+            <a href={`/api/py/opinion/image/${n}`} target="_blank" rel="noreferrer">
+              <img src={`/api/py/opinion/image/${n}`} alt="attached screenshot" loading="lazy" />
+            </a>
+            <button type="button" className="op-thumb-x" aria-label="Remove this image" onClick={() => setNames((x) => x.filter((y) => y !== n))}>×</button>
+          </figure>
+        ))}
+        {names.length < MAX_IMAGES && (
+          <button type="button" className="op-add" onClick={() => input.current?.click()} disabled={busy > 0}>
+            {busy > 0 ? "Uploading…" : "+ Add image"}
+          </button>
+        )}
+        <input ref={input} type="file" accept="image/*" multiple hidden
+               onChange={(e) => { add(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
+      </div>
+      <p className="small muted" style={{ margin: "6px 0 0" }}>Pick a file (camera or gallery on a phone), paste a screenshot with Ctrl+V, or drop it here.</p>
+    </fieldset>
+  );
+}
+
 function OpinionDialog({ src, kind, title, onClose }: { src: ChartSource; kind: Kind; title: string; onClose: () => void }) {
   const dlg = useRef<HTMLDialogElement>(null);
   const [qs, setQs] = useState<Question[] | null>(null);
@@ -62,12 +140,13 @@ function OpinionDialog({ src, kind, title, onClose }: { src: ChartSource; kind: 
   const [saved, setSaved] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [images, setImages] = useState<string[]>([]);
 
   useEffect(() => {
     dlg.current?.showModal();
     getJSON<{ questions: Question[] }>("/api/py/opinion/questions").then((d) => setQs(d.questions)).catch((e) => setErr(String(e?.message ?? e)));
-    getJSON<{ answers: Answers; saved_at: string; version: number } | null>(`/api/py/opinion?ref_id=${encodeURIComponent(refId(src))}`)
-      .then((d) => { if (d) { setA(d.answers ?? {}); setSaved(`last saved ${d.saved_at.slice(0, 16).replace("T", " ")} (version ${d.version})`); } })
+    getJSON<{ answers: Answers; saved_at: string; version: number; images?: string[] } | null>(`/api/py/opinion?ref_id=${encodeURIComponent(refId(src))}`)
+      .then((d) => { if (d) { setA(d.answers ?? {}); setImages(d.images ?? []); setSaved(`last saved ${d.saved_at.slice(0, 16).replace("T", " ")} (version ${d.version})`); } })
       .catch(() => {});
   }, [src]);
 
@@ -79,7 +158,7 @@ function OpinionDialog({ src, kind, title, onClose }: { src: ChartSource; kind: 
     setBusy(true); setErr(null);
     try {
       const answers = Object.fromEntries(Object.entries(a).filter(([k]) => { const q = qs?.find((x) => x.id === k); return q && shown(q); }));
-      const r = await postJSON<{ version: number }>("/api/py/opinion", { ref: refOf(src), answers });
+      const r = await postJSON<{ version: number }>("/api/py/opinion", { ref: refOf(src), answers, images });
       await loadIndex(true);
       setSaved(`saved (version ${r.version})`);
       dlg.current?.close();
@@ -151,6 +230,7 @@ function OpinionDialog({ src, kind, title, onClose }: { src: ChartSource; kind: 
               ))}
             </fieldset>
           ))}
+          <ImagePicker names={images} setNames={setImages} setErr={setErr} />
           <div className="actions">
             <button type="submit" className="btn primary" disabled={busy || !a.verdict}>{busy ? "Saving…" : "Save opinion"}</button>
             <span className="small muted">* required. Change it any time: the latest answers count.</span>

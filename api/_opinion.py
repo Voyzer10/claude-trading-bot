@@ -9,9 +9,18 @@ levels), so the export reads on its own. Saving again adds a newer version; the 
   GET  /api/py/opinion/questions          the questions (the dashboard draws the form from this)
   GET  /api/py/opinion?ref_id=...          the latest answers for one trade / candidate (or null)
   GET  /api/py/opinion/index               {ref_id: saved_at} of everything answered
-  POST /api/py/opinion  {"ref": {...}, "answers": {...}}
+  POST /api/py/opinion  {"ref": {...}, "answers": {...}, "images": [name, ...]}
        ref: {"kind": "position", "key", "entry_time"} | {"kind": "decision", "time", "symbol"}
+  POST /api/py/opinion/image  {"data": "data:image/png;base64,..."} -> {"name"}   (owner, 16 Nov 2026: images)
+  GET  /api/py/opinion/image/{name}        the image
+
+Images (a screenshot of the broker chart, a marked-up chart...): PNG / JPEG / WebP only, checked by their first
+bytes, at most IMG_MAX bytes each and IMG_PER_OPINION per opinion; stored as trader/live/opinion_images/<sha>.<ext>
+(the same picture twice is one file) and listed in the opinion's "images". Download all carries them.
 """
+import base64
+import hashlib
+import re
 import json
 import os
 import sys
@@ -25,6 +34,40 @@ if ROOT not in sys.path:
 
 router = APIRouter()
 OPINIONS = os.path.join("trader", "live", "opinions.jsonl")   # relative, like paper.py (the API runs in /opt/trader)
+IMG_MAX = 4 * 1024 * 1024
+IMG_PER_OPINION = 6
+IMG_NAME = re.compile(r"^[0-9a-f]{20}\.(png|jpg|webp)$")
+IMG_TYPES = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp"}
+
+
+def img_dir():
+    return os.path.join(os.path.dirname(OPINIONS), "opinion_images")
+
+
+def _img_kind(raw):
+    if raw[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if raw[:3] == b"\xff\xd8\xff":
+        return "jpg"
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return "webp"
+    return None
+
+
+def clean_images(names):
+    """The opinion's image names: known, stored, at most IMG_PER_OPINION."""
+    out = []
+    for n in names or []:
+        n = str(n)
+        if not IMG_NAME.match(n):
+            raise HTTPException(400, "bad image name %r" % n[:40])
+        if not os.path.isfile(os.path.join(img_dir(), n)):
+            raise HTTPException(400, "image %s was not uploaded" % n)
+        if n not in out:
+            out.append(n)
+    if len(out) > IMG_PER_OPINION:
+        raise HTTPException(400, "at most %d images per opinion" % IMG_PER_OPINION)
+    return out
 IST = timezone(timedelta(hours=5, minutes=30))
 
 # kinds: "open", "closed" (paper trades), "skipped" (skipped / blocked / log only), "traded" (a traded candidate)
@@ -200,17 +243,61 @@ def get_opinion(ref_id: str):
     return latest().get(ref_id)
 
 
+@router.post("/api/py/opinion/image")
+async def upload_image(request: Request):
+    body = await request.json()
+    data = str((body or {}).get("data") or "")
+    if data.startswith("data:"):
+        data = data.split(",", 1)[-1]
+    if len(data) > IMG_MAX * 4 // 3 + 16:
+        raise HTTPException(413, "the image is over %d MB" % (IMG_MAX // 1024 // 1024))
+    try:
+        raw = base64.b64decode(data, validate=True)
+    except Exception:
+        raise HTTPException(400, "not a base64 image")
+    if not raw or len(raw) > IMG_MAX:
+        raise HTTPException(413, "the image is empty or over %d MB" % (IMG_MAX // 1024 // 1024))
+    kind = _img_kind(raw)
+    if not kind:
+        raise HTTPException(415, "only PNG, JPEG or WebP images")
+    name = "%s.%s" % (hashlib.sha256(raw).hexdigest()[:20], kind)
+    os.makedirs(img_dir(), exist_ok=True)
+    path = os.path.join(img_dir(), name)
+    if not os.path.isfile(path):
+        tmp = path + ".tmp"
+        with open(tmp, "wb") as fh:
+            fh.write(raw)
+        os.replace(tmp, path)
+    return {"name": name, "bytes": len(raw)}
+
+
+@router.get("/api/py/opinion/image/{name}")
+def get_image(name: str):
+    from fastapi.responses import FileResponse
+    if not IMG_NAME.match(name):
+        raise HTTPException(404, "no such image")
+    path = os.path.join(img_dir(), name)
+    if not os.path.isfile(path):
+        raise HTTPException(404, "no such image")
+    return FileResponse(path, media_type=IMG_TYPES[name.rsplit(".", 1)[1]],
+                        headers={"Cache-Control": "private, max-age=31536000, immutable",
+                                 "X-Content-Type-Options": "nosniff"})
+
+
 @router.post("/api/py/opinion")
 async def save_opinion(request: Request):
     body = await request.json()
     ref = body.get("ref") or {}
     rid = ref_id(ref)
     answers = clean(body.get("answers"))
+    images = clean_images(body.get("images"))
     ctx = context(ref)
     prev = latest().get(rid)
     rec = {"saved_at": datetime.now(IST).isoformat(timespec="seconds"), "ref_id": rid,
            "ref": {k: ref.get(k) for k in ("kind", "key", "entry_time", "time", "symbol") if ref.get(k)},
            "version": (prev or {}).get("version", 0) + 1, "context": ctx, "answers": answers}
+    if images:
+        rec["images"] = images
     os.makedirs(os.path.dirname(OPINIONS), exist_ok=True)
     with open(OPINIONS, "a", encoding="utf-8") as fh:
         fh.write(json.dumps(rec, default=str) + "\n")
@@ -218,7 +305,8 @@ async def save_opinion(request: Request):
 
 
 OPINION_COLS = ["saved_at", "version", "kind", "symbol", "side", "setup_name", "scanner", "result", "reason", "r",
-                "why", "entry", "stop", "target", "entry_time", "exit_time", "time"] + [q["id"] for q in QUESTIONS]
+                "why", "entry", "stop", "target", "entry_time", "exit_time", "time"] + [q["id"] for q in QUESTIONS] + [
+                "images"]
 
 
 def opinion_rows():
@@ -234,5 +322,6 @@ def opinion_rows():
         for q in QUESTIONS:
             v = a.get(q["id"])
             row[q["id"]] = "; ".join(v) if isinstance(v, list) else v
+        row["images"] = "; ".join("opinion_images/" + n for n in r.get("images") or [])
         rows.append(row)
     return sorted(rows, key=lambda x: x["saved_at"] or "")

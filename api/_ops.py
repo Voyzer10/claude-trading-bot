@@ -1014,6 +1014,10 @@ def _download_all():
             OP.OPINIONS = os.path.join(LIVE, "opinions.jsonl")
             z.writestr("opinions.csv", _csv(OP.opinion_rows(), OP.OPINION_COLS))
             made.append("opinions.csv")
+            idir = OP.img_dir()
+            for name in sorted(os.listdir(idir)) if os.path.isdir(idir) else []:
+                if OP.IMG_NAME.match(name):   # the images attached to opinions (opinions.csv lists them)
+                    add_file(os.path.join(idir, name), "opinion_images/" + name)
         except Exception as e:   # never lose the export over the reviews
             z.writestr("opinions_error.txt", str(e))
         state = _read_json(os.path.join(LIVE, "state.json"), {})
@@ -1037,7 +1041,8 @@ def _download_all():
             "daily_summary.csv   per day and account: trades, wins, win rate, P&L, total / average / best / worst R",
             "opinions.csv        your reviews (Your opinion button): the latest answers per trade / skipped",
             "                    candidate with a snapshot of it (setup, result, R, reason, levels);",
-            "                    every version is in live/opinions.jsonl",
+            "                    every version is in live/opinions.jsonl; the images column names the",
+            "                    pictures attached to an opinion, in opinion_images/",
             "summary.json        totals: closed trades by setup, scanner version, market | setup | side, exit reason",
             "                    and day; decisions by result, reason, stopping agent, setup and day",
             "paper/          ledger.json (accounts, open and closed trades), config.json (risk limits, fees)",

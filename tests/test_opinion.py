@@ -87,6 +87,37 @@ if __name__ == "__main__":
         check("   an unknown trade: 404", cl.post("/api/py/opinion", json={"ref": {"kind": "position", "key": "US:NOPE"},
                                                                          "answers": {"verdict": "right"}}).status_code == 404)
 
+        # 4b. images (owner, 16 Nov 2026: "opinions m images dalne ka option bhi do")
+        import base64
+        png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 200
+        jpg = b"\xff\xd8\xff\xe0" + b"\x01" * 300
+        up = cl.post("/api/py/opinion/image", json={"data": "data:image/png;base64," + base64.b64encode(png).decode()})
+        name = up.json().get("name", "")
+        check("4b. an image upload: a PNG is stored under its hash", up.status_code == 200 and name.endswith(".png")
+              and os.path.isfile(os.path.join("trader", "live", "opinion_images", name)), up.json())
+        again = cl.post("/api/py/opinion/image", json={"data": base64.b64encode(png).decode()}).json().get("name")
+        check("   the same picture twice is one file", again == name and len(os.listdir("trader/live/opinion_images")) == 1)
+        jname = cl.post("/api/py/opinion/image", json={"data": base64.b64encode(jpg).decode()}).json().get("name", "")
+        check("   a JPEG too", jname.endswith(".jpg"), jname)
+        for data, code, why in ((base64.b64encode(b"<svg onload=alert(1)>").decode(), 415, "not a PNG / JPEG / WebP (an SVG)"),
+                                ("@@@not base64@@@", 400, "not base64"),
+                                (base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x00" * (OP.IMG_MAX + 10)).decode(), 413, "over 4 MB")):
+            check("   refused: %s" % why, cl.post("/api/py/opinion/image", json={"data": data}).status_code == code)
+        g = cl.get("/api/py/opinion/image/" + name)
+        check("   served back with its type, nosniff", g.status_code == 200 and g.content == png
+              and g.headers["content-type"] == "image/png" and g.headers.get("x-content-type-options") == "nosniff")
+        check("   a bad or unknown name: 404", cl.get("/api/py/opinion/image/..%2F..%2Fpaper%2Fledger.json").status_code == 404
+              and cl.get("/api/py/opinion/image/" + "0" * 20 + ".png").status_code == 404)
+        r = cl.post("/api/py/opinion", json={"ref": dref, "answers": {"verdict": "wrong", "mistakes": ["filter_wrong_skip"]},
+                                             "images": [name, jname, name]})
+        d = cl.get("/api/py/opinion", params={"ref_id": "dec|US:QCOM|" + dec["time"]}).json()
+        check("   saved with the opinion (once each)", r.status_code == 200 and d["images"] == [name, jname], d.get("images"))
+        check("   an image that was never uploaded: refused",
+              cl.post("/api/py/opinion", json={"ref": dref, "answers": {"verdict": "right"},
+                                               "images": ["a" * 20 + ".png"]}).status_code == 400)
+        check("   more than 6: refused", cl.post("/api/py/opinion", json={"ref": dref, "answers": {"verdict": "right"},
+                                                                         "images": [name] * 1 + ["%020x.png" % k for k in range(6)]}).status_code == 400)
+
         # 5. the export
         import api._ops as O
         # every path the export reads, in this temp folder (the repo's own trader/ may not exist, e.g. in CI)
@@ -103,6 +134,9 @@ if __name__ == "__main__":
               "live/opinions.jsonl" in z.namelist() and csv_txt.splitlines()[0].startswith("saved_at,version,kind,symbol")
               and len(csv_txt.strip().splitlines()) == 3 and "US:QCOM" in csv_txt and "blocked" in csv_txt
               and "opinions.csv" in z.read("README.txt").decode(), csv_txt[:300])
+        check("   the images go along: opinion_images/ in the zip, named in the csv's images column",
+              "opinion_images/" + name in z.namelist() and "opinion_images/" + jname in z.namelist()
+              and ("opinion_images/%s; opinion_images/%s" % (name, jname)) in csv_txt, [n for n in z.namelist() if "image" in n])
     finally:
         os.chdir(old)
         shutil.rmtree(tmp, ignore_errors=True)
