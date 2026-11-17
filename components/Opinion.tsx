@@ -92,8 +92,11 @@ async function toDataURL(file: File): Promise<string> {
 }
 
 /** Screenshots with the opinion: pick (camera / gallery on a phone), paste (Ctrl+V) or drop. */
-function ImagePicker({ names, setNames, saved }: { names: string[]; setNames: (f: (x: string[]) => string[]) => void; saved: string[] }) {
+function ImagePicker({ names, setNames, saved, onBusy }: {
+  names: string[]; setNames: (f: (x: string[]) => string[]) => void; saved: string[]; onBusy: (n: number) => void;
+}) {
   const [busy, setBusy] = useState(0);
+  useEffect(() => { onBusy(busy); }, [busy]);   // the dialog keeps Save off while an upload runs
   const [over, setOver] = useState(false);
   const [err, setErr] = useState<string | null>(null);     // shown right here, not at the top of the form
   const add = async (files: File[]) => {
@@ -131,8 +134,12 @@ function ImagePicker({ names, setNames, saved }: { names: string[]; setNames: (f
             <a href={`/api/py/opinion/image/${n}`} target="_blank" rel="noreferrer">
               <img src={`/api/py/opinion/image/${n}`} alt="attached screenshot" loading="lazy" />
             </a>
+            <figcaption className={`op-badge ${saved.includes(n) ? "ok" : "up"}`}>{saved.includes(n) ? "✓ saved" : "✓ uploaded"}</figcaption>
             <button type="button" className="op-thumb-x" aria-label="Remove this image" onClick={() => setNames((x) => x.filter((y) => y !== n))}>×</button>
           </figure>
+        ))}
+        {Array.from({ length: busy }, (_, k) => (
+          <div key={`up${k}`} className="op-thumb op-uploading" role="status">Uploading…</div>
         ))}
         {names.length < MAX_IMAGES && (
           // a <label> around the input (not a hidden input clicked from code): iPhones open the picker reliably
@@ -163,6 +170,8 @@ function OpinionDialog({ src, kind, title, onClose }: { src: ChartSource; kind: 
   const [busy, setBusy] = useState(false);
   const [images, setImages] = useState<string[]>([]);
   const [savedImages, setSavedImages] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(0);
+  const [done, setDone] = useState<string | null>(null);      // the confirmation after a save, from the server's answer
 
   useEffect(() => {
     dlg.current?.showModal();
@@ -180,10 +189,13 @@ function OpinionDialog({ src, kind, title, onClose }: { src: ChartSource; kind: 
     setBusy(true); setErr(null);
     try {
       const answers = Object.fromEntries(Object.entries(a).filter(([k]) => { const q = qs?.find((x) => x.id === k); return q && shown(q); }));
-      const r = await postJSON<{ version: number }>("/api/py/opinion", { ref: refOf(src), answers, images });
+      const r = await postJSON<{ version: number; images?: string[] }>("/api/py/opinion", { ref: refOf(src), answers, images });
       await loadIndex(true);
+      const kept = r.images ?? [];
+      setSavedImages(kept);
       setSaved(`saved (version ${r.version})`);
-      dlg.current?.close();
+      setDone(`✓ Saved (version ${r.version})${kept.length ? ` with ${kept.length} image${kept.length === 1 ? "" : "s"}` : ", no images"}.`
+        + (kept.length < images.length ? ` ${images.length - kept.length} image(s) were not kept: add them again.` : ""));
     } catch (e) {
       setErr(`Not saved: ${String((e as Error)?.message ?? e)}`);
     } finally { setBusy(false); }
@@ -252,13 +264,20 @@ function OpinionDialog({ src, kind, title, onClose }: { src: ChartSource; kind: 
               ))}
             </fieldset>
           ))}
-          <ImagePicker names={images} setNames={setImages} saved={savedImages} />
+          <ImagePicker names={images} setNames={(f) => { setDone(null); setImages(f); }} saved={savedImages} onBusy={setUploading} />
           <div className="actions">
-            <button type="submit" className="btn primary" disabled={busy || !a.verdict}>{busy ? "Saving…" : "Save opinion"}</button>
+            <button type="submit" className="btn primary" disabled={busy || !a.verdict || uploading > 0}>
+              {busy ? "Saving…" : uploading > 0 ? "Uploading image… wait" : "Save opinion"}
+            </button>
             <span className="small muted">
               {!a.verdict ? "Answer the first question (Right / Wrong…) to save. " : ""}* required. Change it any time: the latest answers count.
             </span>
           </div>
+          {done && (
+            <div className="notice good op-done" role="status">
+              {done} <button type="button" className="btn small-btn" onClick={() => dlg.current?.close()}>Close</button>
+            </div>
+          )}
           {err && <div className="notice bad" role="alert">{err}</div>}
         </form>
       )}
