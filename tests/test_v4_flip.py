@@ -3,7 +3,7 @@
 
   1. Engine: every flip closes a trade from an earlier day's BOS setup at the candle's close and opens the opposite
      side from a setup whose BOS formed that day; switched off, no flips.
-  2. live_candidate: with a v4 trade open on the chart only an opposite-side flip trigger comes back.
+  2. live_candidate: with a v4 trade open every trigger comes back (paper decides), except the one it came from.
   3. paper.setup_decision: a flip closes the open position at the current price, then takes the new trade; a
      setup without the flip mark still waits.
   4. Latest BOS: with a trade open, a setup of a newer BOS is taken as well (at most 2 open on a chart); live it
@@ -104,29 +104,27 @@ if __name__ == "__main__":
     check("   never more than %d trades open on a chart" % V4.DEFAULTS["max_open"], over == 0, over)
 
     # ------------------------------------------------------------------ 2. live_candidate
+    # (17 Nov 2026: with trades open every trigger comes back; paper.setup_decision takes the flip / latest-BOS ones
+    # and records the rest as skipped, so none is dropped unseen. Only the trigger an open position came from is not.)
     real_seq = V4.sequence
+    t99 = datetime(2026, 11, 16, 16, 30, tzinfo=timezone.utc)
+    rows100 = [(t99 - timedelta(minutes=5 * (99 - k)), 1, 1, 1, 1, 0) for k in range(100)]
     flip_short = {"i": 99, "kind": "primary", "side": "short", "pending": True, "flip": True}
     plain_short = {"i": 99, "kind": "primary", "side": "short", "pending": True}
-    rows100 = [(None,)] * 100
     led = {"open": [{"key": "NSE:TCS", "market": "NSE", "symbol": "TCS", "scanner": "v4", "v4_chart": "NSE:TCS",
-                     "setup": "v4_primary_long", "side": "long"}], "closed": []}
+                     "setup": "v4_primary_long", "side": "long",
+                     "v4_signal_at": (t99 - timedelta(hours=1)).isoformat()}], "closed": []}
     V4.sequence = lambda *a, **k: [dict(flip_short), dict(plain_short)]
     got = V4.live_candidate(rows100, day_of, led, "NSE:TCS", intraday=True)
-    check("2. open long + flip short trigger -> only the flip comes back", len(got) == 1 and got[0].get("flip"), got)
-    led["open"][0]["setup"] = "v4_primary_short"
-    check("   open short + flip short -> nothing (same side)", V4.live_candidate(rows100, day_of, led, "NSE:TCS") == [])
+    check("2. a trade open: every trigger comes back (the flip one and a plain one, which paper records as skipped)",
+          len(got) == 2 and got[0].get("flip"), got)
+    led["open"][0]["v4_signal_at"] = t99.astimezone(timezone(timedelta(hours=-5))).isoformat()   # ET, as US rows
+    check("   the trigger the open position came from is not offered again",
+          V4.live_candidate(rows100, day_of, led, "NSE:TCS") == [])
     opt = {"key": "NFO:X-PE", "market": "NFO", "symbol": "X-PE", "scanner": "v4", "v4_chart": "NSE:TCS",
            "setup": "v4_primary_long", "side": "long"}
     check("   an option bought on a long setup counts as long", V4.direction(opt) == "long"
           and V4.direction(dict(opt, setup="v4_primary_short")) == "short")
-    V4.sequence = lambda *a, **k: [dict(plain_short, latest_bos=True), dict(plain_short)]
-    led["open"][0]["setup"] = "v4_primary_long"
-    got = V4.live_candidate(rows100, day_of, led, "NSE:TCS")
-    check("   open trade + latest-BOS trigger -> it comes back (either side)", len(got) == 1 and got[0].get("latest_bos"),
-          got)
-    led["open"].append(dict(led["open"][0], key="NSE:TCS#2"))
-    check("   two open already -> no latest-BOS trigger", V4.live_candidate(rows100, day_of, led, "NSE:TCS") == [])
-    V4.sequence = lambda *a, **k: [dict(flip_short), dict(plain_short)]
     led["open"] = []
     check("   no open trade -> every pending trigger", len(V4.live_candidate(rows100, day_of, led, "NSE:TCS")) == 2)
     V4.sequence = real_seq
@@ -169,8 +167,9 @@ if __name__ == "__main__":
         s2 = dict(s, setup="v4_primary_long", side="long", stop=989.0, target=1010.0,
                   details={})                            # no flip mark: waits for the open short
         rec2 = P.setup_decision("NSE", "TCS", s2)
-        check("   a setup without the flip mark still waits for the open trade", rec2["result"] == "skipped"
-              and "wait for the open trade" in rec2["why"], (rec2["result"], rec2.get("why")))
+        check("   a setup without the flip mark is skipped and says why (the engine had closed the open trade)",
+              rec2["result"] == "skipped" and "NSE:TCS is still open on this chart" in rec2["why"]
+              and "engine had already closed" in rec2["why"], (rec2["result"], rec2.get("why")))
         s3 = dict(s, setup="v4_primary_short", side="short")
         rec3 = P.setup_decision("NSE", "TCS", s3)
         check("   a flip mark on the same side as the open trade does nothing", rec3["result"] == "skipped", rec3)
@@ -193,6 +192,55 @@ if __name__ == "__main__":
         led = P.load_ledger(cfg)
         check("   the runner's check handles both positions (prices by symbol, not key)",
               len([p for p in led["open"] if p["symbol"] == "TCS"]) == 2, [p["key"] for p in led["open"]])
+
+        # 5. a v4 option also exits on its underlying's v4 stop / target (owner, 17 Nov 2026), premium ones stay
+        E = datetime(2026, 11, 16, 16, 17, tzinfo=timezone.utc)
+        mins = [(E + timedelta(minutes=k), 667.0, 667.0 + 0.5 * k, 666.8, 667.2) for k in range(6)]   # QQQ rises
+        put = {"key": "USOPT:QQQ261118P00666000", "market": "USOPT", "symbol": "QQQ261118P00666000", "entry_time": E.isoformat(),
+               "underlying_plan": {"market": "US", "symbol": "QQQ", "side": "short", "stop": 669.43, "target": 663.07}}
+        P.underlying_data = lambda m, s, since, now: (667.5, [b for b in mins if b[0] + timedelta(seconds=60) > since])
+        why = P.underlying_exit(put, E + timedelta(minutes=7))
+        check("5. QQQ's 1-minute high reached the v4 stop 669.43 between checks -> the put exits ('underlying stop')",
+              why is not None and why.startswith("underlying stop: QQQ reached 669.5") and "669.43" in why, why)
+        put["underlying_plan"]["stop"] = 671.0
+        check("   below the stop and above the target: no exit, the check moves on",
+              P.underlying_exit(put, E + timedelta(minutes=7)) is None and put["underlying_plan"]["checked_until"])
+        P.underlying_data = lambda m, s, since, now: (662.9, [])
+        why = P.underlying_exit(put, E + timedelta(minutes=9))
+        check("   the live price at the v4 target 663.07 -> 'underlying target'", why is not None
+              and why.startswith("underlying target: QQQ reached 662.9"), why)
+        long_call = {"key": "NFO:NIFTY25NOV24000CE", "entry_time": E.isoformat(),
+                     "underlying_plan": {"market": "NSE", "symbol": "NIFTY", "side": "long", "stop": 23950.0, "target": 24100.0}}
+        P.underlying_data = lambda m, s, since, now: (23990.0, [(E, 24000.0, 24010.0, 23940.0, 23990.0)])
+        check("   a Nifty call: the index's low under the stop -> exit (long side mirrored)",
+              (P.underlying_exit(long_call, E + timedelta(minutes=2)) or "").startswith("underlying stop: NIFTY reached 23940"))
+        def broken(m, s, since, now):
+            raise RuntimeError("feed down")
+        P.underlying_data = broken
+        check("   no underlying data: never closes the trade (retried next check)", P.underlying_exit(long_call, E) is None)
+
+        # the plan is saved on the option bought from a v4 setup
+        P.underlying_data = lambda m, s, since, now: (667.5, [])
+        P.fetch_price = lambda m, t: (7.2, datetime.now(timezone.utc))
+        cfg2 = P.load_config()
+        led2 = P.load_ledger(cfg2)
+        led2["open"] = [p for p in led2["open"] if not p["key"].startswith("USOPT:")]
+        op = {"kind": "PE", "premium": 7.2, "stop": 5.77, "target": 8.86, "name": "QQQ261118P00666000", "lot": 100,
+              "iv": 0.2, "delta": -0.46, "expiry": "2026-11-18"}
+        st2 = {}
+        rec6 = {"steps": st2}
+        def done2(result, why):
+            rec6["result"], rec6["why"] = result, why
+            return rec6
+        P._option_setup(st2, done2, cfg2, cfg2["accounts"]["USFNO"], "QQQ",
+                        {"setup": "v4_primary_short", "side": "short", "price": 666.32, "stop": 669.43, "target": 663.07,
+                         "name": "v4 primary short"}, op, "v4", led2,
+                        {"v4_chart": "US:QQQ", "v4_signal_at": E.isoformat()}, mk="USOPT")
+        bought = next((p for p in P.load_ledger(cfg2)["open"] if p["key"] == "USOPT:QQQ261118P00666000"), {})
+        check("   a v4 option buy saves QQQ's v4 stop / target on the position; the premium stop / target stay",
+              bought.get("underlying_plan", {}).get("stop") == 669.43 and bought["underlying_plan"]["target"] == 663.07
+              and bought["underlying_plan"]["side"] == "short" and bought.get("stop") == 5.77
+              and "QQQ itself" in str(st2.get("9_alerts")), (rec6.get("result"), rec6.get("why"), bought.get("underlying_plan")))
     finally:
         os.chdir(old)
 

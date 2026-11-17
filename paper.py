@@ -1342,6 +1342,67 @@ def check_once(cfg, led):
     return len(led["open"])
 
 
+INDEX_TICK = {"NIFTY": "NSE:NIFTY50", "BANKNIFTY": "NSE:BANKNIFTY"}
+
+
+def underlying_data(market, symbol, since, now):
+    """(price, 1-minute candles since `since`) of an option's underlying: QQQ / SPY / DIA (US), Nifty / Bank Nifty or
+    an F&O stock (NSE). Live feeds first (Alpaca, Zerodha), Yahoo after."""
+    t = symbol.upper()
+    price, bars = None, []
+    if market == "NSE" and t in INDEX_TICK:
+        k = kite_mod()
+        if k:
+            try:
+                q = k.tick_price(INDEX_TICK[t]) or k.ltp(INDEX_TICK[t])
+                price = float(q[0]) if q else None
+            except Exception:
+                price = None
+            try:
+                bars = k.minutes(INDEX_TICK[t], since - timedelta(minutes=1), now) or []
+            except Exception:
+                bars = []
+        if price is None or not bars:
+            import fno as F
+            d = F.yahoo_bars(F.FNO[t]["yahoo"], "1d", "1m")
+            ys = [(datetime.fromtimestamp(ts, timezone.utc), o, h, l, c) for ts, o, h, l, c in
+                  zip(d["t"], d["o"], d["h"], d["l"], d["c"]) if None not in (o, h, l, c)]
+            bars = bars or ys
+            if price is None and ys:
+                price = float(ys[-1][4])
+    else:
+        price = fetch_price(market, symbol)[0]
+        try:
+            bars = fetch_minutes(market, symbol, 1)
+        except Exception:
+            bars = []
+    return price, [b for b in bars if b[0] + timedelta(seconds=60) > since]
+
+
+def underlying_exit(pos, now):
+    """The v4 option's plan on its underlying (pos["underlying_plan"]): a reason to exit when the underlying's
+    1-minute candles since the last check, or its live price, reached the v4 stop (first, as the engine) or target;
+    else None. Data trouble never closes a trade: it is retried on the next check."""
+    u = pos["underlying_plan"]
+    since = _iso(u.get("checked_until")) or _iso(pos.get("entry_time")) or now
+    try:
+        px, bars = underlying_data(u["market"], u["symbol"], since, now)
+    except Exception as e:
+        print("%-16s underlying %s not checked: %s" % (pos["key"], u["symbol"], str(e)[:120]))
+        return None
+    short = u["side"] == "short"
+    stop, target = u["stop"], u.get("target")
+    path = [(b[2], b[3], b[0]) for b in bars] + ([(px, px, now)] if px is not None else [])
+    for hi, lo, at in path:
+        if (hi >= stop) if short else (lo <= stop):
+            return "underlying stop: %s reached %s, the v4 stop %s" % (u["symbol"], hi if short else lo, stop)
+        if target is not None and ((lo <= target) if short else (hi >= target)):
+            return "underlying target: %s reached %s, the v4 target %s" % (u["symbol"], lo if short else hi, target)
+    u["checked_until"] = (now.replace(second=0, microsecond=0)).isoformat()
+    u["last"] = px
+    return None
+
+
 def check_position(cfg, led, pos, price, bars, now):
     """One open position: walk its 1-minute candles and the live price (stop first, then target), then the
     flat-by / overnight exits. Raises on bad data; check_once catches it so the other positions still run."""
@@ -1374,6 +1435,11 @@ def check_position(cfg, led, pos, price, bars, now):
               "missing minutes are read on the next check" % pos["key"])
     for b in path:
         if step_bar(led, cfg, pos, acc, b, now, sh):
+            return
+    if pos.get("underlying_plan"):
+        why = underlying_exit(pos, now)
+        if why:
+            close_position(led, cfg, pos, price, why, now)
             return
     tm = tm_cfg(acc) if not pos.get("trail_k") else None
     if tm:   # the Trade Manager thinks about the trade after every check (7 Nov 2026), whatever the scanner
@@ -1593,12 +1659,20 @@ def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields, mk
     except PaperError as e:
         st["6-8_budget_risk_broker"] = "BLOCK: %s" % e
         return done("blocked", str(e))
+    if version == "v4" and stop is not None:
+        # the v4 plan on the underlying's own chart (owner, 17 Nov 2026): the option also exits when QQQ / Nifty
+        # reaches the v4 stop or target, as the engine and the backtests do; the premium stop / target still count
+        pos["underlying_plan"] = {"market": "US" if mk == "USOPT" else "NSE", "symbol": symbol, "side": s["side"],
+                                  "stop": float(stop), "target": float(target) if target is not None else None}
+        save_json(LEDGER, led)
     st["6-8_budget_risk_broker"] = {"verdict": "PASS, paper option bought", "qty": pos["qty"], "entry": pos["entry"],
                                     "stop": pos["stop"], "target": pos["target"],
                                     "max_loss": round(abs(pos["entry"] - pos["stop"]) * pos["qty"]
                                                       + pos.get("entry_fee", 0), 2),
                                     "report": buf.getvalue().strip().splitlines()}
-    st["9_alerts"] = "live.py / Trade Manager watch the premium: stop %s, target %s" % (pos["stop"], pos["target"])
+    st["9_alerts"] = "live.py / Trade Manager watch the premium: stop %s, target %s" % (pos["stop"], pos["target"]) + (
+        "; and %s itself: exit when it reaches the v4 stop %s or target %s" % (symbol, stop, target)
+        if pos.get("underlying_plan") else "")
     return done("PAPER BUY", "%s %s @ %s, stop %s, target %s (Scanner %s: %s on %s)" % (
         pos["qty"], pos["key"], pos["entry"], pos["stop"], pos["target"], version, name, symbol))
 
@@ -1686,6 +1760,14 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
                 # take it as well (its own position, key ...#2)
                 st["0_latest_bos"] = {"open": [o["key"] for o in opens],
                                       "why": "a newer BOS's setup triggered while a trade is open: taken as well"}
+            elif prim and det.get("latest_bos"):
+                return done("skipped", "v4: a newer BOS's setup, but %d trades are open on this chart already (max %d)"
+                            % (len(opens), int(V4.DEFAULTS["max_open"])))
+            elif not det.get("flip") and not det.get("latest_bos"):
+                # the v4 engine had no trade open on this chart (its stop or target on the chart was hit) but the
+                # paper position is still open, e.g. an option whose premium stop was not reached (owner, 17 Nov)
+                return done("skipped", "v4: %s is still open on this chart, so this trigger is skipped (the v4 "
+                                       "engine had already closed that trade on the chart)" % ", ".join(o["key"] for o in opens))
             else:
                 return done("skipped", "v4: wait for the open trade on this chart to close")
         exited = _iso(closed.get("exit_time")) if closed else None

@@ -140,7 +140,7 @@ if __name__ == "__main__":
               led["accounts"]["USFNO"]["cash"] < 50000 and led["accounts"]["US"]["cash"] == 50000, led["accounts"])
         again = P.setup_decision("US", "QQQ", setup)
         check("   one trade at a time per chart: the next QQQ setup waits", again["result"] == "skipped"
-              and "open trade on this chart" in again["why"], again.get("why"))
+              and ("open trade on this chart" in again["why"] or "is still open on this chart" in again["why"]), again.get("why"))
         UO.plan.__defaults__ = (NOW, [])
         rec2 = P.setup_decision("US", "SPY", dict(setup, v4_signal_at=(NOW + timedelta(minutes=5)).isoformat()))
         check("   no priced contract -> skipped with the reason", rec2["result"] == "skipped" and rec2["why"].startswith("option:"),

@@ -56,7 +56,7 @@ more (owner, 12 Nov 2026, the BULLISH / BEARISH BOS image: "high ke upper break 
 bn gya bos"). The weak-BOS check (bos_body_atr 0.8 ATR body, bos_vol_x 1.2x volume) is off; the backtest can still
 switch it on (variant with_weak_bos), as it can the 1-hour trend skip (htf). Chop and opposing-zone filters: off.
 """
-from datetime import timezone
+from datetime import datetime, timezone
 
 import smc_playbook as PB
 
@@ -639,11 +639,17 @@ def live_candidate(rows, day_of, ledger, chart, intraday=False):
     opens = chart_open(ledger, chart) or ([opened] if opened else [])
     last = len(rows) - 1
     seq = [t for t in sequence(rows, day_of, intraday=intraday) if t.get("pending") and t["i"] == last]
-    if opens:   # only the flip rule's trade (the opposite side) or the latest-BOS rule's (room for one more)
-        dirs = {direction(o) for o in opens}
-        return [t for t in seq if t["kind"] == "primary" and (
-            (t.get("flip") and any(d != t["side"] for d in dirs))
-            or (t.get("latest_bos") and len(opens) < int(DEFAULTS["max_open"])))]
+    if opens:
+        # every trigger comes back: paper.setup_decision takes the flip / latest-BOS ones and records the others as
+        # skipped (before 17 Nov they were dropped here unseen, e.g. when an option's premium stop kept a trade open
+        # that the engine had closed on the chart). The trade a position came from is not offered again.
+        took = set()
+        for o in opens:
+            try:
+                took.add(datetime.fromisoformat(o["v4_signal_at"]).timestamp())
+            except (KeyError, TypeError, ValueError):
+                pass
+        return [t for t in seq if rows[t["i"]][0].timestamp() not in took]
     return seq
 
 
