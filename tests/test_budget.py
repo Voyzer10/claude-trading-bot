@@ -91,6 +91,20 @@ if __name__ == "__main__":
         lot_risk = 30 * (300.0 - 213.7)            # one Bank Nifty lot, premium 300 -> stop 213.7 = Rs 2,589
         check("3. a Bank Nifty lot (risk Rs %.0f) fits the FNO max loss per trade (Rs %s)" % (lot_risk,
               fno["max_loss_per_trade_fno"]), lot_risk <= fno["max_loss_per_trade_fno"])
+        # 4. the dashboard's P&L counts only trades closed after the reset (the old ones stay as history)
+        import api._ops as O
+        led = P.load_ledger(P.load_config())
+        at = led["accounts"]["US"]["budget_reset"]["at"]
+        led["closed"] = [{"key": "US:MSFT", "market": "US", "pnl": 1288.21, "r": 1.2, "exit_time": "2026-11-16T20:00:00+00:00",
+                          "exit_date": "2026-11-16"},
+                         {"key": "US:AAPL", "market": "US", "pnl": -12.5, "r": -0.4, "exit_time": "2099-01-01T00:00:00+00:00",
+                          "exit_date": "2099-01-01"}]
+        P.save_json(P.LEDGER, led)
+        O.LEDGER, O.PREFS = os.path.abspath(P.LEDGER), os.path.join(tmp, "prefs.json")
+        perf = O.performance()
+        check("4. dashboard P&L: only trades after the reset count; every account shows (from zero)",
+              perf["accounts"]["US"]["trades"] == 1 and perf["accounts"]["US"]["pnl"] == -12.5
+              and perf["accounts"]["INDIA"]["trades"] == 0 and perf["history_trades"] == 1 and perf["since"], perf["accounts"])
     finally:
         os.chdir(old)
         shutil.rmtree(tmp, ignore_errors=True)
