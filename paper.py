@@ -116,7 +116,7 @@ DEFAULT_CONFIG = {
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
                    "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
                    "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
-        "CRYPTO": {"capital": 1000, "max_loss_per_trade": 30, "max_position_pct": 25,
+        "CRYPTO": {"capital": 1000, "max_loss_per_trade": 30, "max_position_pct": 25, "intraday_leverage": 5,
                    "daily_loss_limit": 90, "max_trades_per_day": 10, "min_reward_risk": 1.0,
                    "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "max_same_side": 3, "risk_limits": False, "trade_setups": True,
@@ -239,6 +239,9 @@ def load_config():
             for k in ("fno_underlyings", "fno_stock_options"):
                 india.pop(k, None)
         changed = True
+    if not cfg.get("_crypto_lev_1117") and "CRYPTO" in accs:  # one-time (owner, 17 Nov 2026): crypto on 5x margin
+        accs["CRYPTO"].setdefault("intraday_leverage", 5)
+        cfg["_crypto_lev_1117"] = changed = True
     if not cfg.get("_budget_1117"):  # one-time (owner, 17 Nov 2026): see BUDGET_1117
         for name, cap in BUDGET_1117.items():
             if name in accs:
@@ -1023,7 +1026,8 @@ def cmd_buy(a, cfg, led):
     max_loss = acc.get("max_loss_per_trade_fno", acc["max_loss_per_trade"]) if fno_trade else acc["max_loss_per_trade"]
     pos_pct = acc.get("max_position_pct_fno", acc["max_position_pct"]) if fno_trade else acc["max_position_pct"]
     equity = book["cash"] + sum(held_value(p) for p in led["open"] if account_of(p["market"]) == account_of(m))
-    lev = float(acc.get("intraday_leverage") or 1) if (kind == "equity" and m in ("NSE", "BSE", "US")) else 1.0
+    # margin: India / US stocks (14 Nov 2026) and crypto (owner, 17 Nov 2026: 5x, like Indian crypto futures)
+    lev = float(acc.get("intraday_leverage") or 1) if (kind == "equity" and m in ("NSE", "BSE", "US", "CRYPTO")) else 1.0
     lev = max(1.0, min(lev, 5.0))
     if kind == "futures":
         unit_cost = entry * acc.get("futures_margin_pct", 12) / 100
