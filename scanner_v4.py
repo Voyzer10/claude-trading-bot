@@ -11,8 +11,9 @@ PRIMARY BUY (SELL is the mirror)
      2 candles have closed after it (smc_playbook.Context, k=2), whatever the shape of the move.
      Every BOS starts its own setup; all stay active, buy and sell, until one is traded (owner: "jitne bhi bane
      saare active ho"), except the intraday day rule below.
-  2. Sweep: after that BOS, a completed candle CLOSES BELOW an old low: the low the BOS move started from, or a
-     confirmed swing low formed after the BOS. A wick below is not a sweep. Further closes lower only deepen it.
+  2. Sweep: after that BOS, a completed candle CLOSES BELOW the low the BOS move started from (owner, 17 Nov 2026:
+     "BOS jha se start hua h vha se"; a swing low formed after the BOS no longer counts: sweep_post_bos). A wick
+     below is not a sweep. Further closes lower only deepen it.
   3. Signal: after the sweep, at any time, one of the owner's buying candles (12 Nov 2026), any colour: classic doji,
      gravestone doji, long-legged doji (body <= 15% of the range) or inverted hammer (upper wick >= 1x the body, >= half
      the range; owner, 13 Nov 2026). A dragonfly doji or a hammer
@@ -21,8 +22,11 @@ PRIMARY BUY (SELL is the mirror)
      below the swept low). No trigger in 2 candles: a later signal candle gives a new chance.
   5. Entry: right after the trigger candle closes, at the current price (backtest: the next candle's open).
   6. Stop: below the lowest low from the sweep candle to the signal candle, minus 0.1 ATR.
-  7. Target: the nearest untaken liquidity above the entry (a confirmed swing high, or the BOS move's high). The
-     target must be above the entry; there is no minimum reward:risk (min_rr = 0; the backtest also tries 1 and 2).
+  7. Target (owner, 17 Nov 2026, "against wale BOS ... max target bada swing"): the high the latest bearish BOS
+     move started from, above the entry and not taken since, but never beyond the nearest big swing high (a high of
+     big_k = 6 candles each side). No such BOS: the nearest untaken liquidity above the entry (a confirmed swing
+     high, or the BOS move's high), the 12 Nov rule (target_rule "near"). The target must be above the entry;
+     there is no minimum reward:risk in the engine (min_rr = 0; the account's min reward:risk still applies).
   8. Trade Manager, trailing only: at +1R the stop goes to the entry, at +2R to +1R, then up 1R per R. No other
      exit (intraday charts still close at the session's end). That is the default of the account's Trade Manager
      (Settings > Trade Manager), which applies to every scanner's trades; it can add a profit lock, a reversal
@@ -92,13 +96,14 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             "chop_er": 0, "er_n": 20, "opp_zone": False, "opp_lookback": 48,
             # the flip rule (owner, 14 Nov 2026: on, tested live on paper): see _flip()
             "flip_same_day": True,
-            # the owner's sweep and target (17 Nov 2026), switches for the backtest first:
+            # the owner's sweep and target (17 Nov 2026): ON, tested live on paper (owner: "live market m test
+            # karenge, kuch problem hui to remove kar denge"). Switches (the 12 Nov rules: True / "near"):
             #   sweep_post_bos: True = a close beyond the BOS-start level OR a swing formed after the BOS sweeps (the
             #     12 Nov rule); False = only the level the BOS move started from ("BOS jha se start hua h vha se")
             #   target_rule: "near" = the nearest untaken swing / the BOS move's extreme (12 Nov); "opp_bos" = where the
             #     latest opposite-side BOS move started ("against wale BOS"); "opp_bos_cap" = that, but never beyond
             #     the nearest big swing (a pivot of big_k candles each side; "max target bada swing")
-            "sweep_post_bos": True, "target_rule": "near", "big_k": 6,
+            "sweep_post_bos": False, "target_rule": "opp_bos_cap", "big_k": 6,
             # the latest-BOS rule (owner, 14 Nov 2026): see _latest(); max_open = trades open at once on one chart
             "latest_bos": True, "max_open": 2}
 
