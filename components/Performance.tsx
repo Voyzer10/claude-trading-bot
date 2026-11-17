@@ -17,6 +17,8 @@ type Perf = {
   month: { days_traded: number; green_days: number; red_days: number; pnl_inr: number; goal_inr: number };
   open_positions: number;
   total_trades: number;
+  since?: string | null;            // the budget reset: P&L counts trades closed after it
+  history_trades?: number;          // older trades, kept in the ledger as history
 };
 
 const inr = (x: number) => money(x, "₹");
@@ -38,7 +40,7 @@ export default function Performance({ refreshKey }: { refreshKey: number }) {
   const goal = p.prefs.daily_goal_inr;
   const monthPct = p.month.goal_inr > 0 ? Math.max(0, Math.min(100, (p.month.pnl_inr / p.month.goal_inr) * 100)) : 0;
 
-  const periods: [string, string][] = [["today", "Today"], ["d7", "7 days"], ["month", "Month"], ["all", "All time"]];
+  const periods: [string, string][] = [["today", "Today"], ["d7", "7 days"], ["month", "Month"], ["all", p.since ? "Since reset" : "All time"]];
   const hero: Record<string, { value: number; sub: string; bar: number | null }> = {
     today: { value: p.inr.today, sub: `goal ${inr(goal)}`, bar: goal > 0 ? Math.max(0, Math.min(100, (p.inr.today / goal) * 100)) : null },
     d7: { value: p.inr.d7, sub: `30 days ${inr(p.inr.d30)}`, bar: null },
@@ -64,6 +66,7 @@ export default function Performance({ refreshKey }: { refreshKey: number }) {
         {p.daily.length > 0 && <DailyBars days={p.daily} goal={goal} />}
         <p className="small muted" style={{ margin: "10px 0 0" }}>
           US$ at ₹{p.prefs.usd_inr}. Goal ₹{goal}/day. {p.total_trades} closed trades, {p.open_positions} open. Judge after 30+ trades.
+          {p.since ? ` Counting from the budget reset (${new Date(p.since).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false })} IST); ${p.history_trades ?? 0} older trades stay in Trades as history.` : ""}
         </p>
       </section>
 
@@ -85,7 +88,7 @@ export default function Performance({ refreshKey }: { refreshKey: number }) {
                   </span>
                   <span className="lr-side">
                     <b className={`num ${tone(a.pnl)}`}>{money(a.pnl, cur)}</b>
-                    <span className="small muted">all time</span>
+                    <span className="small muted">{p.since ? "since reset" : "all time"}</span>
                   </span>
                   <span className="chev"><Icon name={isOpen ? "down" : "right"} size={16} /></span>
                 </button>

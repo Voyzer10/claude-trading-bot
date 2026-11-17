@@ -636,9 +636,17 @@ def performance():
     prefs.update(_read_json(PREFS, {}))
     fx = {"INDIA": 1.0, "FNO": 1.0, "US": prefs["usd_inr"], "USFNO": prefs["usd_inr"], "CRYPTO": prefs["usd_inr"]}
     today = _now().date()
-    closed = led.get("closed") or []
+    # the budget reset (owner, 17 Nov 2026: "purana data 0 kardo, sirf data ledger m rehne do"): the P&L counts the
+    # trades closed after each account's reset; older ones stay in the ledger (Trades tab, exports) as history
+    resets = {a: ((b or {}).get("budget_reset") or {}).get("at") for a, b in (led.get("accounts") or {}).items()}
+    def counted(c):
+        at = resets.get(_acct(c.get("market")))
+        return not at or (c.get("exit_time") or "") >= at
+    every = led.get("closed") or []
+    closed = [c for c in every if counted(c)]
     by_day = {}
-    accounts = {}
+    accounts = {a: {"trades": 0, "wins": 0, "pnl": 0.0, "r_sum": 0.0, "today": 0.0, "d7": 0.0, "d30": 0.0,
+                    "best": None, "worst": None} for a in (led.get("accounts") or {}) if resets.get(a)}
     for c in closed:
         a = _acct(c.get("market"))
         d = c.get("exit_date") or (c.get("exit_time") or "")[:10]
@@ -681,7 +689,9 @@ def performance():
                       "red_days": sum(1 for x in month_days if x["pnl_inr"] < 0),
                       "pnl_inr": round(sum(x["pnl_inr"] for x in month_days), 2),
                       "goal_inr": round(goal * today.day, 2)},
-            "open_positions": len(led.get("open") or []), "total_trades": len(closed)}
+            "open_positions": len(led.get("open") or []), "total_trades": len(closed),
+            "since": min([v for v in resets.values() if v] or [None]) if any(resets.values()) else None,
+            "history_trades": len(every) - len(closed)}
 
 
 # ------------------------------------------------------------------ backtests
