@@ -35,7 +35,15 @@ FILTERS = {"all": {}, "with_weak_bos": {"bos_body_atr": 0.8, "bos_vol_x": 1.2},
            "old_sweep_target": {"sweep_post_bos": True, "target_rule": "near"},
            "old_sweep_only": {"sweep_post_bos": True},
            "old_target_only": {"target_rule": "near"},
-           "target_nocap": {"target_rule": "opp_bos"}}
+           "target_nocap": {"target_rule": "opp_bos"},
+           # the owner's 43 opinions (17 Nov 2026)
+           "newest_bos": {"bos_pick": "newest"},
+           "skip_open_bos": {"skip_open_bos": True},
+           "latest_signal": {"latest_signal": True},
+           "replace_newer": {"replace_newer": True, "flip_same_day": False, "latest_bos": False},
+           "four_rules": {"bos_pick": "newest", "skip_open_bos": True, "latest_signal": True, "replace_newer": True,
+                          "flip_same_day": False, "latest_bos": False},
+           "three_no_replace": {"bos_pick": "newest", "skip_open_bos": True, "latest_signal": True}}
 RRS = (0.0, 1.0, 2.0)
 VARIANTS = [(rr, f) for rr in RRS for f in FILTERS]
 LIVE = {"side": "both", "trades": "both", "min_rr": 0.0, "filters": "all", "session": "all"}

@@ -104,6 +104,13 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             #     latest opposite-side BOS move started ("against wale BOS"); "opp_bos_cap" = that, but never beyond
             #     the nearest big swing (a pivot of big_k candles each side; "max target bada swing")
             "sweep_post_bos": False, "target_rule": "opp_bos_cap", "big_k": 6,
+            # from the owner's 43 opinions (17 Nov 2026), switches for the backtest first:
+            #   bos_pick "newest": when several setups trigger on a candle the newest BOS is taken ("oldest" = 12 Nov)
+            #   skip_open_bos: no BOS on a session's first candle (intraday; a sweep there still counts)
+            #   latest_signal: the trigger needs the most recent signal candle (a newer one replaces an older one)
+            #   replace_newer: a setup whose BOS is newer than the open trade's replaces it, either side ("naya bos
+            #     wala purani trade ki jgha lelo, same side ho to bhi"); one trade per chart (flip / latest-BOS off)
+            "bos_pick": "oldest", "skip_open_bos": False, "latest_signal": False, "replace_newer": False,
             # the latest-BOS rule (owner, 14 Nov 2026): see _latest(); max_open = trades open at once on one chart
             "latest_bos": True, "max_open": 2}
 
@@ -312,7 +319,9 @@ class _Side:
             else:
                 still.append(st)
         self.waiting = still
-        if ctx.bull[j] and ctx.sh_known[j - 1]:
+        open_candle = bool(p.get("skip_open_bos") and p.get("_intraday") and self.day is not None
+                           and (j == 0 or self.day[j] != self.day[j - 1]))
+        if ctx.bull[j] and ctx.sh_known[j - 1] and not open_candle:
             ok, _ = bos_quality(b, ctx, j, p)
             if ok:
                 sh_i, sh_px = ctx.sh_known[j - 1][-1]
@@ -323,7 +332,11 @@ class _Side:
                 self.bos_hist.append((j, st["origin"]))
         # trigger: candle j closes above the high of a signal 1 or 2 candles back
         for s in range(j - 1, max(j - p["conf_max"], 0) - 1, -1):
-            if not self.pat(s) or c <= b[s][2]:
+            if not self.pat(s):
+                continue
+            if c <= b[s][2]:
+                if p.get("latest_signal"):
+                    break           # the newest signal candle decides; an older one no longer triggers
                 continue
             a = ctx.atr[j]
             if not a or (p.get("htf") and self.htf is not None and self.htf[j] == "down"):
@@ -339,7 +352,9 @@ class _Side:
                 self.trig.append(t)
                 if self.last_today is None and self.day is not None and st["day"] == self.day[j]:
                     self.last_today = t
-            return self.trig[0] if self.trig else None
+            if not self.trig:
+                return None
+            return max(self.trig, key=lambda t: t["bos"]) if p.get("bos_pick") == "newest" else self.trig[0]
         return None
 
     def _trade(self, st, s, j, a, liq):
@@ -421,6 +436,7 @@ class _Side:
             return None
         return {"i": m, "kind": "secondary", "zone": z["name"], "zone_top": z["top"], "zone_bottom": z["bot"],
                 "tap": m, "entry": c, "stop": stop, "target": tgt, "atr": a, "primary_at": prim["i"],
+                "prim_bos": prim.get("bos"),
                 "primary_closed_at": k_exit, "signal_pattern": self.pat(m)}
 
 
@@ -528,6 +544,7 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
     normal (shorts un-mirrored). A trigger on the last candle comes back with exit_reason "open" and pending=True
     (entry = that candle's close; live, the paper trade fills at the current price)."""
     p = dict(DEFAULTS, **kw)
+    p["_intraday"] = intraday
     cx = ctxs or contexts(rows, day_of, bool(p.get("htf")))
     srcs = (rows, cx["mirror"])
     carry_day = None
@@ -551,27 +568,34 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
         opens = still
         cands = [(s, sides[s].step(k)) for s in (0, 1)]
         if opens:
-            extra = _flip(opens, sides, srcs, day, carry_day, k, intraday, p)
-            how = "flip"
-            if extra is None:
-                extra, how = _latest(opens, sides, srcs, day, k, intraday, p), "latest"
+            if p.get("replace_newer"):
+                extra, how = _replace(opens, sides, srcs, day, k, intraday, p), "replace"
+            else:
+                extra = _flip(opens, sides, srcs, day, carry_day, k, intraday, p)
+                how = "flip"
+                if extra is None:
+                    extra, how = _latest(opens, sides, srcs, day, k, intraday, p), "latest"
             if extra is None:
                 continue
             s, t, fill, olds = extra
             if fill is None:       # live: the trigger is on the last candle; paper.py acts on it
+                tag = ({"flip": True, "flip_from": _real(dict(olds[0]), olds[0]["_side"] == 1)} if how == "flip" else
+                       {"replace": True, "flip_from": _real(dict(olds[0]), olds[0]["_side"] == 1)} if how == "replace"
+                       else {"latest_bos": True})
                 pend = dict(t, signal_close=t["entry"], exit_i=None, exit=None, exit_reason="open", pending=True,
-                            _side=s, **({"flip": True, "flip_from": _real(dict(olds[0]), olds[0]["_side"] == 1)}
-                                        if how == "flip" else {"latest_bos": True}))
+                            _side=s, **tag)
                 out.append(_real(pend, s == 1))
                 continue
             for old in olds:
-                old.update(exit_i=k, exit=srcs[old["_side"]][k][4], exit_reason="flip: today's opposite BOS setup")
+                old.update(exit_i=k, exit=srcs[old["_side"]][k][4],
+                           exit_reason="replaced: a newer BOS setup" if how == "replace" else "flip: today's opposite BOS setup")
                 out.append(_real(old, old["_side"] == 1))
                 opens.remove(old)
             t["setup"]["used"] = True
             sec = None
             opens.append(dict(t, signal_close=t["entry"], entry=fill, cur_stop=t["stop"], _side=s,
-                              **({"flipped": True} if how == "flip" else {"latest_bos": True})))
+                              **({"flipped": True} if how == "flip" else {"replaced": True} if how == "replace"
+                                 else {"latest_bos": True})))
             continue
         pick = None
         if sec is not None and k > sec[2]:
@@ -584,7 +608,7 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
         if pick is None:
             prims = [(s, t) for s, t in cands if t]
             if prims:
-                pick = min(prims, key=lambda x: x[1]["bos"])
+                pick = (max if p.get("bos_pick") == "newest" else min)(prims, key=lambda x: x[1]["bos"])
         if pick is None:
             continue
         s, t = pick
@@ -624,6 +648,28 @@ def _flip(opens, sides, srcs, day, carry_day, k, intraday, p):
             continue
         return s, t, fill, olds
     return None
+
+
+def _replace(opens, sides, srcs, day, k, intraday, p):
+    """The replace rule (owner, 17 Nov 2026): a setup of either side whose BOS is newer than every open trade's BOS
+    (a secondary counts its primary's BOS) triggers: the open trades are closed at this candle's close and the newest
+    such setup is taken. (side, trigger, fill, trades to close) or None; fill None = the live, pending case."""
+    if any(k <= tr["i"] for tr in opens):
+        return None
+    ref = max(tr.get("bos", tr.get("prim_bos")) if tr.get("bos", tr.get("prim_bos")) is not None else tr["i"]
+              for tr in opens)
+    best = None
+    for s in (0, 1):
+        for t in sides[s].trig:
+            if t["bos"] > ref and (best is None or t["bos"] > best[1]["bos"]):
+                best = (s, t)
+    if best is None:
+        return None
+    s, t = best
+    fill, why = _fill(srcs[s], day, t, intraday)
+    if fill is None and why != "pending":
+        return None
+    return s, t, fill, list(opens)
 
 
 def _latest(opens, sides, srcs, day, k, intraday, p):
