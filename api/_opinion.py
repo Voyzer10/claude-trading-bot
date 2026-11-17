@@ -301,7 +301,7 @@ async def save_opinion(request: Request):
     os.makedirs(os.path.dirname(OPINIONS), exist_ok=True)
     with open(OPINIONS, "a", encoding="utf-8") as fh:
         fh.write(json.dumps(rec, default=str) + "\n")
-    return {"ok": True, "ref_id": rid, "version": rec["version"]}
+    return {"ok": True, "ref_id": rid, "version": rec["version"], "images": rec.get("images", [])}
 
 
 OPINION_COLS = ["saved_at", "version", "kind", "symbol", "side", "setup_name", "scanner", "result", "reason", "r",

@@ -64,24 +64,41 @@ async function toDataURL(file: File): Promise<string> {
     const fr = new FileReader(); fr.onload = () => ok(String(fr.result)); fr.onerror = () => bad(fr.error); fr.readAsDataURL(b);
   });
   const small = file.size <= 1.5 * 1024 * 1024 && ["image/png", "image/jpeg", "image/webp"].includes(file.type);
-  let bmp: ImageBitmap | null = null;
-  try { bmp = await createImageBitmap(file); } catch { if (small) return read(file); throw new Error("not an image this browser can read"); }
-  if (small && Math.max(bmp.width, bmp.height) <= MAX_SIDE) { bmp.close(); return read(file); }
-  const k = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
+  // decode: createImageBitmap, else an <img> (Safari reads iPhone HEIC photos that way)
+  let src: ImageBitmap | HTMLImageElement | null = null;
+  try { src = await createImageBitmap(file); } catch { src = null; }
+  if (!src) {
+    const url = URL.createObjectURL(file);
+    try {
+      src = await new Promise<HTMLImageElement>((ok, bad) => {
+        const im = new Image(); im.onload = () => ok(im); im.onerror = () => bad(new Error("x")); im.src = url;
+      });
+    } catch {
+      URL.revokeObjectURL(url);
+      if (small) return read(file);
+      throw new Error(`this browser cannot read ${file.type || "this file"}; send a PNG or JPEG screenshot`);
+    }
+  }
+  const w = "naturalWidth" in src ? src.naturalWidth : src.width, h = "naturalHeight" in src ? src.naturalHeight : src.height;
+  if (small && Math.max(w, h) <= MAX_SIDE) { if ("close" in src) src.close(); return read(file); }
+  const k = Math.min(1, MAX_SIDE / Math.max(w, h));
   const cv = document.createElement("canvas");
-  cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
-  cv.getContext("2d")!.drawImage(bmp, 0, 0, cv.width, cv.height);
-  bmp.close();
+  cv.width = Math.round(w * k); cv.height = Math.round(h * k);
+  cv.getContext("2d")!.drawImage(src, 0, 0, cv.width, cv.height);
+  if ("close" in src) src.close(); else URL.revokeObjectURL(src.src);
   const blob = await new Promise<Blob | null>((ok) => cv.toBlob(ok, "image/jpeg", 0.85));
   if (!blob) throw new Error("could not shrink the image");
   return read(blob);
 }
 
 /** Screenshots with the opinion: pick (camera / gallery on a phone), paste (Ctrl+V) or drop. */
-function ImagePicker({ names, setNames, setErr }: { names: string[]; setNames: (f: (x: string[]) => string[]) => void; setErr: (e: string | null) => void }) {
+function ImagePicker({ names, setNames, saved, onBusy }: {
+  names: string[]; setNames: (f: (x: string[]) => string[]) => void; saved: string[]; onBusy: (n: number) => void;
+}) {
   const [busy, setBusy] = useState(0);
+  useEffect(() => { onBusy(busy); }, [busy]);   // the dialog keeps Save off while an upload runs
   const [over, setOver] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
+  const [err, setErr] = useState<string | null>(null);     // shown right here, not at the top of the form
   const add = async (files: File[]) => {
     const imgs = files.filter((f) => f.type.startsWith("image/"));
     if (!imgs.length) return;
@@ -117,17 +134,28 @@ function ImagePicker({ names, setNames, setErr }: { names: string[]; setNames: (
             <a href={`/api/py/opinion/image/${n}`} target="_blank" rel="noreferrer">
               <img src={`/api/py/opinion/image/${n}`} alt="attached screenshot" loading="lazy" />
             </a>
+            <figcaption className={`op-badge ${saved.includes(n) ? "ok" : "up"}`}>{saved.includes(n) ? "✓ saved" : "✓ uploaded"}</figcaption>
             <button type="button" className="op-thumb-x" aria-label="Remove this image" onClick={() => setNames((x) => x.filter((y) => y !== n))}>×</button>
           </figure>
         ))}
+        {Array.from({ length: busy }, (_, k) => (
+          <div key={`up${k}`} className="op-thumb op-uploading" role="status">Uploading…</div>
+        ))}
         {names.length < MAX_IMAGES && (
-          <button type="button" className="op-add" onClick={() => input.current?.click()} disabled={busy > 0}>
+          // a <label> around the input (not a hidden input clicked from code): iPhones open the picker reliably
+          <label className={`op-add${busy > 0 ? " busy" : ""}`} aria-disabled={busy > 0}>
             {busy > 0 ? "Uploading…" : "+ Add image"}
-          </button>
+            <input type="file" accept="image/*" multiple className="op-file" disabled={busy > 0}
+                   onChange={(e) => { add(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
+          </label>
         )}
-        <input ref={input} type="file" accept="image/*" multiple hidden
-               onChange={(e) => { add(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
       </div>
+      {err && <p className="small neg" role="alert" style={{ margin: "6px 0 0" }}>{err}</p>}
+      {names.some((n) => !saved.includes(n)) && (
+        <p className="small" style={{ margin: "6px 0 0", color: "var(--warn, #c98a1a)" }}>
+          Uploaded. Press <b>Save opinion</b> to keep {names.filter((n) => !saved.includes(n)).length === 1 ? "it" : "them"} with this opinion.
+        </p>
+      )}
       <p className="small muted" style={{ margin: "6px 0 0" }}>Pick a file (camera or gallery on a phone), paste a screenshot with Ctrl+V, or drop it here.</p>
     </fieldset>
   );
@@ -141,12 +169,15 @@ function OpinionDialog({ src, kind, title, onClose }: { src: ChartSource; kind: 
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [images, setImages] = useState<string[]>([]);
+  const [savedImages, setSavedImages] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(0);
+  const [done, setDone] = useState<string | null>(null);      // the confirmation after a save, from the server's answer
 
   useEffect(() => {
     dlg.current?.showModal();
     getJSON<{ questions: Question[] }>("/api/py/opinion/questions").then((d) => setQs(d.questions)).catch((e) => setErr(String(e?.message ?? e)));
     getJSON<{ answers: Answers; saved_at: string; version: number; images?: string[] } | null>(`/api/py/opinion?ref_id=${encodeURIComponent(refId(src))}`)
-      .then((d) => { if (d) { setA(d.answers ?? {}); setImages(d.images ?? []); setSaved(`last saved ${d.saved_at.slice(0, 16).replace("T", " ")} (version ${d.version})`); } })
+      .then((d) => { if (d) { setA(d.answers ?? {}); setImages(d.images ?? []); setSavedImages(d.images ?? []); setSaved(`last saved ${d.saved_at.slice(0, 16).replace("T", " ")} (version ${d.version})`); } })
       .catch(() => {});
   }, [src]);
 
@@ -158,10 +189,13 @@ function OpinionDialog({ src, kind, title, onClose }: { src: ChartSource; kind: 
     setBusy(true); setErr(null);
     try {
       const answers = Object.fromEntries(Object.entries(a).filter(([k]) => { const q = qs?.find((x) => x.id === k); return q && shown(q); }));
-      const r = await postJSON<{ version: number }>("/api/py/opinion", { ref: refOf(src), answers, images });
+      const r = await postJSON<{ version: number; images?: string[] }>("/api/py/opinion", { ref: refOf(src), answers, images });
       await loadIndex(true);
+      const kept = r.images ?? [];
+      setSavedImages(kept);
       setSaved(`saved (version ${r.version})`);
-      dlg.current?.close();
+      setDone(`✓ Saved (version ${r.version})${kept.length ? ` with ${kept.length} image${kept.length === 1 ? "" : "s"}` : ", no images"}.`
+        + (kept.length < images.length ? ` ${images.length - kept.length} image(s) were not kept: add them again.` : ""));
     } catch (e) {
       setErr(`Not saved: ${String((e as Error)?.message ?? e)}`);
     } finally { setBusy(false); }
@@ -230,11 +264,21 @@ function OpinionDialog({ src, kind, title, onClose }: { src: ChartSource; kind: 
               ))}
             </fieldset>
           ))}
-          <ImagePicker names={images} setNames={setImages} setErr={setErr} />
+          <ImagePicker names={images} setNames={(f) => { setDone(null); setImages(f); }} saved={savedImages} onBusy={setUploading} />
           <div className="actions">
-            <button type="submit" className="btn primary" disabled={busy || !a.verdict}>{busy ? "Saving…" : "Save opinion"}</button>
-            <span className="small muted">* required. Change it any time: the latest answers count.</span>
+            <button type="submit" className="btn primary" disabled={busy || !a.verdict || uploading > 0}>
+              {busy ? "Saving…" : uploading > 0 ? "Uploading image… wait" : "Save opinion"}
+            </button>
+            <span className="small muted">
+              {!a.verdict ? "Answer the first question (Right / Wrong…) to save. " : ""}* required. Change it any time: the latest answers count.
+            </span>
           </div>
+          {done && (
+            <div className="notice good op-done" role="status">
+              {done} <button type="button" className="btn small-btn" onClick={() => dlg.current?.close()}>Close</button>
+            </div>
+          )}
+          {err && <div className="notice bad" role="alert">{err}</div>}
         </form>
       )}
     </dialog>

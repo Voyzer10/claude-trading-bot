@@ -112,6 +112,8 @@ if __name__ == "__main__":
                                              "images": [name, jname, name]})
         d = cl.get("/api/py/opinion", params={"ref_id": "dec|US:QCOM|" + dec["time"]}).json()
         check("   saved with the opinion (once each)", r.status_code == 200 and d["images"] == [name, jname], d.get("images"))
+        check("   the save answer lists the images it kept (the form confirms from it)", r.json().get("images") == [name, jname],
+              r.json())
         check("   an image that was never uploaded: refused",
               cl.post("/api/py/opinion", json={"ref": dref, "answers": {"verdict": "right"},
                                                "images": ["a" * 20 + ".png"]}).status_code == 400)
