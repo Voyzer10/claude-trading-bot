@@ -92,6 +92,13 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             "chop_er": 0, "er_n": 20, "opp_zone": False, "opp_lookback": 48,
             # the flip rule (owner, 14 Nov 2026: on, tested live on paper): see _flip()
             "flip_same_day": True,
+            # the owner's sweep and target (17 Nov 2026), switches for the backtest first:
+            #   sweep_post_bos: True = a close beyond the BOS-start level OR a swing formed after the BOS sweeps (the
+            #     12 Nov rule); False = only the level the BOS move started from ("BOS jha se start hua h vha se")
+            #   target_rule: "near" = the nearest untaken swing / the BOS move's extreme (12 Nov); "opp_bos" = where the
+            #     latest opposite-side BOS move started ("against wale BOS"); "opp_bos_cap" = that, but never beyond
+            #     the nearest big swing (a pivot of big_k candles each side; "max target bada swing")
+            "sweep_post_bos": True, "target_rule": "near", "big_k": 6,
             # the latest-BOS rule (owner, 14 Nov 2026): see _latest(); max_open = trades open at once on one chart
             "latest_bos": True, "max_open": 2}
 
@@ -263,6 +270,8 @@ class _Side:
         self.pats = {}
         self.lows = _Range([r[3] for r in src], min)
         self.highs = _Range([r[2] for r in src], max)
+        self.other = None         # the opposite side (sequence sets it): its BOS origins are this side's targets
+        self.bos_hist = []        # every BOS of this side: (BOS candle, the level its move started from), never pruned
 
     def pat(self, k):
         """The signal-candle name of candle k (src terms), or None."""
@@ -289,8 +298,8 @@ class _Side:
             if j <= st["bos"]:
                 still.append(st)
                 continue
-            lv = [("bos_origin", st["origin"])] + [("post_bos", px) for idx, px in ctx.sl_known[j - 1]
-                                                  if idx > st["bos"]]
+            lv = [("bos_origin", st["origin"])] + ([("post_bos", px) for idx, px in ctx.sl_known[j - 1]
+                                                   if idx > st["bos"]] if p.get("sweep_post_bos", True) else [])
             broken = [(nm, px) for nm, px in lv if c < px]
             if broken:
                 st["lvl_name"], st["lvl"] = max(broken, key=lambda x: x[1])
@@ -306,6 +315,7 @@ class _Side:
                       "day": self.day[j] if self.day is not None else None}
                 self.setups.append(st)
                 self.waiting.append(st)
+                self.bos_hist.append((j, st["origin"]))
         # trigger: candle j closes above the high of a signal 1 or 2 candles back
         for s in range(j - 1, max(j - p["conf_max"], 0) - 1, -1):
             if not self.pat(s) or c <= b[s][2]:
@@ -333,11 +343,46 @@ class _Side:
         stop = self.lows.q(st["sweep"], s) - p["buffer_atr"] * a
         move_hi = self.highs.q(st["bos"], st["sweep"])
         tgt = min([x for x in (liq, move_hi if move_hi > c else None) if x is not None], default=None)
+        rule = p.get("target_rule", "near")
+        if rule != "near":
+            ot = self._opp_target(j, c)
+            if ot is not None:
+                if rule == "opp_bos_cap":
+                    cap = self._big_swing(j, c, int(p.get("big_k") or 6))
+                    if cap is not None:
+                        ot = min(ot, cap)
+                tgt = ot
         if tgt is None or stop >= c or (tgt - c) < p["min_rr"] * (c - stop):
             return None
         return {"i": j, "kind": "primary", "setup": st, "bos": st["bos"], "sweep": st["sweep"], "reclaim": st["sweep"],
                 "signal": s, "level_name": st["lvl_name"], "level": st["lvl"], "entry": c, "stop": stop,
                 "target": tgt, "atr": a, "trigger_px": b[s][2], "signal_pattern": self.pat(s)}
+
+    def _opp_target(self, j, c):
+        """Where the latest opposite-side BOS move started (in this side's terms), above the entry and not traded
+        through since that BOS; None if there is none."""
+        if self.other is None:
+            return None
+        for bi, origin in reversed(self.other.bos_hist):
+            if bi >= j:
+                continue
+            lvl = -origin                      # the other side's prices are this side's, negated (mirror)
+            if lvl > c and (bi + 1 > j or self.highs.q(bi + 1, j) < lvl):
+                return lvl
+        return None
+
+    def _big_swing(self, j, c, k):
+        """The nearest big swing above the entry: a high that is the highest of k candles each side (confirmed k
+        candles later), not traded through since."""
+        b = self.b
+        best = None
+        for idx in range(j - k, max(k, j - 600) - 1, -1):
+            h = b[idx][2]
+            if h <= c or (best is not None and h >= best):
+                continue
+            if self.highs.q(idx - k, idx + k) == h and (idx + 1 > j or self.highs.q(idx + 1, j) <= h):
+                best = h
+        return best
 
     def secondary_at(self, prim, k_exit, m):
         """The OB / FVG secondary on candle m after the primary closed at candle k_exit, or None; "dead" when no
@@ -485,6 +530,7 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
         # intraday: the session's day; crypto (not intraday): the UTC day (owner, 12 Nov 2026)
         carry_day = cx["day"] if intraday else [r[0].astimezone(timezone.utc).date() for r in rows]
     sides = [_Side(srcs[s], cx["ctx"][s], cx["htf"][s] if p.get("htf") else None, p, carry_day) for s in (0, 1)]
+    sides[0].other, sides[1].other = sides[1], sides[0]
     day, n = cx["day"], len(rows)
     out, opens, sec = [], [], None       # sec: (side, primary trade, exit candle) while a secondary is looked for
     for k in range(31, n):

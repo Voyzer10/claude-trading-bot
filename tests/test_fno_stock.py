@@ -55,6 +55,8 @@ if __name__ == "__main__":
     try:
         import fno_stock as FS
         import paper as P
+        import _old_budget
+        _old_budget.apply(P)   # written against the pre-17-Nov budgets
         now = datetime(2026, 11, 10, 5, 0, tzinfo=timezone.utc)      # 10:30 IST
         setup = {"setup": "v4_primary_long", "name": "v4 primary long", "side": "long", "price": 1412.0,
                  "stop": 1402.0, "target": 1432.0, "scanner": "v4", "liquidity": "swept 1404, reclaimed",

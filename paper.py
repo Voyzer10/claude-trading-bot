@@ -65,8 +65,8 @@ DEFAULT_CONFIG = {
         # intraday_leverage (owner, 14 Nov 2026: "margin k according trade lo"): an intraday stock trade ties up
         # only qty x price / leverage of cash (the broker's intraday margin: SEBI allows at most 5x on Indian cash
         # equity, FINRA 4x intraday in the US). The risk per trade stays max_loss_per_trade; 1 = no leverage.
-        "INDIA":  {"capital": 50000, "max_loss_per_trade": 500, "max_loss_per_trade_fno": 1500, "intraday_leverage": 5,
-                   "max_position_pct": 25, "max_position_pct_fno": 40, "daily_loss_limit": 2500,
+        "INDIA":  {"capital": 100000, "max_loss_per_trade": 3000, "max_loss_per_trade_fno": 3000, "intraday_leverage": 5,
+                   "max_position_pct": 25, "max_position_pct_fno": 40, "daily_loss_limit": 9000,
                    "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
                    "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
@@ -79,8 +79,8 @@ DEFAULT_CONFIG = {
         # FNO (owner, 12 Nov 2026): its own Rs 1,00,000 budget, apart from the Rs 50,000 INDIA stock account; F&O only
         # on Nifty 50 and Bank Nifty (index ATM options), no stock options. Strategy switches are copied from INDIA
         # once when the account is made, then set on their own (Settings > F&O).
-        "FNO":    {"capital": 100000, "max_loss_per_trade": 1500, "max_loss_per_trade_fno": 1500,
-                   "max_position_pct": 40, "max_position_pct_fno": 40, "daily_loss_limit": 5000,
+        "FNO":    {"capital": 100000, "max_loss_per_trade": 3000, "max_loss_per_trade_fno": 3000,
+                   "max_position_pct": 40, "max_position_pct_fno": 40, "daily_loss_limit": 9000,
                    "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
                    "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": False,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
@@ -94,8 +94,8 @@ DEFAULT_CONFIG = {
         # USFNO (owner, 13 Nov 2026): US F&O, its own $50,000, only QQQ / SPY ATM weekly options (us_options.py);
         # strategy switches copied from US once when the account is made. fee_pct 0.5 per side stands for the
         # contract fees and the bid / ask spread (the paper fill is the quote midpoint)
-        "USFNO":  {"capital": 50000, "max_loss_per_trade": 500, "max_loss_per_trade_fno": 500,
-                   "max_position_pct": 40, "max_position_pct_fno": 40, "daily_loss_limit": 1500,
+        "USFNO":  {"capital": 1200, "max_loss_per_trade": 36, "max_loss_per_trade_fno": 36,
+                   "max_position_pct": 40, "max_position_pct_fno": 40, "daily_loss_limit": 108,
                    "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:50", "fee_pct": 0.5,
                    "breakeven_at_r": 1.0, "allow_short": False,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
@@ -106,8 +106,8 @@ DEFAULT_CONFIG = {
                    "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
                    "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0,
                    "usopt_underlyings": ["QQQ", "SPY", "DIA"]},
-        "US":     {"capital": 50000, "max_loss_per_trade": 50, "max_position_pct": 25, "intraday_leverage": 4,
-                   "daily_loss_limit": 150, "max_trades_per_day": 5, "min_reward_risk": 1.0,
+        "US":     {"capital": 1000, "max_loss_per_trade": 30, "max_position_pct": 25, "intraday_leverage": 4,
+                   "daily_loss_limit": 90, "max_trades_per_day": 5, "min_reward_risk": 1.0,
                    "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
                    "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
@@ -116,8 +116,8 @@ DEFAULT_CONFIG = {
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
                    "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
                    "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
-        "CRYPTO": {"capital": 1000, "max_loss_per_trade": 10, "max_position_pct": 25,
-                   "daily_loss_limit": 30, "max_trades_per_day": 10, "min_reward_risk": 1.0,
+        "CRYPTO": {"capital": 1000, "max_loss_per_trade": 30, "max_position_pct": 25,
+                   "daily_loss_limit": 90, "max_trades_per_day": 10, "min_reward_risk": 1.0,
                    "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "max_same_side": 3, "risk_limits": False, "trade_setups": True,
                    "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
@@ -207,6 +207,19 @@ def save_json(path, doc):
     os.replace(tmp, path)
 
 
+# The owner's budget of 17 Nov 2026: Rs 1 lakh per Indian account, $1,000 per US / crypto account ($1,200 for US
+# options); max loss per trade 3% of it, the daily loss limit 3 trades (9%). Applied once to the live config, and
+# once to the ledger: every book restarts at its budget (cash = budget - what open positions tie up), the old trades
+# stay in the ledger as history ("purana data 0 kardo, sirf data ledger m rehne do").
+BUDGET_1117 = {"INDIA": 100000, "FNO": 100000, "US": 1000, "USFNO": 1200, "CRYPTO": 1000}
+
+
+def budget_limits(capital):
+    # max_loss_per_trade_fno is what an option / futures trade is sized by (Bank Nifty's lot needs ~Rs 2,600)
+    return {"capital": capital, "max_loss_per_trade": round(capital * 0.03, 2),
+            "max_loss_per_trade_fno": round(capital * 0.03, 2), "daily_loss_limit": round(capital * 0.09, 2)}
+
+
 def load_config():
     if not os.path.exists(CONFIG):
         save_json(CONFIG, DEFAULT_CONFIG)
@@ -226,6 +239,11 @@ def load_config():
             for k in ("fno_underlyings", "fno_stock_options"):
                 india.pop(k, None)
         changed = True
+    if not cfg.get("_budget_1117"):  # one-time (owner, 17 Nov 2026): see BUDGET_1117
+        for name, cap in BUDGET_1117.items():
+            if name in accs:
+                accs[name].update(budget_limits(cap))
+        cfg["_budget_1117"] = changed = True
     if not cfg.get("_tm_global"):   # one-time (owner, 13 Nov 2026): one Trade Manager per account, every scanner
         for acc in accs.values():
             tm_one_set(acc)
@@ -269,6 +287,7 @@ def load_config():
 def load_ledger(cfg):
     led = load_json(LEDGER, {"accounts": {}, "open": [], "closed": []})
     topped = split_fno(led, cfg)
+    topped = budget_reset(led, cfg) or topped
     for name, acc in cfg["accounts"].items():
         if name in ACCOUNT_MARKET:
             book = led["accounts"].setdefault(name, {"cash": float(acc["capital"]), "start_capital": float(acc["capital"])})
@@ -281,6 +300,27 @@ def load_ledger(cfg):
     if topped and os.path.exists(LEDGER):
         save_json(LEDGER, led)
     return led
+
+
+def budget_reset(led, cfg):
+    """One-time (owner, 17 Nov 2026): every book restarts at its configured budget; open positions stay open and
+    keep the money they tie up (margin, or the entry value); closed trades stay as history. True if it ran."""
+    if led.get("_budget_1117") or not cfg.get("_budget_1117"):
+        return False
+    books = led.setdefault("accounts", {})
+    at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    for name, acc in cfg.get("accounts", {}).items():
+        if name not in ACCOUNT_MARKET:
+            continue
+        cap = float(acc["capital"])
+        tied = sum((p["margin"] if p.get("margin") is not None else p["qty"] * p["entry"])
+                   for p in led.get("open", []) if MARKETS.get(p.get("market"), {}).get("account") == name)
+        old = books.get(name) or {}
+        books[name] = {"cash": round(cap - tied, 6), "start_capital": cap,
+                       "budget_reset": {"at": at, "old_cash": old.get("cash"), "old_start": old.get("start_capital"),
+                                        "tied": round(tied, 4)}}
+    led["_budget_1117"] = at
+    return True
 
 
 def split_fno(led, cfg):

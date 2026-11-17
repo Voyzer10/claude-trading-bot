@@ -27,6 +27,8 @@ if __name__ == "__main__":
     os.chdir(tmp)
     try:
         import paper as P
+        import _old_budget
+        _old_budget.apply(P)   # written against the pre-17-Nov budgets
         # an old install: one INDIA account for stocks and F&O, on Scanner v4, capital raised to 80,000
         old_india = dict(P.DEFAULT_CONFIG["accounts"]["INDIA"], capital=80000, scanner_version="v4",
                          v4_setups=["v4_primary_long"], max_loss_per_trade_fno=1200, fno_stock_options=True,

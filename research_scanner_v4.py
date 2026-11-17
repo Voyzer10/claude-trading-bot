@@ -29,7 +29,13 @@ FILTERS = {"all": {}, "with_weak_bos": {"bos_body_atr": 0.8, "bos_vol_x": 1.2},
            "no_day_rule": {"day_carry": False}, "hammer_2x": {"hammer_x": 2.0},
            "old_candles": {"hammer_x": 2.0, "one_side": 1.01}, "no_flip": {"flip_same_day": False},
            "no_latest_bos": {"latest_bos": False},
-           "old_one_trade": {"flip_same_day": False, "latest_bos": False}}
+           "old_one_trade": {"flip_same_day": False, "latest_bos": False},
+           # the owner's sweep / target (17 Nov 2026)
+           "sweep_origin_only": {"sweep_post_bos": False},
+           "target_opp_bos": {"target_rule": "opp_bos"},
+           "target_opp_bos_cap": {"target_rule": "opp_bos_cap"},
+           "owner_sweep_target": {"sweep_post_bos": False, "target_rule": "opp_bos_cap"},
+           "owner_sweep_target_nocap": {"sweep_post_bos": False, "target_rule": "opp_bos"}}
 RRS = (0.0, 1.0, 2.0)
 VARIANTS = [(rr, f) for rr in RRS for f in FILTERS]
 LIVE = {"side": "both", "trades": "both", "min_rr": 0.0, "filters": "all", "session": "all"}

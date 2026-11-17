@@ -52,6 +52,8 @@ if __name__ == "__main__":
     os.chdir(tmp)
     try:
         import paper as P
+        import _old_budget
+        _old_budget.apply(P)   # written against the pre-17-Nov budgets
         cfg = P.load_config()
         for acc in cfg["accounts"].values():
             acc["scanner_version"] = "v2"          # these are v2 setups
