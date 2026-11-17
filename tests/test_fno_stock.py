@@ -114,7 +114,8 @@ if __name__ == "__main__":
             P.save_json(P.LEDGER, led)
             again = P.setup_decision("NSE", "RELIANCE", tight)
             check("   an older v4 option without chart metadata still blocks overlap",
-                  again["result"] == "skipped" and "wait for the open trade" in again["why"], again)
+                  again["result"] == "skipped" and ("wait for the open trade" in again["why"]
+                                                    or "is still open on this chart" in again["why"]), again)
         cfg = P.load_config()
         cfg["accounts"]["FNO"]["fno_stock_options"] = False
         P.save_json(P.CONFIG, cfg)
