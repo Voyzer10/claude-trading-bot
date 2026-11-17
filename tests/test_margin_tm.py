@@ -120,14 +120,15 @@ if __name__ == "__main__":
               and abs(p5["margin"] - round(p5["qty"] * 200.0 / 4, 2)) < 0.01, p5)
         led["open"].remove(p5)
         p6 = buy(P, cfg, led, "CRYPTO:BTC", 100.0, 99.0, 102.0)
-        check("   crypto: no margin (spot)", p6.get("margin") is None and "leverage" not in p6, p6)
+        check("   crypto on 5x margin (owner, 17 Nov): margin = qty x entry / 5",
+              p6.get("leverage") == 5 and abs(p6["margin"] - round(p6["qty"] * 100.0 / 5, 2)) < 0.01, p6)
         led["open"].remove(p6)
 
         sys.path.insert(0, os.path.join(ROOT, "api"))
         from api import _ops as OPS
         f = OPS.RISK_FIELDS.get("intraday_leverage") or {}
-        check("   Settings: intraday_leverage editable for INDIA and US, 1..5",
-              f.get("min") == 1 and f.get("max") == 5 and set(f.get("accounts", [])) == {"INDIA", "US"}, f)
+        check("   Settings: intraday_leverage editable for INDIA, US and crypto, 1..5",
+              f.get("min") == 1 and f.get("max") == 5 and set(f.get("accounts", [])) == {"INDIA", "US", "CRYPTO"}, f)
 
         # ---------------------------------------------------------------- 2. timemachine_v4
         import timemachine_v4 as TM
