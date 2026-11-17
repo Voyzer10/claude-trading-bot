@@ -90,6 +90,8 @@ jobs:
         run: python tests/test_pov.py
       - name: Scanner v4 acceptance tests (primary, sequential OB/FVG secondary, version gate) (offline)
         run: python tests/test_scanner_v4.py
+      - name: Scanner v4 sweep from the BOS start + target from the opposite BOS (owner, 17 Nov) (offline)
+        run: python tests/test_v4_sweep_target.py
       - name: Budget of 17 Nov (Rs 1 lakh / $1,000, 3% a trade), applied once to config and ledger (offline)
         run: python tests/test_budget.py
       - name: Scanner v4 flip rule (previous day's BOS trade -> today's opposite BOS setup) (offline)
