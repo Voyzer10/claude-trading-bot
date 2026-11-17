@@ -136,6 +136,8 @@ if __name__ == "__main__":
     os.chdir(tmp)
     try:
         import paper as P
+        import _old_budget
+        _old_budget.apply(P)   # written against the pre-17-Nov budgets
         cfg = P.load_config()
         cfg["accounts"]["INDIA"]["scanner_version"] = "v4"
         P.save_json(P.CONFIG, cfg)
