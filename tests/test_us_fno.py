@@ -102,6 +102,8 @@ if __name__ == "__main__":
 
         # 3. the account and the trade through the agents
         import paper as P
+        import _old_budget
+        _old_budget.apply(P)   # written against the pre-17-Nov budgets
         os.makedirs(os.path.dirname(P.CONFIG), exist_ok=True)
         json.dump({"accounts": {"US": dict(P.DEFAULT_CONFIG["accounts"]["US"], scanner_version="v4",
                                            v4_setups=["v4_primary_long", "v4_primary_short"])}}, open(P.CONFIG, "w"))

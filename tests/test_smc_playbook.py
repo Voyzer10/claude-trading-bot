@@ -96,6 +96,8 @@ def agent_checks(r):
         os.chdir(tmp)
         import auto_crypto as A
         import paper as P
+        import _old_budget
+        _old_budget.apply(P)   # written against the pre-17-Nov budgets
         A.headlines = lambda sym, n=3: []
         P.fetch_price = lambda m, s: (99.8, "test")
         logs = []
@@ -145,6 +147,8 @@ def zone_checks():
 
 def guard_checks():
     import paper as P
+    import _old_budget
+    _old_budget.apply(P)   # written against the pre-17-Nov budgets
     now = datetime(2026, 11, 4, 6, 0, tzinfo=UTC)
     acc = dict(P.DEFAULT_CONFIG["accounts"]["CRYPTO"])
 
