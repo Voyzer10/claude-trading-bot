@@ -3,7 +3,7 @@
 export type Segment = { start: string; end: string };
 
 export type Runner = {
-  mode?: "pc" | "vps";
+  mode?: "cloud" | "pc" | "vps";
   status: string | null;
   updated: string | null;
   next_run: string | null;

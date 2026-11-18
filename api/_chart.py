@@ -84,8 +84,8 @@ def candles(market, sym, since):
         d = S.yahoo_chart(sym, rng, "5m", ".NS" if market == "NSE" else ".BO" if market == "BSE" else "")
     if not d or not d.get("t"):
         return []
-    out = on_grid([(int(t), o, h, l, c) for t, o, h, l, c in zip(d["t"], d["o"], d["h"], d["l"], d["c"])
-                   if None not in (o, h, l, c)])
+    out = [(int(t), o, h, l, c) for t, o, h, l, c in zip(d["t"], d["o"], d["h"], d["l"], d["c"])
+           if None not in (o, h, l, c)]
     if market != "CRYPTO" and out:
         try:
             out = top_up(market, sym, out)
@@ -94,23 +94,6 @@ def candles(market, sym, since):
     if since:   # keep about 1.5 sessions before the entry for context
         lo = int((since - timedelta(hours=30)).timestamp())
         out = [r for r in out if r[0] >= lo] or out
-    return out
-
-
-def on_grid(rows):
-    """Yahoo ends a 5-minute chart with the live price as its own point, stamped at the trade's time (e.g. 16:46),
-    which drew as an extra one-price candle beside the forming 16:45 one. Each off-grid point joins its 5-minute
-    candle (its high / low / close), or starts it when that candle is not there yet."""
-    out = []
-    for t, o, h, l, c in rows:
-        b = t - t % 300
-        if t != b and out and out[-1][0] == b:
-            t0, o0, h0, l0, _c = out[-1]
-            out[-1] = (t0, o0, max(h0, h), min(l0, l), c)
-        elif t != b and out and out[-1][0] > b:
-            continue                          # an old stray point: its candle is complete already
-        else:
-            out.append((b, o, h, l, c))
     return out
 
 

@@ -11,3 +11,5 @@ OLD = {"INDIA": {"capital": 50000, "max_loss_per_trade": 500, "max_loss_per_trad
 def apply(P):
     for name, v in OLD.items():
         P.DEFAULT_CONFIG["accounts"][name].update(v)
+    P.BUDGET_1117 = {}                              # the one-time config change: nothing to change
+    P.budget_reset = lambda led, cfg: False         # the one-time ledger reset: off

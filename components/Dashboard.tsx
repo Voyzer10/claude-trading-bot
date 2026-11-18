@@ -296,7 +296,7 @@ function RunnerSection({ snap, ageSec }: { snap: Snapshot; ageSec: number | null
     <section id="runner" className="panel" aria-labelledby="runner-h">
       <div className="panel-head">
         <div>
-          <h2 id="runner-h">Runner{snap.runner.mode ? ` · ${snap.runner.mode === "vps" ? "VPS" : "PC"}` : ""}</h2>
+          <h2 id="runner-h">Runner{snap.runner.mode ? ` · ${({ cloud: "cloud (Vercel)", vps: "VPS", pc: "PC" } as Record<string, string>)[snap.runner.mode] ?? snap.runner.mode}` : ""}</h2>
           <p>{r.status ?? "unknown"}</p>
         </div>
         {stale ? (
@@ -308,9 +308,11 @@ function RunnerSection({ snap, ageSec }: { snap: Snapshot; ageSec: number | null
       {stale && (
         <div className="notice bad" style={{ marginBottom: 12 }}>
           No update for {ageSec !== null ? ago(ageSec) : "a long time"}.{" "}
-          {snap.runner.mode === "vps"
-            ? "The runner service may have stopped: see Operations below, or run sudo systemctl status trader-runner on the VPS."
-            : "The PC runner window may be closed, or the PC asleep."}
+          {snap.runner.mode === "cloud"
+            ? "The scheduler (cron-job.org or the GitHub Action) has stopped calling /api/py/cron/tick, or the tick is failing: check /api/py/health."
+            : snap.runner.mode === "vps"
+              ? "The runner service may have stopped: see Operations below, or run sudo systemctl status trader-runner on the VPS."
+              : "The PC runner window may be closed, or the PC asleep."}
         </div>
       )}
       <div className="runner">
@@ -947,23 +949,15 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
       {show("accounts") && (
       <div className="accounts" style={{ marginBottom: part === "accounts" ? 0 : 14 }}>
         {Object.entries(accounts).map(([name, a]) => {
-          // equity, not cash: an open trade's margin / cost leaves the cash while it is open, so cash alone made
-          // every open trade look like a loss. Open trades count at their live P&L when the runner has priced them.
-          const mine = open.filter((p) => acctOf(p.market) === name);
-          const held = mine.reduce((s, p) => s + investedOf(p) + (p.open_pnl ?? 0), 0);
-          const equity = a.cash + held;
-          const d = Math.round((equity - a.start_capital) * 100) / 100;
+          const d = a.cash - a.start_capital;
           const cur = currencyOf(name);
           return (
             <div key={name} className="stat">
               <span className="label">{ACCOUNT_LABEL[name] ?? name}</span>
-              <span className="value" style={{ fontSize: 19 }}>{money(equity, cur)}</span>
+              <span className="value" style={{ fontSize: 19 }}>{money(a.cash, cur)}</span>
               <span className={`sub ${d > 0 ? "pos" : d < 0 ? "neg" : ""}`}>
                 {d === 0 ? "untouched" : `${d > 0 ? "+" : ""}${money(d, cur)} on ${money(a.start_capital, cur)}`}
               </span>
-              {mine.length > 0 && (
-                <span className="sub">cash {money(a.cash, cur)} · {mine.length} open ({money(held, cur)})</span>
-              )}
             </div>
           );
         })}

@@ -177,8 +177,7 @@ def intraday_one(d, cutoff, symbol=None, v4_ledger=None):
         rows2 = [(b[0], b[5] if b[5] is not None else b[3], b[1], b[2], b[3], b[4] or 0) for b in bars]
         own = PB2.owner_setups(rows2, lambda t: t.date(), version=PB2.scanner_version("CRYPTO"),
                                  market="CRYPTO", symbol=symbol, ledger=v4_ledger)
-    except Exception as e:   # the scan goes on; journalctl shows why this coin had no setups
-        print("Scanner setups failed on CRYPTO:%s: %s: %s" % (symbol, type(e).__name__, str(e)[:200]), flush=True)
+    except Exception:
         own = []
     return {"price": last[3], "bar_end": (last[0] + timedelta(minutes=BAR_MIN)).isoformat(),
             "range_high": hi, "range_low": lo, "pct_vs_high": round((last[3] / hi - 1) * 100, 2),

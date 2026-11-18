@@ -62,16 +62,21 @@ def save_state(state):
 
 
 def push_dashboard(state):
-    """Write the dashboard snapshot (dashboard_push.py). Never stops the runner."""
+    """Send the snapshot to the web dashboard (dashboard_push.py). Never stops the runner."""
     try:
         import dashboard_push
-        dashboard_push.push(state)
-        if not _push_note["done"]:
+        res = dashboard_push.push(state)
+        if state.get("runner_mode") == "cloud":
+            return  # the cloud runner stores the snapshot itself
+        if res.get("pushed") and not _push_note["done"]:
+            log("Dashboard: pushed (%s bytes, storage %s)." % (res.get("bytes"), res.get("storage")))
+            _push_note["done"] = True
+        elif not res.get("pushed") and not _push_note["done"]:
             log("Dashboard: snapshot saved to trader/live/dashboard_snapshot.json (the dashboard reads it).")
             _push_note["done"] = True
     except Exception as e:
         if not _push_note.get("err"):
-            log("Dashboard snapshot failed: %s (the runner keeps going)" % e)
+            log("Dashboard push failed: %s (the runner keeps going)" % e)
             _push_note["err"] = True
 
 
@@ -130,7 +135,7 @@ def paper_snapshot():
         except Exception:
             pass
         opens.append(row)
-    return {"open": opens, "closed_today": [c for c in led["closed"] if P.ist_day(c) == today]}
+    return {"open": opens, "closed_today": [c for c in led["closed"] if c.get("exit_date") == today]}
 
 
 COOLDOWN = timedelta(hours=6)  # one evaluated breakout per coin per 6 h, like the backtest's one trade at a time
