@@ -62,21 +62,16 @@ def save_state(state):
 
 
 def push_dashboard(state):
-    """Send the snapshot to the web dashboard (dashboard_push.py). Never stops the runner."""
+    """Write the dashboard snapshot (dashboard_push.py). Never stops the runner."""
     try:
         import dashboard_push
-        res = dashboard_push.push(state)
-        if state.get("runner_mode") == "cloud":
-            return  # the cloud runner stores the snapshot itself
-        if res.get("pushed") and not _push_note["done"]:
-            log("Dashboard: pushed (%s bytes, storage %s)." % (res.get("bytes"), res.get("storage")))
-            _push_note["done"] = True
-        elif not res.get("pushed") and not _push_note["done"]:
+        dashboard_push.push(state)
+        if not _push_note["done"]:
             log("Dashboard: snapshot saved to trader/live/dashboard_snapshot.json (the dashboard reads it).")
             _push_note["done"] = True
     except Exception as e:
         if not _push_note.get("err"):
-            log("Dashboard push failed: %s (the runner keeps going)" % e)
+            log("Dashboard snapshot failed: %s (the runner keeps going)" % e)
             _push_note["err"] = True
 
 

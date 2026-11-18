@@ -296,7 +296,7 @@ function RunnerSection({ snap, ageSec }: { snap: Snapshot; ageSec: number | null
     <section id="runner" className="panel" aria-labelledby="runner-h">
       <div className="panel-head">
         <div>
-          <h2 id="runner-h">Runner{snap.runner.mode ? ` · ${({ cloud: "cloud (Vercel)", vps: "VPS", pc: "PC" } as Record<string, string>)[snap.runner.mode] ?? snap.runner.mode}` : ""}</h2>
+          <h2 id="runner-h">Runner{snap.runner.mode ? ` · ${snap.runner.mode === "vps" ? "VPS" : "PC"}` : ""}</h2>
           <p>{r.status ?? "unknown"}</p>
         </div>
         {stale ? (
@@ -308,11 +308,9 @@ function RunnerSection({ snap, ageSec }: { snap: Snapshot; ageSec: number | null
       {stale && (
         <div className="notice bad" style={{ marginBottom: 12 }}>
           No update for {ageSec !== null ? ago(ageSec) : "a long time"}.{" "}
-          {snap.runner.mode === "cloud"
-            ? "The scheduler (cron-job.org or the GitHub Action) has stopped calling /api/py/cron/tick, or the tick is failing: check /api/py/health."
-            : snap.runner.mode === "vps"
-              ? "The runner service may have stopped: see Operations below, or run sudo systemctl status trader-runner on the VPS."
-              : "The PC runner window may be closed, or the PC asleep."}
+          {snap.runner.mode === "vps"
+            ? "The runner service may have stopped: see Operations below, or run sudo systemctl status trader-runner on the VPS."
+            : "The PC runner window may be closed, or the PC asleep."}
         </div>
       )}
       <div className="runner">

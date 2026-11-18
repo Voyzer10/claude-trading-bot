@@ -9,7 +9,6 @@ cycle: trader/live/auto_config.json (crypto rules), trader/paper/config.json (ri
 trader/universe_crypto.txt (coins), trader/alerts.json (Telegram).
 
 Every change made here is written to the runner log as "Dashboard: ..." so there is a record of who changed what.
-The underscore in the file name keeps Vercel from treating it as a separate function.
 """
 import csv
 import io
