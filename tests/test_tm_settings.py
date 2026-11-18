@@ -129,6 +129,7 @@ if __name__ == "__main__":
         from fastapi.testclient import TestClient
         import api._ops as O
         O.PAPER_CFG = P.CONFIG
+        O.LIVE, O.LOG = "trader/live", "trader/live/log.txt"   # the temp folder, not the repo's real log
         app = FastAPI()
         app.include_router(O.router)
         cl = TestClient(app)

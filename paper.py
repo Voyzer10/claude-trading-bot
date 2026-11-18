@@ -819,6 +819,16 @@ def today_closed(led, m, utc):
     return [c for c in led["closed"] if account_of(c["market"]) == acc and c["exit_date"] == d]
 
 
+def ist_day(rec):
+    """The India date a closed trade ended on, for the dashboard, alerts and state.json. exit_date is the market's
+    own date (UTC for crypto, New York for US), which the risk limits use; a US trade closed at 01:00 IST belongs
+    to the India day it closed on."""
+    try:
+        return datetime.fromisoformat(rec["exit_time"]).astimezone(IST).date().isoformat()
+    except (KeyError, TypeError, ValueError):
+        return rec.get("exit_date") or ""
+
+
 def trades_today(led, m, utc):
     d = local_now(m, utc).date().isoformat()
     acc = account_of(m)

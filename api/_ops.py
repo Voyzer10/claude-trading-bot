@@ -630,6 +630,7 @@ def _acct(m):
 
 @router.get("/performance")
 def performance():
+    import paper
     led = _read_json(LEDGER, {"accounts": {}, "open": [], "closed": []})
     prefs = dict(PREF_DEFAULT)
     prefs.update(_read_json(PREFS, {}))
@@ -648,7 +649,7 @@ def performance():
                     "best": None, "worst": None} for a in (led.get("accounts") or {}) if resets.get(a)}
     for c in closed:
         a = _acct(c.get("market"))
-        d = c.get("exit_date") or (c.get("exit_time") or "")[:10]
+        d = paper.ist_day(c)   # the India date ("today" is India's): exit_date is UTC / New York for crypto / US
         pnl = float(c.get("pnl") or 0)
         acc = accounts.setdefault(a, {"trades": 0, "wins": 0, "pnl": 0.0, "r_sum": 0.0, "today": 0.0, "d7": 0.0,
                                       "d30": 0.0, "best": None, "worst": None})

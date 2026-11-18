@@ -130,7 +130,7 @@ def paper_snapshot():
         except Exception:
             pass
         opens.append(row)
-    return {"open": opens, "closed_today": [c for c in led["closed"] if c.get("exit_date") == today]}
+    return {"open": opens, "closed_today": [c for c in led["closed"] if P.ist_day(c) == today]}
 
 
 COOLDOWN = timedelta(hours=6)  # one evaluated breakout per coin per 6 h, like the backtest's one trade at a time
