@@ -1027,8 +1027,7 @@ def cmd_buy(a, cfg, led):
     pos_pct = acc.get("max_position_pct_fno", acc["max_position_pct"]) if fno_trade else acc["max_position_pct"]
     equity = book["cash"] + sum(held_value(p) for p in led["open"] if account_of(p["market"]) == account_of(m))
     # margin: India / US stocks (14 Nov 2026) and crypto (owner, 17 Nov 2026: 5x, like Indian crypto futures)
-    lev = float(acc.get("intraday_leverage") or 1) if (kind == "equity" and m in ("NSE", "BSE", "US", "CRYPTO")) else 1.0
-    lev = max(1.0, min(lev, 5.0))
+    lev = margin_x(acc, m, kind)
     if kind == "futures":
         unit_cost = entry * acc.get("futures_margin_pct", 12) / 100
     else:
@@ -1721,6 +1720,32 @@ def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields, mk
         pos["qty"], pos["key"], pos["entry"], pos["stop"], pos["target"], version, name, symbol))
 
 
+V4_TRIGGERS = os.path.join("trader", "live", "v4_triggers.json")
+
+
+def first_trigger(chart, side, signal, bar_end, path=None):
+    """The candle (bar_end ISO) on which this v4 signal of this chart and side first triggered; records it when new.
+    "No late entry" (owner, 19 Nov 2026): a trigger that could not be taken on its own candle (no free cash, a rule,
+    a full chart...) is not taken a candle or more later. Entries older than 3 days are dropped."""
+    path = path or V4_TRIGGERS
+    seen = load_json(path, {})
+    k = "%s|%s|%s" % (chart, side, signal.isoformat())
+    if k in seen:
+        return seen[k]
+    cut = datetime.now(timezone.utc) - timedelta(days=3)
+    seen = {x: v for x, v in seen.items() if (_iso(v) or cut) >= cut}
+    seen[k] = bar_end
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    save_json(path, seen)
+    return bar_end
+
+
+def margin_x(acc, market, kind="equity"):
+    """The intraday margin multiple a stock / crypto trade gets in this account (1 = none), as cmd_buy sizes it."""
+    lev = float(acc.get("intraday_leverage") or 1) if (kind == "equity" and market in ("NSE", "BSE", "US", "CRYPTO")) else 1.0
+    return max(1.0, min(lev, 5.0))
+
+
 def setup_decision(market, symbol, s, news=None, now_iso=None):
     """One of the owner's setups found by the Scanner (v3; smc_playbook.owner_setups dict), taken through the agents
     Entry (the candle close), Exit (stop, 2R or the v3 liquidity target, costs in R), Budget (size from this account's limits), Risk (costs <=
@@ -1771,6 +1796,12 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
         opened, closed = V4.chart_state(led, chart)
         signal = _iso(s.get("v4_signal_at"))
         flipped = None
+        bar_end = s.get("bar_end")
+        if signal is not None and bar_end:
+            first = first_trigger(chart, s["side"], signal, bar_end)
+            if (_iso(first) or _iso(bar_end)) < _iso(bar_end):
+                return done("skipped", "late entry: this signal's trigger was the candle ending %s and it was not "
+                                       "taken then; a missed trigger is not taken later (owner, 19 Nov 2026)" % first[:16])
         opens = V4.chart_open(led, chart) or ([opened] if opened else [])
         if opens:
             det = s.get("details") or {}
@@ -1863,7 +1894,10 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
             st["4_exit"] = {"underlying_entry": entry, "underlying_stop": stop, "underlying_target": target}
             return done("skipped", "option: %s" % e)
         return _option_setup(st, done, cfg, usf_acc, symbol, s, op, version, led, v4_fields, mk="USOPT")
-    units = min(acc["max_loss_per_trade"] / risk, acc["capital"] * acc["max_position_pct"] / 100 / entry)
+    # the position cap counts the intraday margin, like the paper buy (cmd_buy): with $1,000 and 4x, a $300 stock
+    # fits; without it every US stock above ~$250 was "0 units fit" (owner's audit, 18 Nov 2026)
+    units = min(acc["max_loss_per_trade"] / risk,
+                acc["capital"] * acc["max_position_pct"] / 100 / (entry / margin_x(acc, market)))
     qty = units if market == "CRYPTO" else int(units)
     cost = None
     if market in ("NSE", "BSE"):
