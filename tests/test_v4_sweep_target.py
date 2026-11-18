@@ -52,19 +52,25 @@ if __name__ == "__main__":
           V4.DEFAULTS["bos_pick"] == "newest" and V4.DEFAULTS["latest_signal"] is True
           and V4.DEFAULTS["replace_newer"] is False and V4.DEFAULTS["skip_open_bos"] is False)
 
-    names, old_names, diff, n, wrong_side = set(), set(), 0, 0, 0
+    names, old_names, diff, n, wrong_side, shifted = set(), set(), 0, 0, 0, 0
     for seed in range(10):
         rows = walk(30, seed)
         new = [t for t in V4.sequence(rows, day_of, intraday=True) if t["kind"] == "primary"]
         old = [t for t in V4.sequence(rows, day_of, intraday=True, sweep_post_bos=True, target_rule="near")
                if t["kind"] == "primary"]
         names |= {t["level_name"] for t in new}
+        shifted += sum(1 for t in new if t["level_name"] == "near_swing")
+        noshift = [t for t in V4.sequence(rows, day_of, intraday=True, sweep_shift=False) if t["kind"] == "primary"]
+        old_names |= {"noshift:" + t["level_name"] for t in noshift}
         old_names |= {t["level_name"] for t in old}
         n += len(new)
         wrong_side += sum(1 for t in new if ((t["target"] <= t["entry"]) if t["side"] == "long" else (t["target"] >= t["entry"])))
         diff += len({(t["i"], t["side"], round(t["target"], 6)) for t in new} ^ {(t["i"], t["side"], round(t["target"], 6)) for t in old})
-    check("1. every primary's sweep is of the BOS-start level (the 12 Nov rule also had post-BOS swings)",
-          n > 0 and names == {"bos_origin"} and "post_bos" in old_names, (n, names, old_names))
+    check("1. every primary's sweep is the BOS-start level or, 18 Nov, a swing beyond it near the entry "
+          "(the 12 Nov rule also had post-BOS swings)",
+          n > 0 and names == {"bos_origin", "near_swing"} and "post_bos" in old_names and shifted > 0, (n, names, old_names))
+    check("   sweep_shift off: only the BOS-start level (the 17 Nov rule)",
+          {x for x in old_names if x.startswith("noshift:")} == {"noshift:bos_origin"}, old_names)
     check("2. targets stay on the right side of the entry", wrong_side == 0, wrong_side)
     check("   and differ from the 12 Nov ones on these charts", diff > 0, diff)
 
