@@ -587,7 +587,8 @@ def v5_setups(rows, day_of, i, intraday=False, params=None):
     import scanner_v5 as V5
     try:
         seq = V5.sequence(rows, day_of, intraday=intraday, **(params or {}))
-    except Exception:
+    except Exception as e:   # never stop the scan, but never hide it either
+        print("Scanner v5 failed: %s: %s" % (type(e).__name__, str(e)[:200]), flush=True)
         return []
     out = []
     for t in seq:
@@ -611,9 +612,18 @@ def v4_setups(rows, day_of, i, intraday=False, ledger=None, chart=None):
     """Format the current v4 signal from the live ledger or from a chart-only simulation."""
     import scanner_v4 as V4
     try:
-        seq = (V4.live_candidate(rows, day_of, ledger, chart, intraday=intraday) if ledger is not None
-               else V4.sequence(rows, day_of, intraday=intraday))
+        # the account's own Trade Manager, as the backtest (research_scanner_v4) and the paper trades use it: with
+        # the defaults the chart's simulated trade could exit at another time than the paper trade
+        import paper as P
+        mk, _, sym = (chart or "").partition(":")
+        tm = V4.tm_settings(P.setup_account(P.load_config(), mk, sym)) if mk in P.MARKETS else {}
     except Exception:
+        tm = {}
+    try:
+        seq = (V4.live_candidate(rows, day_of, ledger, chart, intraday=intraday, **tm) if ledger is not None
+               else V4.sequence(rows, day_of, intraday=intraday, **tm))
+    except Exception as e:   # never stop the scan, but never hide it either: no setups would ever show up
+        print("Scanner v4 failed on %s: %s: %s" % (chart or "a chart", type(e).__name__, str(e)[:200]), flush=True)
         return []
     out = []
     for t in seq:

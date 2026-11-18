@@ -950,6 +950,14 @@ def rulebook_guards(led, m, acc, now, short):
                              % (cap, "short" if short else "long", name, ", ".join(p["key"] for p in same)))
 
 
+def margin_x(acc, m, kind="equity"):
+    """The intraday margin a trade gets: India / US stocks (14 Nov 2026) and crypto (owner, 17 Nov 2026: 5x, like
+    Indian crypto futures) tie up qty x price / this; 1 = none. Options and futures: 1 (futures use their margin %)."""
+    if kind != "equity" or m not in ("NSE", "BSE", "US", "CRYPTO"):
+        return 1.0
+    return max(1.0, min(float(acc.get("intraday_leverage") or 1), 5.0))
+
+
 def cmd_buy(a, cfg, led):
     now = datetime.now(timezone.utc)
     m, t = parse_symbol(a.symbol, cfg)
@@ -1011,9 +1019,7 @@ def cmd_buy(a, cfg, led):
     max_loss = acc.get("max_loss_per_trade_fno", acc["max_loss_per_trade"]) if fno_trade else acc["max_loss_per_trade"]
     pos_pct = acc.get("max_position_pct_fno", acc["max_position_pct"]) if fno_trade else acc["max_position_pct"]
     equity = book["cash"] + sum(held_value(p) for p in led["open"] if account_of(p["market"]) == account_of(m))
-    # margin: India / US stocks (14 Nov 2026) and crypto (owner, 17 Nov 2026: 5x, like Indian crypto futures)
-    lev = float(acc.get("intraday_leverage") or 1) if (kind == "equity" and m in ("NSE", "BSE", "US", "CRYPTO")) else 1.0
-    lev = max(1.0, min(lev, 5.0))
+    lev = margin_x(acc, m, kind)
     if kind == "futures":
         unit_cost = entry * acc.get("futures_margin_pct", 12) / 100
     else:
@@ -1706,6 +1712,20 @@ def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields, mk
         pos["qty"], pos["key"], pos["entry"], pos["stop"], pos["target"], version, name, symbol))
 
 
+def setup_account(cfg, market, symbol):
+    """The account whose switches (scanner version, Trade Manager, budget) decide a Scanner setup on market:symbol:
+    an index setup (Nifty / Bank Nifty) is an F&O trade (FNO), a QQQ / SPY / DIA setup a US F&O trade (USFNO), every
+    other setup its market's own account."""
+    accs = cfg["accounts"]
+    acc = accs[MARKETS[market]["account"]] if market in MARKETS else accs["US"]
+    if market in ("NSE", "BSE") and symbol.upper() in INDEX_UNDERLYINGS:
+        return accs.get("FNO", acc)
+    usf = accs.get("USFNO") or {}
+    if market == "US" and symbol.upper() in [u.upper() for u in (usf.get("usopt_underlyings") or [])]:
+        return usf
+    return acc
+
+
 def setup_decision(market, symbol, s, news=None, now_iso=None):
     """One of the owner's setups found by the Scanner (v3; smc_playbook.owner_setups dict), taken through the agents
     Entry (the candle close), Exit (stop, 2R or the v3 liquidity target, costs in R), Budget (size from this account's limits), Risk (costs <=
@@ -1728,14 +1748,10 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
 
     # Scanner v3's sweep reversal carries its own target (the opposing liquidity); the older setups use 2R
     cfg = load_config()
-    acc = cfg["accounts"][MARKETS[market]["account"]] if market in MARKETS else cfg["accounts"]["US"]
-    if market in ("NSE", "BSE") and symbol.upper() in INDEX_UNDERLYINGS:
-        acc = cfg["accounts"].get("FNO", acc)   # an index setup is an F&O trade: the FNO account's switches
+    acc = setup_account(cfg, market, symbol)
     fno_acc = cfg["accounts"].get("FNO", acc)
     usf_acc = cfg["accounts"].get("USFNO") or {}
     us_opt = market == "US" and symbol.upper() in [u.upper() for u in (usf_acc.get("usopt_underlyings") or [])]
-    if us_opt:
-        acc = usf_acc                            # QQQ / SPY setups are US F&O trades: the USFNO account's switches
     version = acc.get("scanner_version", DEFAULT_SCANNER)
     st["1_scanner"]["scanner"] = version
     # versions never mix (owner, 5 and 7 Nov 2026): a setup of another version (switched after it was scanned) is
@@ -1848,7 +1864,9 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
             st["4_exit"] = {"underlying_entry": entry, "underlying_stop": stop, "underlying_target": target}
             return done("skipped", "option: %s" % e)
         return _option_setup(st, done, cfg, usf_acc, symbol, s, op, version, led, v4_fields, mk="USOPT")
-    units = min(acc["max_loss_per_trade"] / risk, acc["capital"] * acc["max_position_pct"] / 100 / entry)
+    # the same caps as cmd_buy: the max loss, and the position cap on the cash a unit ties up (intraday margin)
+    units = min(acc["max_loss_per_trade"] / risk,
+                acc["capital"] * acc["max_position_pct"] / 100 / (entry / margin_x(acc, market)))
     qty = units if market == "CRYPTO" else int(units)
     cost = None
     if market in ("NSE", "BSE"):

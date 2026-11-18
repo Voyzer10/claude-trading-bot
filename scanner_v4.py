@@ -742,14 +742,15 @@ def chart_open(ledger, chart):
 
 
 
-def live_candidate(rows, day_of, ledger, chart, intraday=False):
+def live_candidate(rows, day_of, ledger, chart, intraday=False, **kw):
     """The v4 entry on the last closed candle, if any: the chart's own simulated sequence (the same code as the
     backtest) gives the signal; the paper ledger blocks it while a v4 trade is open on this chart. paper.py's
-    setup_decision checks the rest (fresh signal, a secondary's primary really closed)."""
+    setup_decision checks the rest (fresh signal, a secondary's primary really closed). kw: settings for sequence(),
+    e.g. the account's Trade Manager (tm_settings), so the chart's simulated exits match the paper trades'."""
     opened, _ = chart_state(ledger, chart)
     opens = chart_open(ledger, chart) or ([opened] if opened else [])
     last = len(rows) - 1
-    seq = [t for t in sequence(rows, day_of, intraday=intraday) if t.get("pending") and t["i"] == last]
+    seq = [t for t in sequence(rows, day_of, intraday=intraday, **kw) if t.get("pending") and t["i"] == last]
     if opens:
         # every trigger comes back: paper.setup_decision takes the flip / latest-BOS ones and records the others as
         # skipped (before 17 Nov they were dropped here unseen, e.g. when an option's premium stop kept a trade open
