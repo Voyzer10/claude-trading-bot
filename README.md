@@ -7,11 +7,13 @@ integration plus hard safety limits (see "Before real money" below).
 ```
 D:\trader                       (this repo)
 ├── app/, components/, lib/     Next.js dashboard (frontend)
-├── api/index.py                FastAPI: the dashboard API (and a cloud runner, parked for later)
+├── api/                        FastAPI: the dashboard API (index.py) and its operations (_ops.py)
 ├── *.py                        the bot: live.py (runner), paper.py, scan_crypto.py, auto_crypto.py, ...
-├── start_all.bat               starts the runner
+├── us/                         the US agent scripts auto_us.py runs (scanner, news, entry, exit, time machine)
+├── tests/                      python -m unittest discover tests  (the paper account's money math)
+├── deploy/                     VPS install, update and data import
+├── start_all.bat               starts the runner (start_all.bat --markets CRYPTO for crypto only)
 ├── start_dashboard.bat         starts the dashboard (http://localhost:3000)
-├── cloud_seed.py, vercel.json  for the optional cloud setup later
 └── trader/                     the bot's data (ledger, logs, control.json): NOT in git
 ```
 
@@ -69,14 +71,6 @@ Settings: `/etc/trader/trader.env` (password, markets). Data: `/opt/trader/trade
 - **Backtest**: runs research.py on the machine with fresh data and shows the report.
 - **Alerts**: Telegram messages for trades, errors, runner restarts and a daily summary.
 
-## Later: cloud (optional, not set up)
-
-The repo can also deploy to Vercel (Next.js + `api/index.py`) with Upstash Redis and an outside scheduler
-calling `/api/py/cron/tick` every 5 minutes, so the PC can be off. Only crypto fits a 60-second cloud tick.
-That path is parked for now; `vercel.json`, `cloud_seed.py` and `github-workflow-tick.yml` are kept for it.
-In the cloud the API switches to Redis automatically (it runs in local mode only when no Redis is configured
-and it is not on Vercel).
-
 ## Before real money
 
 Going live is planned after testing. It needs, at minimum:
@@ -89,5 +83,8 @@ Going live is planned after testing. It needs, at minimum:
 ## Known limits
 
 - Yahoo Finance data is free and unofficial: it can lag or refuse requests; crypto falls back to Coinbase.
+- US holidays and early closes come from `us/ustime.py`, which lists 2026 and 2027: add the next year before it
+  starts. Indian exchange holidays are not known: on a holiday the scans come back empty.
+- The US scan runs in the background and takes a few minutes; its breakouts are evaluated on the next cycle.
 - PC asleep or runner window closed = no scans and no stop checks. Open paper positions are checked again on
   the next cycle after it restarts.
