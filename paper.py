@@ -58,6 +58,26 @@ DEFAULT_SCANNER = "v4"
 ACCOUNT_MARKET = {"INDIA": "NSE", "FNO": "NFO", "US": "US", "USFNO": "USOPT", "CRYPTO": "CRYPTO"}  # currency formatting
 INDIA_ACCOUNTS = ("INDIA", "FNO")   # Indian charges (india_charges), not fee_pct
 
+# The switches every account starts with (scanner, rulebook guards, Trade Manager); each account below adds or
+# overrides its own money and market settings. The comments under "accounts" explain the keys.
+COMMON_ACCOUNT = {
+    "max_trades_per_day": 5, "min_reward_risk": 1.0, "cooldown_losses": 3, "cooldown_minutes": 120,
+    "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True, "scanner_version": DEFAULT_SCANNER,
+    "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing", "v5_target": "leg",
+    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0, "tm_lock_keep": 0.5, "tm_reversal": False,
+    "tm_rev_min_r": 1.0, "tm_stale_min": 0, "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0,
+    "tm_trail_gap": 1.0,
+}
+
+
+def _account(**own):
+    """An account's defaults: COMMON_ACCOUNT (its own copy: lists are never shared) with the account's settings."""
+    acc = json.loads(json.dumps(COMMON_ACCOUNT))
+    acc.update(own)
+    return acc
+
+
 DEFAULT_CONFIG = {
     "_note": "Paper money only. Edit freely. INDIA = NSE / BSE stocks, FNO = NFO (index options / futures). "
              "US/CRYPTO charge fee_pct per side; INDIA uses india_charges (approximate: check your broker's "
@@ -67,67 +87,27 @@ DEFAULT_CONFIG = {
         # intraday_leverage (owner, 14 Nov 2026: "margin k according trade lo"): an intraday stock trade ties up
         # only qty x price / leverage of cash (the broker's intraday margin: SEBI allows at most 5x on Indian cash
         # equity, FINRA 4x intraday in the US). The risk per trade stays max_loss_per_trade; 1 = no leverage.
-        "INDIA":  {"capital": 100000, "max_loss_per_trade": 3000, "max_loss_per_trade_fno": 3000, "intraday_leverage": 5,
-                   "max_position_pct": 25, "max_position_pct_fno": 40, "daily_loss_limit": 9000,
-                   "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
-                   "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": True,
-                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": DEFAULT_SCANNER, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
-                   "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
-                   "v5_target": "leg",
-                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
-                   "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
-                   "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
+        "INDIA":  _account(capital=100000, max_loss_per_trade=3000, max_loss_per_trade_fno=3000, intraday_leverage=5,
+                           max_position_pct=25, max_position_pct_fno=40, daily_loss_limit=9000, flat_by="15:15",
+                           futures_margin_pct=12.0, breakeven_at_r=1.0, allow_short=True),
         # FNO (owner, 12 Nov 2026): its own Rs 1,00,000 budget, apart from the Rs 50,000 INDIA stock account; F&O only
         # on Nifty 50 and Bank Nifty (index ATM options), no stock options. Strategy switches are copied from INDIA
         # once when the account is made, then set on their own (Settings > F&O).
-        "FNO":    {"capital": 100000, "max_loss_per_trade": 3000, "max_loss_per_trade_fno": 3000,
-                   "max_position_pct": 40, "max_position_pct_fno": 40, "daily_loss_limit": 9000,
-                   "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
-                   "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": False,
-                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": DEFAULT_SCANNER, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
-                   "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
-                   "v5_target": "leg",
-                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
-                   "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
-                   "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0, "fno_stock_options": False,
-                   "fno_underlyings": ["NIFTY", "BANKNIFTY"]},
-        # USFNO (owner, 13 Nov 2026): US F&O, its own $50,000, only QQQ / SPY ATM weekly options (us_options.py);
+        "FNO":    _account(capital=100000, max_loss_per_trade=3000, max_loss_per_trade_fno=3000, max_position_pct=40,
+                           max_position_pct_fno=40, daily_loss_limit=9000, flat_by="15:15", futures_margin_pct=12.0,
+                           breakeven_at_r=1.0, allow_short=False, fno_stock_options=False,
+                           fno_underlyings=["NIFTY", "BANKNIFTY"]),
+        # USFNO (owner, 13 Nov 2026): US F&O, its own budget, only QQQ / SPY / DIA ATM weekly options (us_options.py);
         # strategy switches copied from US once when the account is made. fee_pct 0.5 per side stands for the
         # contract fees and the bid / ask spread (the paper fill is the quote midpoint)
-        "USFNO":  {"capital": 1200, "max_loss_per_trade": 36, "max_loss_per_trade_fno": 36,
-                   "max_position_pct": 40, "max_position_pct_fno": 40, "daily_loss_limit": 108,
-                   "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:50", "fee_pct": 0.5,
-                   "breakeven_at_r": 1.0, "allow_short": False,
-                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": DEFAULT_SCANNER, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
-                   "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
-                   "v5_target": "leg",
-                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
-                   "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
-                   "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0,
-                   "usopt_underlyings": ["QQQ", "SPY", "DIA"]},
-        "US":     {"capital": 1000, "max_loss_per_trade": 30, "max_position_pct": 25, "intraday_leverage": 4,
-                   "daily_loss_limit": 90, "max_trades_per_day": 5, "min_reward_risk": 1.0,
-                   "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
-                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": DEFAULT_SCANNER, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
-                   "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
-                   "v5_target": "leg",
-                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
-                   "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
-                   "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
-        "CRYPTO": {"capital": 1000, "max_loss_per_trade": 30, "max_position_pct": 25, "intraday_leverage": 5,
-                   "daily_loss_limit": 90, "max_trades_per_day": 10, "min_reward_risk": 1.0,
-                   "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True,
-                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "max_same_side": 3, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": DEFAULT_SCANNER, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
-                   "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
-                   "v5_target": "leg",
-                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
-                   "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
-                   "tm_candle_min": 15, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
+        "USFNO":  _account(capital=1200, max_loss_per_trade=36, max_loss_per_trade_fno=36, max_position_pct=40,
+                           max_position_pct_fno=40, daily_loss_limit=108, flat_by="15:50", fee_pct=0.5,
+                           breakeven_at_r=1.0, allow_short=False, usopt_underlyings=["QQQ", "SPY", "DIA"]),
+        "US":     _account(capital=1000, max_loss_per_trade=30, max_position_pct=25, intraday_leverage=4,
+                           daily_loss_limit=90, flat_by="15:55", fee_pct=0.0, breakeven_at_r=None, allow_short=True),
+        "CRYPTO": _account(capital=1000, max_loss_per_trade=30, max_position_pct=25, intraday_leverage=5,
+                           daily_loss_limit=90, max_trades_per_day=10, flat_by=None, fee_pct=0.059, breakeven_at_r=None,
+                           allow_short=True, max_same_side=3, tm_candle_min=15),
         # Trade Manager: ONE set per account, for every scanner's trades (owner, 13 Nov 2026). Defaults = the owner's
         # v4 rule: stop to the entry at +tm_be_r R, then (tm_trail) every tm_trail_step R the stop sits tm_trail_gap R
         # behind the best R; the exits below are off (0 / False) by default. Not the crypto trailing exits (trail_k).

@@ -44,62 +44,17 @@ jobs:
       - run: pip install -r deploy/requirements.txt httpx
       - name: Compile every Python file
         run: python -m compileall -q -x '(node_modules|\.next)' .
-      - name: API smoke test (local mode, no network)
+      - name: API smoke test (no network)
         run: python tests/smoke_api.py
-      - name: SMC playbook engine, scanner and agent (offline)
-        run: python tests/test_smc_playbook.py
-      - name: A-B-C-D entry acceptance tests (offline)
-        run: python tests/test_abcd.py
-      - name: Stops / targets touched between two runner checks exit at that level (offline)
-        run: python tests/test_intrabar_exits.py
-      - name: Live quotes never freeze (newest of meta / 1-minute close, 5-minute fallback) (offline)
-        run: python tests/test_quotes.py
-      - name: Trade Manager reactions (breakeven, profit lock, reversal, no follow-through) (offline)
-        run: python tests/test_trade_manager.py
-      - name: US long entry live-price check (offline)
-        run: python tests/test_us_long_entry.py
-      - name: Zerodha data only - order endpoints refused, login, instruments, ticks (offline)
-        run: python tests/test_kite.py
-      - name: F&O stocks as ATM options - contract, premium stop / target, sizing, switch (offline)
-        run: python tests/test_fno_stock.py
-      - name: Stock-option backtest pricing - theta, spread, charges, account fit (offline)
-        run: python tests/test_fno_sv4.py
-      - name: Scanner v4 = only v4 (rules paths off per account), v4 setup ticks, every market's settings (offline)
-        run: python tests/test_v4_only.py
-      - name: US F&O (QQQ / SPY options, USFNO account, Alpaca options data guard, Nasdaq-100, backtest; offline)
-        run: python tests/test_us_fno.py
-      - name: Your opinion (questions, validation, versions, export; offline)
-        run: python tests/test_opinion.py
-      - name: View on chart API (candles, levels, broker links; offline)
-        run: python tests/test_chart.py
-      - name: Trade Manager settings (v4 trailing per account; engine, paper, backtest, API) (offline)
-        run: python tests/test_tm_settings.py
-      - name: F&O own paper account (FNO Rs 1,00,000, INDIA stocks Rs 50,000), one-time split, Nifty + Bank Nifty (offline)
-        run: python tests/test_fno_account.py
-      - name: Live crypto prices (Coinbase public data only) - no key, private / order endpoints refused, ticks (offline)
-        run: python tests/test_crypto_live.py
-      - name: Live US prices (Alpaca market data) - paper key only, trading API refused, snapshots, ticks (offline)
-        run: python tests/test_alpaca.py
-      - name: Scanner v5 - the 0.146 level, cancels, mirror, naming, account gating (offline)
-        run: python tests/test_scanner_v5.py
-      - name: Dashboard watch lists (NSE / US quotes and breaks) (offline)
-        run: python tests/test_watchlists.py
-      - name: Scanner v2 finds the owner's setups, the agents record them, no trade (offline)
-        run: python tests/test_scanner_setups.py
-      - name: Bigger picture (pov.py) - 4h / weekly / monthly candles, last complete v4 setup, file, endpoint (offline)
-        run: python tests/test_pov.py
-      - name: Scanner v4 acceptance tests (primary, sequential OB/FVG secondary, version gate) (offline)
-        run: python tests/test_scanner_v4.py
-      - name: Scanner v4 sweep from the BOS start + target from the opposite BOS (owner, 17 Nov) (offline)
-        run: python tests/test_v4_sweep_target.py
-      - name: Budget of 17 Nov (Rs 1 lakh / $1,000, 3% a trade), applied once to config and ledger (offline)
-        run: python tests/test_budget.py
-      - name: Scanner v4 flip rule (previous day's BOS trade -> today's opposite BOS setup) (offline)
-        run: python tests/test_v4_flip.py
-      - name: Scanner v3 sweep reversal + FVG/OB retest acceptance tests, v2 rollback (offline)
-        run: python tests/test_sweep_reversal.py
-      - name: Intraday margin (5x India / 4x US) + v4 time machine + its logs API (offline)
-        run: python tests/test_margin_tm.py
+      - name: Every offline test (tests/test_*.py; a new test file runs without editing this file)
+        run: |
+          fail=0
+          for f in tests/test_*.py; do
+            echo "::group::$f"
+            python "$f" || { echo "::error file=$f::$f failed"; fail=1; }
+            echo "::endgroup::"
+          done
+          exit $fail
 
   shell:
     name: Shellcheck (deploy scripts)
