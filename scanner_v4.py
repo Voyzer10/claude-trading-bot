@@ -581,7 +581,9 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
                 still.append(tr)
         opens = still
         cands = [(s, sides[s].step(k)) for s in (0, 1)]
-        if opens:
+        # live, with no v4 trade open in the paper ledger (owner, 18 Nov 2026): a trade the simulation holds but paper
+        # never took (the buy was blocked: cash, cooldown, 0 units ...) must not hide the last candle's trigger
+        if opens and not (p.get("_ledger_flat") and k == n - 1):
             if p.get("replace_newer"):
                 extra, how = _replace(opens, sides, srcs, day, k, intraday, p), "replace"
             else:
@@ -742,14 +744,19 @@ def chart_open(ledger, chart):
 
 
 
-def live_candidate(rows, day_of, ledger, chart, intraday=False):
+def live_candidate(rows, day_of, ledger, chart, intraday=False, **kw):
     """The v4 entry on the last closed candle, if any: the chart's own simulated sequence (the same code as the
     backtest) gives the signal; the paper ledger blocks it while a v4 trade is open on this chart. paper.py's
-    setup_decision checks the rest (fresh signal, a secondary's primary really closed)."""
+    setup_decision checks the rest (fresh signal, a secondary's primary really closed). kw: settings for sequence(),
+    e.g. the account's Trade Manager (tm_settings), so the chart's simulated exits match the paper trades'."""
     opened, _ = chart_state(ledger, chart)
     opens = chart_open(ledger, chart) or ([opened] if opened else [])
     last = len(rows) - 1
-    seq = [t for t in sequence(rows, day_of, intraday=intraday) if t.get("pending") and t["i"] == last]
+    if not opens:
+        # the ledger has no v4 trade on this chart: offer the last candle's trigger even if the simulation still
+        # holds a trade there that paper never opened (e.g. the paper buy was blocked)
+        kw = dict(kw, _ledger_flat=True)
+    seq = [t for t in sequence(rows, day_of, intraday=intraday, **kw) if t.get("pending") and t["i"] == last]
     if opens:
         # every trigger comes back: paper.setup_decision takes the flip / latest-BOS ones and records the others as
         # skipped (before 17 Nov they were dropped here unseen, e.g. when an option's premium stop kept a trade open

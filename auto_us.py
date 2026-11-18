@@ -48,6 +48,9 @@ LIVE_DIR = os.path.join("trader", "live")
 CFG_FILE = os.path.join(LIVE_DIR, "auto_us_config.json")
 DECISIONS = os.path.join(LIVE_DIR, "decisions.jsonl")
 PY = sys.executable
+SCAN_LOG = os.path.join(US, "trader", "scan.log")
+SCAN_TIMEOUT = timedelta(minutes=15)
+_scan = {}   # the US scanner running in the background: {"proc", "kind", "started"}
 
 DEFAULTS = {
     "_note": "Auto PAPER trading rules for US stocks. Paper money only.",
@@ -426,22 +429,73 @@ def process(state, log, auto=True):
     if not (start <= et < stop):
         ms["status"] = "open, outside the 9:50-15:30 ET entry window"
         return
+    # The whole-universe scan takes 4-15 minutes. It runs in the background (the runner keeps checking stops and the
+    # dashboard's commands meanwhile) and its result is read on a later cycle.
+    if _scan.get("proc") is not None:
+        kind = finished_scan(log)
+        if kind is None:
+            ms["status"] = "scanning in the background"
+            return
+        if kind == "orb":
+            take_hits(state, ms, cfg, log, auto, et)
+        return
     last = ms.get("last_scan_utc")
     if last and utc - datetime.fromisoformat(last) < timedelta(minutes=cfg["scan_every_min"]):
         return
     if not os.path.exists(os.path.join(US, "trader", "universe.txt")):
-        sh([os.path.join("trader-scanner", "scan.py"), "universe"], timeout=300)
-    log("US scan starting (whole universe, a few minutes)...")
-    try:
-        rc, out = sh([os.path.join("trader-scanner", "scan.py"), "orb", "--max-confirm", str(cfg["max_confirm"]),
-                      "--side", "both" if cfg.get("allow_short") else "long"], timeout=900)
-    except subprocess.TimeoutExpired:
-        log("US scan timed out")
+        log("US: building the stock list first (once, in the background)")
+        start_scan("universe", ["universe"])
         return
+    log("US scan started in the background (whole universe, a few minutes)")
+    start_scan("orb", ["orb", "--max-confirm", str(cfg["max_confirm"]),
+                       "--side", "both" if cfg.get("allow_short") else "long"])
     ms["last_scan_utc"] = utc.isoformat()
+    ms["status"] = "scanning in the background"
+
+
+def start_scan(kind, args):
+    """One trader-scanner command in the background; its output goes to us/trader/scan.log."""
+    os.makedirs(os.path.dirname(SCAN_LOG), exist_ok=True)
+    with open(SCAN_LOG, "w", encoding="utf-8") as fh:
+        proc = subprocess.Popen([PY, os.path.join("trader-scanner", "scan.py")] + args, cwd=US,
+                                stdout=fh, stderr=subprocess.STDOUT)
+    _scan.update({"proc": proc, "kind": kind, "started": datetime.now(timezone.utc)})
+
+
+def finished_scan(log):
+    """None while the background scan runs (or none ran); else its kind. A scan past SCAN_TIMEOUT is stopped."""
+    proc = _scan.get("proc")
+    if proc is None:
+        return None
+    if proc.poll() is None:
+        if datetime.now(timezone.utc) - _scan["started"] < SCAN_TIMEOUT:
+            return None
+        proc.kill()
+        log("US scan timed out after %d min and was stopped" % (SCAN_TIMEOUT.total_seconds() // 60))
+    kind = _scan["kind"]
+    _scan.clear()
+    return kind
+
+
+def _scan_log():
+    try:
+        with open(SCAN_LOG, encoding="utf-8", errors="replace") as fh:
+            return fh.read()
+    except OSError:
+        return ""
+
+
+def take_hits(state, ms, cfg, log, auto, et):
+    """The agents on the fresh hits of the scan that just finished."""
+    out = _scan_log()
     wl = us_json(os.path.join("trader", "watchlist.json")) or {}
-    hits = wl.get("hits", [])
     today = et.date().isoformat()
+    if not str(wl.get("as_of") or "").startswith(today):
+        # the scanner wrote nothing today (a holiday it knows, an error): watchlist.json is an older scan's
+        ms["status"] = "the scan gave no result for today: %s" % " ".join(tail(out, 1))
+        log("US scan gave no result for today: %s" % " ".join(tail(out, 2)))
+        return
+    hits = wl.get("hits", [])
     seen = ms.get("seen") if ms.get("seen_date") == today else {}
     fresh, new = [], []
     for h in hits:

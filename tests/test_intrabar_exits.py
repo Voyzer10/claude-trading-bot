@@ -179,6 +179,17 @@ if __name__ == "__main__":
 
         pos, closed = run(P, "long", lambda n: [], 98.7, 99.0, 102.0)
         check("9. no 1-minute data (fallback): the live price past the stop still exits", closed and closed[0]["reason"] == "stop", closed)
+
+        # 13. options have no 1-minute candles: a premium seen past the stop is a gap even when the position was
+        # checked 5 minutes ago (the premium jumped: we cannot know it ever traded at the stop)
+        tn = datetime.now(timezone.utc)
+        recent = {"entry_time": (tn - timedelta(minutes=20)).isoformat(),
+                  "last_seen": (tn - timedelta(minutes=5)).isoformat()}
+        opt_gap = P.path_since(dict(recent, market="USOPT"), [], tn, 80.0)[-1][5]
+        nfo_gap = P.path_since(dict(recent, market="NFO"), [], tn, 80.0)[-1][5]
+        coin_gap = P.path_since(dict(recent, market="CRYPTO"), [], tn, 80.0)[-1][5]
+        check("13. option premium past the stop with no candles fills at the premium (gap); a watched coin still "
+              "fills at its stop", opt_gap and nfo_gap and not coin_gap, (opt_gap, nfo_gap, coin_gap))
     finally:
         os.chdir(old)
         shutil.rmtree(tmp, ignore_errors=True)

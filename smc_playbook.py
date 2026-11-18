@@ -423,19 +423,32 @@ def v5_params(market):
             "target": acc.get("v5_target", "leg")}
 
 
-def scanner_version(market):
+def scanner_version(market, symbol=None):
     """Which Scanner a market runs: "v4" (the owner's v4 rules of 11 Nov, Final Trading Workflow + his answers: primary sweep reversal, then a sequential OB/FVG
     secondary), "v3" (the 5 Nov workflow: sweep reversal + FVG/OB retest) or "v2" (A-B-C-D, playbook doji / star /
     hammer, FVG / order-block retests). Versions never mix (owner, 5 and 7 Nov 2026).
-    One switch per paper account (paper_config.json accounts.<X>.scanner_version, Settings > Risk limits). Defaults
-    to v3 if the config cannot be read."""
+    One switch per paper account (paper_config.json accounts.<X>.scanner_version, Settings > Risk limits). Missing:
+    paper.DEFAULT_SCANNER. If the config cannot be read (a typo in a hand edit), the last version read for that market
+    stays: never a silent switch to another strategy.
+    With a symbol: the account that DECIDES that chart's setups (paper.setup_account: QQQ / SPY / DIA -> USFNO, an
+    index -> FNO), so the scanner looks for the version the broker will take."""
+    import paper as P
+    memo = (market, symbol) if symbol else market
     try:
-        import paper as P
-        acc = P.MARKETS.get(market, {}).get("account", market)
-        v = P.load_config()["accounts"].get(acc, {}).get("scanner_version", "v3")
-        return v if v in SCANNER_VERSIONS else "v3"
+        cfg = P.load_config()
+        if symbol and market in P.MARKETS:
+            acc_cfg = P.setup_account(cfg, market, symbol)
+        else:
+            acc_cfg = cfg["accounts"].get(P.MARKETS.get(market, {}).get("account", market), {})
+        v = acc_cfg.get("scanner_version", P.DEFAULT_SCANNER)
+        v = v if v in SCANNER_VERSIONS else P.DEFAULT_SCANNER
     except Exception:
-        return "v3"
+        return _LAST_VERSION.get(memo, P.DEFAULT_SCANNER)
+    _LAST_VERSION[memo] = v
+    return v
+
+
+_LAST_VERSION = {}   # the last scanner_version read per market (used only when the config cannot be read)
 
 
 # the candles each chart's v4 setups came from (owner, 14 Nov 2026): paper.py's v4 time machine replays them
@@ -581,7 +594,8 @@ def v5_setups(rows, day_of, i, intraday=False, params=None):
     import scanner_v5 as V5
     try:
         seq = V5.sequence(rows, day_of, intraday=intraday, **(params or {}))
-    except Exception:
+    except Exception as e:   # never stop the scan, but never hide it either
+        print("Scanner v5 failed: %s: %s" % (type(e).__name__, str(e)[:200]), flush=True)
         return []
     out = []
     for t in seq:
@@ -605,9 +619,18 @@ def v4_setups(rows, day_of, i, intraday=False, ledger=None, chart=None):
     """Format the current v4 signal from the live ledger or from a chart-only simulation."""
     import scanner_v4 as V4
     try:
-        seq = (V4.live_candidate(rows, day_of, ledger, chart, intraday=intraday) if ledger is not None
-               else V4.sequence(rows, day_of, intraday=intraday))
+        # the account's own Trade Manager, as the backtest (research_scanner_v4) and the paper trades use it: with
+        # the defaults the chart's simulated trade could exit at another time than the paper trade
+        import paper as P
+        mk, _, sym = (chart or "").partition(":")
+        tm = V4.tm_settings(P.setup_account(P.load_config(), mk, sym)) if mk in P.MARKETS else {}
     except Exception:
+        tm = {}
+    try:
+        seq = (V4.live_candidate(rows, day_of, ledger, chart, intraday=intraday, **tm) if ledger is not None
+               else V4.sequence(rows, day_of, intraday=intraday, **tm))
+    except Exception as e:   # never stop the scan, but never hide it either: no setups would ever show up
+        print("Scanner v4 failed on %s: %s: %s" % (chart or "a chart", type(e).__name__, str(e)[:200]), flush=True)
         return []
     out = []
     for t in seq:

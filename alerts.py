@@ -142,7 +142,8 @@ def notify_cycle(state, ledger_path=os.path.join("trader", "paper", "ledger.json
         ist = datetime.now(IST)
         today = ist.date().isoformat()
         if ist.hour == 23 and ist.minute >= 30 and st.get("daily_sent") != today:
-            todays = [c for c in closed if c.get("exit_date") == today]
+            import paper
+            todays = [c for c in closed if paper.ist_day(c) == today]   # India's day for every market
             by = {}
             for c in todays:
                 acc = ("INDIA" if c.get("market") in ("NSE", "BSE") else "FNO" if c.get("market") == "NFO"

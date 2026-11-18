@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Settings > Trade Manager (owner, 13 Nov 2026): ONE set per market account, for every scanner (v2 / v3 / v4 / v5 /
 rules). Breakeven, trailing, profit lock, reversal and no-follow-through exits; the backtest engine, the paper
-account and the dashboard share the settings. Includes the one-time fold of the old two sets. Offline.
+account and the dashboard share the settings. Offline.
 
     python tests/test_tm_settings.py
 """
@@ -73,29 +73,13 @@ if __name__ == "__main__":
     os.chdir(tmp)
     try:
         import paper as P
-        # 3. the one-time fold of an old config (two Trade Managers) into one set per account
-        old_cfg = {"accounts": {
-            "US": dict(P.DEFAULT_CONFIG["accounts"]["US"], scanner_version="v4", tm_lock_at=0.8, tm_reversal=True,
-                       tm_stale_min=60, v4_trail=True, v4_be_r=0.5, v4_trail_step=1.0, v4_trail_gap=1.0),
-            "CRYPTO": dict(P.DEFAULT_CONFIG["accounts"]["CRYPTO"], scanner_version="v3", tm_lock_at=0.8,
-                           tm_reversal=True, tm_stale_min=240, v4_trail=True, v4_be_r=1.0)}}
-        for a in old_cfg["accounts"].values():
-            for k in ("tm_trail", "tm_trail_step", "tm_trail_gap"):
-                a.pop(k, None)
-        os.makedirs(os.path.dirname(P.CONFIG), exist_ok=True)
-        json.dump(old_cfg, open(P.CONFIG, "w"))
+        # 3. every account carries the full Trade Manager set; the default is the owner's v4 rule (trailing on).
+        # (The one-time fold of the older two sets ran on the VPS and was removed on 18 Nov 2026.)
         cfg = P.load_config()
-        us, cr = cfg["accounts"]["US"], cfg["accounts"]["CRYPTO"]
-        check("3. fold: a v4 account keeps what its trades ran (v4 trailing, breakeven 0.5R; lock / reversal / stale off)",
-              us["tm_trail"] is True and us["tm_be_r"] == 0.5 and us["tm_lock_at"] == 0 and us["tm_reversal"] is False
-              and us["tm_stale_min"] == 0 and "v4_trail" not in us, us)
-        check("   a v3 account keeps its exits (lock 0.8, reversal, 240 min) and no trailing",
-              cr["tm_trail"] is False and cr["tm_lock_at"] == 0.8 and cr["tm_reversal"] is True and cr["tm_stale_min"] == 240,
-              cr)
-        cr["tm_trail"] = True
-        json.dump(cfg, open(P.CONFIG, "w"))
-        check("   once only: a later change stays", P.load_config()["accounts"]["CRYPTO"]["tm_trail"] is True)
-        check("   every account has the full set", all(all(k in a for k in V4.TM_KEYS) for a in P.load_config()["accounts"].values()))
+        us = cfg["accounts"]["US"]
+        check("3. every account has the full set, trailing on by default (+1R -> entry, then 1R per R)",
+              all(all(k in a for k in V4.TM_KEYS) for a in cfg["accounts"].values())
+              and all(a["tm_trail"] is True and a["tm_be_r"] == 1.0 for a in cfg["accounts"].values()), us)
 
         # 4. paper: one helper, the same for every scanner
         tm = P.tm_cfg(dict(us, tm_be_r=1.0))
@@ -129,6 +113,7 @@ if __name__ == "__main__":
         from fastapi.testclient import TestClient
         import api._ops as O
         O.PAPER_CFG = P.CONFIG
+        O.LIVE, O.LOG = "trader/live", "trader/live/log.txt"   # the temp folder, not the repo's real log
         app = FastAPI()
         app.include_router(O.router)
         cl = TestClient(app)

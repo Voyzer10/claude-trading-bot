@@ -8,7 +8,6 @@ __pycache__/
 # secrets
 .env
 .env*.local
-trader/dashboard.json
 # the bot's live data (logs, ledger, caches) stays on your PC
 trader/
 us/trader/

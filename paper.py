@@ -32,8 +32,6 @@ import math
 import os
 import sys
 import time
-import urllib.parse
-import urllib.request
 from datetime import datetime, timedelta, timezone
 
 BASE = os.path.join("trader", "paper")
@@ -53,8 +51,30 @@ MARKETS = {
     "US":     {"suffix": "",     "cur": "$",  "open": "09:30", "close": "16:00", "fractional": False, "account": "US"},
     "CRYPTO": {"suffix": "-USD", "cur": "$",  "open": None,    "close": None,    "fractional": True,  "account": "CRYPTO"},
 }
+# the Scanner version an account runs when its config does not say (Settings > Risk limits): the owner trades v4
+DEFAULT_SCANNER = "v4"
 ACCOUNT_MARKET = {"INDIA": "NSE", "FNO": "NFO", "US": "US", "USFNO": "USOPT", "CRYPTO": "CRYPTO"}  # currency formatting
 INDIA_ACCOUNTS = ("INDIA", "FNO")   # Indian charges (india_charges), not fee_pct
+
+# The switches every account starts with (scanner, rulebook guards, Trade Manager); each account below adds or
+# overrides its own money and market settings. The comments under "accounts" explain the keys.
+COMMON_ACCOUNT = {
+    "max_trades_per_day": 5, "min_reward_risk": 1.0, "cooldown_losses": 3, "cooldown_minutes": 120,
+    "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True, "scanner_version": DEFAULT_SCANNER,
+    "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing", "v5_target": "leg",
+    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0, "tm_lock_keep": 0.5, "tm_reversal": False,
+    "tm_rev_min_r": 1.0, "tm_stale_min": 0, "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0,
+    "tm_trail_gap": 1.0,
+}
+
+
+def _account(**own):
+    """An account's defaults: COMMON_ACCOUNT (its own copy: lists are never shared) with the account's settings."""
+    acc = json.loads(json.dumps(COMMON_ACCOUNT))
+    acc.update(own)
+    return acc
+
 
 DEFAULT_CONFIG = {
     "_note": "Paper money only. Edit freely. INDIA = NSE / BSE stocks, FNO = NFO (index options / futures). "
@@ -65,67 +85,27 @@ DEFAULT_CONFIG = {
         # intraday_leverage (owner, 14 Nov 2026: "margin k according trade lo"): an intraday stock trade ties up
         # only qty x price / leverage of cash (the broker's intraday margin: SEBI allows at most 5x on Indian cash
         # equity, FINRA 4x intraday in the US). The risk per trade stays max_loss_per_trade; 1 = no leverage.
-        "INDIA":  {"capital": 100000, "max_loss_per_trade": 3000, "max_loss_per_trade_fno": 3000, "intraday_leverage": 5,
-                   "max_position_pct": 25, "max_position_pct_fno": 40, "daily_loss_limit": 9000,
-                   "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
-                   "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": True,
-                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
-                   "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
-                   "v5_target": "leg",
-                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
-                   "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
-                   "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
+        "INDIA":  _account(capital=100000, max_loss_per_trade=3000, max_loss_per_trade_fno=3000, intraday_leverage=5,
+                           max_position_pct=25, max_position_pct_fno=40, daily_loss_limit=9000, flat_by="15:15",
+                           futures_margin_pct=12.0, breakeven_at_r=1.0, allow_short=True),
         # FNO (owner, 12 Nov 2026): its own Rs 1,00,000 budget, apart from the Rs 50,000 INDIA stock account; F&O only
         # on Nifty 50 and Bank Nifty (index ATM options), no stock options. Strategy switches are copied from INDIA
         # once when the account is made, then set on their own (Settings > F&O).
-        "FNO":    {"capital": 100000, "max_loss_per_trade": 3000, "max_loss_per_trade_fno": 3000,
-                   "max_position_pct": 40, "max_position_pct_fno": 40, "daily_loss_limit": 9000,
-                   "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
-                   "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": False,
-                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
-                   "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
-                   "v5_target": "leg",
-                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
-                   "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
-                   "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0, "fno_stock_options": False,
-                   "fno_underlyings": ["NIFTY", "BANKNIFTY"]},
-        # USFNO (owner, 13 Nov 2026): US F&O, its own $50,000, only QQQ / SPY ATM weekly options (us_options.py);
+        "FNO":    _account(capital=100000, max_loss_per_trade=3000, max_loss_per_trade_fno=3000, max_position_pct=40,
+                           max_position_pct_fno=40, daily_loss_limit=9000, flat_by="15:15", futures_margin_pct=12.0,
+                           breakeven_at_r=1.0, allow_short=False, fno_stock_options=False,
+                           fno_underlyings=["NIFTY", "BANKNIFTY"]),
+        # USFNO (owner, 13 Nov 2026): US F&O, its own budget, only QQQ / SPY / DIA ATM weekly options (us_options.py);
         # strategy switches copied from US once when the account is made. fee_pct 0.5 per side stands for the
         # contract fees and the bid / ask spread (the paper fill is the quote midpoint)
-        "USFNO":  {"capital": 1200, "max_loss_per_trade": 36, "max_loss_per_trade_fno": 36,
-                   "max_position_pct": 40, "max_position_pct_fno": 40, "daily_loss_limit": 108,
-                   "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:50", "fee_pct": 0.5,
-                   "breakeven_at_r": 1.0, "allow_short": False,
-                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
-                   "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
-                   "v5_target": "leg",
-                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
-                   "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
-                   "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0,
-                   "usopt_underlyings": ["QQQ", "SPY", "DIA"]},
-        "US":     {"capital": 1000, "max_loss_per_trade": 30, "max_position_pct": 25, "intraday_leverage": 4,
-                   "daily_loss_limit": 90, "max_trades_per_day": 5, "min_reward_risk": 1.0,
-                   "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
-                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
-                   "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
-                   "v5_target": "leg",
-                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
-                   "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
-                   "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
-        "CRYPTO": {"capital": 1000, "max_loss_per_trade": 30, "max_position_pct": 25, "intraday_leverage": 5,
-                   "daily_loss_limit": 90, "max_trades_per_day": 10, "min_reward_risk": 1.0,
-                   "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True,
-                   "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "max_same_side": 3, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
-                   "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
-                   "v5_target": "leg",
-                   "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
-                   "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
-                   "tm_candle_min": 15, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
+        "USFNO":  _account(capital=1200, max_loss_per_trade=36, max_loss_per_trade_fno=36, max_position_pct=40,
+                           max_position_pct_fno=40, daily_loss_limit=108, flat_by="15:50", fee_pct=0.5,
+                           breakeven_at_r=1.0, allow_short=False, usopt_underlyings=["QQQ", "SPY", "DIA"]),
+        "US":     _account(capital=1000, max_loss_per_trade=30, max_position_pct=25, intraday_leverage=4,
+                           daily_loss_limit=90, flat_by="15:55", fee_pct=0.0, breakeven_at_r=None, allow_short=True),
+        "CRYPTO": _account(capital=1000, max_loss_per_trade=30, max_position_pct=25, intraday_leverage=5,
+                           daily_loss_limit=90, max_trades_per_day=10, flat_by=None, fee_pct=0.059, breakeven_at_r=None,
+                           allow_short=True, max_same_side=3, tm_candle_min=15),
         # Trade Manager: ONE set per account, for every scanner's trades (owner, 13 Nov 2026). Defaults = the owner's
         # v4 rule: stop to the entry at +tm_be_r R, then (tm_trail) every tm_trail_step R the stop sits tm_trail_gap R
         # behind the best R; the exits below are off (0 / False) by default. Not the crypto trailing exits (trail_k).
@@ -161,31 +141,6 @@ DEFAULT_CONFIG = {
 }
 
 
-# the strategy switches FNO starts with: INDIA's, so F&O keeps running the Scanner version it ran before the split
-FNO_FROM_INDIA = ("scanner_version", "v4_setups", "v5_setups", "v5_constant", "v5_move", "v5_target", "trade_setups",
-                  "risk_limits", "trade_manager", "tm_be_r", "tm_trail", "tm_trail_step", "tm_trail_gap", "tm_lock_at",
-                  "tm_lock_keep", "tm_reversal",
-                  "tm_rev_min_r", "tm_stale_min", "tm_candle_min", "max_loss_per_trade_fno", "futures_margin_pct",
-                  "flat_by", "cooldown_losses", "cooldown_minutes", "weekly_loss_x")
-
-
-def tm_one_set(acc):
-    """Fold an account's two Trade Managers (v4: trailing only, v4_*; others: tm_*) into one set, keeping what its
-    trades ran with: on Scanner v4 the v4 trailing (and the other exits off); otherwise the tm_* exits (no trailing)."""
-    v4 = acc.get("scanner_version") == "v4"
-    if v4:
-        acc["tm_be_r"] = acc.get("v4_be_r", 1.0)
-        acc["tm_trail"] = bool(acc.get("v4_trail", True))
-        acc["tm_lock_at"], acc["tm_reversal"], acc["tm_stale_min"] = 0.0, False, 0
-        acc["trade_manager"] = True
-    else:
-        acc["tm_trail"] = False
-    acc["tm_trail_step"] = acc.get("v4_trail_step", 1.0)
-    acc["tm_trail_gap"] = acc.get("v4_trail_gap", 1.0)
-    for k in ("v4_trail", "v4_be_r", "v4_trail_step", "v4_trail_gap"):
-        acc.pop(k, None)
-
-
 class PaperError(Exception):
     pass
 
@@ -207,17 +162,10 @@ def save_json(path, doc):
     os.replace(tmp, path)
 
 
-# The owner's budget of 17 Nov 2026: Rs 1 lakh per Indian account, $1,000 per US / crypto account ($1,200 for US
-# options); max loss per trade 3% of it, the daily loss limit 3 trades (9%). Applied once to the live config, and
-# once to the ledger: every book restarts at its budget (cash = budget - what open positions tie up), the old trades
-# stay in the ledger as history ("purana data 0 kardo, sirf data ledger m rehne do").
-BUDGET_1117 = {"INDIA": 100000, "FNO": 100000, "US": 1000, "USFNO": 1200, "CRYPTO": 1000}
-
-
-def budget_limits(capital):
-    # max_loss_per_trade_fno is what an option / futures trade is sized by (Bank Nifty's lot needs ~Rs 2,600)
-    return {"capital": capital, "max_loss_per_trade": round(capital * 0.03, 2),
-            "max_loss_per_trade_fno": round(capital * 0.03, 2), "daily_loss_limit": round(capital * 0.09, 2)}
+# One-time changes of an older config / ledger (the F&O and US F&O accounts of 12-13 Nov, one Trade Manager per
+# account, the CoinDCX fee, the 17 Nov budget and its ledger reset) ran on the VPS and were removed on 18 Nov 2026;
+# DEFAULT_CONFIG holds their results for a new install. The ledger keeps each book's "budget_reset" note, which the
+# dashboard's P&L reads.
 
 
 def load_config():
@@ -227,70 +175,23 @@ def load_config():
     cfg = load_json(CONFIG, DEFAULT_CONFIG)
     changed = False
     accs = cfg.setdefault("accounts", {})
-    if "FNO" not in accs:  # one-time (owner, 12 Nov 2026): F&O gets its own account; INDIA = stocks, Rs 50,000
-        fno = dict(DEFAULT_CONFIG["accounts"]["FNO"])
-        india = accs.get("INDIA") or {}
-        for k in FNO_FROM_INDIA:
-            if k in india:
-                fno[k] = india[k]
-        accs["FNO"] = fno
-        if india:
-            india["capital"] = 50000
-            for k in ("fno_underlyings", "fno_stock_options"):
-                india.pop(k, None)
-        changed = True
-    if not cfg.get("_crypto_lev_1117") and "CRYPTO" in accs:  # one-time (owner, 17 Nov 2026): crypto on 5x margin
-        accs["CRYPTO"].setdefault("intraday_leverage", 5)
-        cfg["_crypto_lev_1117"] = changed = True
-    if not cfg.get("_budget_1117"):  # one-time (owner, 17 Nov 2026): see BUDGET_1117
-        for name, cap in BUDGET_1117.items():
-            if name in accs:
-                accs[name].update(budget_limits(cap))
-        cfg["_budget_1117"] = changed = True
-    if not cfg.get("_tm_global"):   # one-time (owner, 13 Nov 2026): one Trade Manager per account, every scanner
-        for acc in accs.values():
-            tm_one_set(acc)
-        cfg["_tm_global"] = changed = True
-    usf_old = accs.get("USFNO")
-    if usf_old and "DIA" not in (usf_old.get("usopt_underlyings") or []) and not cfg.get("_usopt_dia"):
-        usf_old["usopt_underlyings"] = list(usf_old.get("usopt_underlyings") or []) + ["DIA"]   # one-time: the Dow
-        cfg["_usopt_dia"] = changed = True
-    if "USFNO" not in accs:   # one-time (owner, 13 Nov 2026): US F&O gets its own account, US's scanner switches
-        usf = dict(DEFAULT_CONFIG["accounts"]["USFNO"])
-        us = accs.get("US") or {}
-        for k in FNO_FROM_INDIA:
-            if k in us and k not in ("max_loss_per_trade_fno", "futures_margin_pct", "flat_by"):
-                usf[k] = us[k]
-        accs["USFNO"] = usf
-        changed = True
-    for name, acc in DEFAULT_CONFIG["accounts"].items():
+    for name, acc in DEFAULT_CONFIG["accounts"].items():   # new keys (and new accounts) get their defaults
         merged = dict(acc)
-        merged.update(cfg.get("accounts", {}).get(name, {}))
-        if cfg.get("accounts", {}).get(name) != merged:
+        merged.update(accs.get(name, {}))
+        if accs.get(name) != merged:
             changed = True
-        cfg.setdefault("accounts", {})[name] = merged
-    crypto = cfg["accounts"].get("CRYPTO", {})
-    if not cfg.get("_fees_coindcx") and crypto.get("fee_pct") == 0.1:  # one-time: the old generic 0.1% -> CoinDCX
-        crypto["fee_pct"] = DEFAULT_CONFIG["accounts"]["CRYPTO"]["fee_pct"]
-        cfg["_fees_coindcx"] = True
-        changed = True
-    us = cfg["accounts"].get("US", {})
-    if not cfg.get("_us_capital_50k") and float(us.get("capital", 0)) == 5000:   # one-time: owner raised US to $50k
-        us["capital"] = 50000
-        cfg["_us_capital_50k"] = True
-        changed = True
+        accs[name] = merged
     if "india_charges" not in cfg:
         cfg["india_charges"] = DEFAULT_CONFIG["india_charges"]
         changed = True
-    if changed:  # write the new defaults (e.g. the INDIA account) into the user's file once
+    if changed:  # write the new defaults into the user's file once
         save_json(CONFIG, cfg)
     return cfg
 
 
 def load_ledger(cfg):
     led = load_json(LEDGER, {"accounts": {}, "open": [], "closed": []})
-    topped = split_fno(led, cfg)
-    topped = budget_reset(led, cfg) or topped
+    topped = False
     for name, acc in cfg["accounts"].items():
         if name in ACCOUNT_MARKET:
             book = led["accounts"].setdefault(name, {"cash": float(acc["capital"]), "start_capital": float(acc["capital"])})
@@ -303,44 +204,6 @@ def load_ledger(cfg):
     if topped and os.path.exists(LEDGER):
         save_json(LEDGER, led)
     return led
-
-
-def budget_reset(led, cfg):
-    """One-time (owner, 17 Nov 2026): every book restarts at its configured budget; open positions stay open and
-    keep the money they tie up (margin, or the entry value); closed trades stay as history. True if it ran."""
-    if led.get("_budget_1117") or not cfg.get("_budget_1117"):
-        return False
-    books = led.setdefault("accounts", {})
-    at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    for name, acc in cfg.get("accounts", {}).items():
-        if name not in ACCOUNT_MARKET:
-            continue
-        cap = float(acc["capital"])
-        tied = sum((p["margin"] if p.get("margin") is not None else p["qty"] * p["entry"])
-                   for p in led.get("open", []) if MARKETS.get(p.get("market"), {}).get("account") == name)
-        old = books.get(name) or {}
-        books[name] = {"cash": round(cap - tied, 6), "start_capital": cap,
-                       "budget_reset": {"at": at, "old_cash": old.get("cash"), "old_start": old.get("start_capital"),
-                                        "tied": round(tied, 4)}}
-    led["_budget_1117"] = at
-    return True
-
-
-def split_fno(led, cfg):
-    """One-time (owner, 12 Nov 2026): F&O moves out of INDIA into its own FNO book. Each book's cash stays
-    start + realised P&L - money tied in open positions: the NFO trades' realised P&L and the cash their open
-    positions tie up move from INDIA to FNO. Returns True if the ledger changed."""
-    books = led.setdefault("accounts", {})
-    if "FNO" in books or "INDIA" not in books or "FNO" not in cfg.get("accounts", {}):
-        return False
-    cap = float(cfg["accounts"]["FNO"]["capital"])
-    realised = sum(float(c.get("pnl") or 0) for c in led.get("closed", []) if c.get("market") == "NFO")
-    tied = sum((p["margin"] if p.get("margin") is not None else p["qty"] * p["entry"]) + float(p.get("entry_fee") or 0)
-               for p in led.get("open", []) if p.get("market") == "NFO")
-    books["INDIA"]["cash"] = round(float(books["INDIA"]["cash"]) - realised + tied, 6)
-    books["FNO"] = {"cash": round(cap + realised - tied, 6), "start_capital": cap,
-                    "split_from_india": {"realised": round(realised, 4), "tied": round(tied, 4)}}
-    return True
 
 
 def account_of(m):
@@ -467,299 +330,6 @@ def lot_of(m, t):
     return fno.lot_size(t)
 
 
-# ------------------------------------------------------------------ prices
-
-def kite_mod():
-    """kite.py when Zerodha is connected today (Indian market data), else None. Data only: it cannot trade."""
-    try:
-        import kite
-        return kite if kite.connected() else None
-    except Exception:
-        return None
-
-
-def kite_price(m, t):
-    """(price, time) for NSE / BSE / NFO from Zerodha: the live tick stream first, then a Kite quote. None if
-    Zerodha is not connected or does not know the instrument."""
-    if m not in ("NSE", "BSE", "NFO"):
-        return None
-    k = kite_mod()
-    if not k:
-        return None
-    tick = k.tick_price(key(m, t))
-    if tick:
-        return tick
-    try:
-        return k.ltp(key(m, t))
-    except Exception:
-        return None
-
-
-def _newest_quote(res):
-    """(price, time) from one Yahoo chart result: the newer of meta.regularMarketPrice (at regularMarketTime) and
-    the last 1-minute close (at its candle's end). None if neither exists."""
-    meta = res.get("meta") or {}
-    cands = []
-    if meta.get("regularMarketPrice") is not None:
-        ts = meta.get("regularMarketTime")
-        cands.append((datetime.fromtimestamp(ts, timezone.utc) if ts else None, float(meta["regularMarketPrice"])))
-    q = ((res.get("indicators") or {}).get("quote") or [{}])[0]
-    for ts, c in reversed(list(zip(res.get("timestamp") or [], q.get("close") or []))):
-        if c is not None and ts is not None:
-            cands.append((datetime.fromtimestamp(ts, timezone.utc) + timedelta(minutes=1), float(c)))
-            break
-    if not cands:
-        return None
-    now = datetime.now(timezone.utc)
-    dated = [(min(t, now), p) for t, p in cands if t is not None]
-    if dated:
-        t, p = max(dated, key=lambda x: x[0])
-        return p, t
-    return cands[0][1], now
-
-
-_MONTHS = {m: i for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov",
-                                        "dec"), 1)}
-
-
-def _nasdaq_quote(t, opener=None):
-    """(price, trade time UTC) from Nasdaq's public quote API (last sale; no key), or None. Tries stock, then ETF."""
-    import re
-    opener = opener or urllib.request.urlopen
-    for cls in ("stocks", "etf"):
-        url = "https://api.nasdaq.com/api/quote/%s/info?assetclass=%s" % (urllib.parse.quote(t), cls)
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json, text/plain, */*",
-                                                       "Origin": "https://www.nasdaq.com",
-                                                       "Referer": "https://www.nasdaq.com/"})
-            with opener(req, timeout=8) as r:
-                doc = json.loads(r.read())
-            pd = ((doc or {}).get("data") or {}).get("primaryData") or {}
-            px = str(pd.get("lastSalePrice") or "").replace("$", "").replace(",", "").strip()
-            if not px:
-                continue
-            ts = str(pd.get("lastTradeTimestamp") or "")
-            mt = re.search(r"([A-Za-z]{3})\w*\.? (\d{1,2}), (\d{4}),? (\d{1,2}):(\d{2}) ?([AP]M)", ts)
-            if not mt:
-                return float(px), None
-            mon, day, yr, hh, mm, ap = mt.groups()
-            h = int(hh) % 12 + (12 if ap.upper() == "PM" else 0)
-            local = datetime(int(yr), _MONTHS[mon.lower()], int(day), h, int(mm), tzinfo=timezone.utc)
-            utc = local - us_offset(local + timedelta(hours=5))     # ET -> UTC
-            return float(px), utc
-        except Exception:
-            continue
-    return None
-
-
-def _stooq_quote(t, opener=None):
-    """(price, time UTC) from Stooq's CSV quote (no key), or None. Stooq times are Polish local time."""
-    opener = opener or urllib.request.urlopen
-    url = "https://stooq.com/q/l/?s=%s.us&f=sd2t2c&h&e=csv" % urllib.parse.quote(t.lower())
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": UA})
-        with opener(req, timeout=8) as r:
-            lines = r.read().decode("utf-8", "replace").strip().splitlines()
-        sym, d, tm, close = lines[1].split(",")[:4]
-        if close in ("N/D", ""):
-            return None
-        try:
-            from zoneinfo import ZoneInfo
-            local = datetime.fromisoformat("%sT%s" % (d, tm)).replace(tzinfo=ZoneInfo("Europe/Warsaw"))
-            return float(close), local.astimezone(timezone.utc)
-        except Exception:
-            return float(close), None
-    except Exception:
-        return None
-
-
-def us_backup_quote(t):
-    """The newest of the backup US quotes: (price, time UTC) or None. Nasdaq's last sale is real time, so a Nasdaq
-    price whose trade time cannot be read counts as now (checked from the VPS, 6 Nov 2026: Nasdaq answers, Stooq
-    does not)."""
-    now = datetime.now(timezone.utc)
-    n = _nasdaq_quote(t)
-    got = [(n[0], n[1] or now)] if n else []
-    st = _stooq_quote(t)
-    if st and st[1] is not None:
-        got.append(st)
-    return max(got, key=lambda q: q[1]) if got else None
-
-
-def crypto_live_price(t, rest=True):
-    """(price, time) for a coin from Coinbase (public data, no key): the live ticker's file (crypto_ticker.py)
-    first, then one REST request. None when Coinbase does not list the coin or does not answer (Yahoo then)."""
-    try:
-        import coinbase
-    except Exception:
-        return None
-    q = coinbase.tick_price(t)
-    if q:
-        return q
-    return coinbase.price(t) if rest else None
-
-
-def us_live_price(t, rest=True):
-    """(price, time) for a US stock from Alpaca's IEX feed (paper key, data only): the live ticker's file
-    (us_ticker.py) first, then one REST request. None without Alpaca keys or an IEX price (Yahoo then)."""
-    try:
-        import alpaca
-    except Exception:
-        return None
-    q = alpaca.tick_price(t)
-    if q:
-        return q
-    return alpaca.price(t) if (rest and alpaca.configured()) else None
-
-
-def fetch_price(m, t):
-    """Return (price, quote_time_utc). Raises PaperError."""
-    kq = kite_price(m, t)                # Indian market: Zerodha (live) when connected
-    if kq:
-        return float(kq[0]), kq[1]
-    if m == "US":
-        uq = us_live_price(t)            # US: Alpaca IEX, live (owner, 11 Nov 2026)
-        if uq:
-            return float(uq[0]), uq[1]
-    if m == "CRYPTO":
-        cq = crypto_live_price(t)        # crypto: Coinbase live (CoinDCX blocks the VPS; 11 Nov 2026)
-        if cq:
-            return float(cq[0]), cq[1]
-    if m == "USOPT":                     # Alpaca options data, indicative feed (paper key, data only)
-        import us_options
-        try:
-            q = us_options.price(t)
-        except Exception as e:
-            raise PaperError("could not price %s: %s" % (t, str(e)[:200]))
-        if not q:
-            raise PaperError("no Alpaca option price for %s (paper key set? market open?)" % t)
-        return q
-    if m == "NFO":
-        import fno
-        try:
-            p, qt, src, extra = fno.quote(t)
-            return p, qt
-        except fno.FnoError as e:
-            raise PaperError(str(e))
-        except Exception as e:
-            raise PaperError("could not price %s: %s" % (t, e))
-    ysym = urllib.parse.quote(yahoo_symbol(m, t), safe="")
-    last, best = None, None
-    for host in ("query2", "query1"):
-        # _=<now> makes every request unique, so no cache between us and Yahoo can hand back an old answer
-        url = "https://%s.finance.yahoo.com/v8/finance/chart/%s?range=1d&interval=1m&includePrePost=false&_=%d" % (
-            host, ysym, int(time.time()))
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": UA, "Cache-Control": "no-cache"})
-            with urllib.request.urlopen(req, timeout=8) as r:
-                doc = json.loads(r.read())
-            res = (doc.get("chart") or {}).get("result") or []
-            if not res:
-                raise PaperError("Yahoo has no data for %s" % yahoo_symbol(m, t))
-            best = _newest_quote(res[0])
-            if best is None:
-                raise PaperError("no price for %s" % yahoo_symbol(m, t))
-            break
-        except PaperError:
-            raise
-        except Exception as e:
-            last = e
-    if best is not None:
-        price, qt = best
-        # 5 Nov 2026: US quotes stayed frozen for 15+ minutes while the market was open (crypto was fine). If the
-        # 1-minute answer is stale in an open session, ask for the 5-minute chart the scanner uses (it was fresh).
-        now = datetime.now(timezone.utc)
-        if m in ("US", "NSE", "BSE") and session(m, now) == "open" and now - qt > timedelta(minutes=10):
-            try:
-                import scan_nse as SN
-                d = SN.yahoo_chart(t, "1d", "5m", suffix=MARKETS[m]["suffix"])
-                if d and d["t"]:
-                    t5 = datetime.fromtimestamp(d["t"][-1], timezone.utc) + timedelta(minutes=5)
-                    if t5 > qt:
-                        price, qt = float(d["c"][-1]), min(t5, now)
-            except Exception:
-                pass
-        # still stale (5-6 Nov 2026: Yahoo served US quotes frozen 87 min from the VPS): Nasdaq / Stooq
-        if m == "US" and session(m, now) == "open" and now - qt > timedelta(minutes=10):
-            b = us_backup_quote(t)
-            if b and b[1] > qt:
-                price, qt = b[0], min(b[1], now)
-        return float(price), qt
-    if m == "US":      # Yahoo failed outright: the backup sources
-        b = us_backup_quote(t)
-        if b:
-            return float(b[0]), min(b[1], datetime.now(timezone.utc))
-    if m == "CRYPTO":  # cloud servers are sometimes refused by Yahoo: Coinbase's public ticker as a fallback
-        try:
-            req = urllib.request.Request("https://api.exchange.coinbase.com/products/%s-USD/ticker" % t,
-                                         headers={"User-Agent": "trader-bot", "Accept": "application/json"})
-            with urllib.request.urlopen(req, timeout=10) as r:
-                doc = json.loads(r.read())
-            return float(doc["price"]), datetime.now(timezone.utc)
-        except Exception as e:
-            last = "%s; coinbase: %s" % (last, e)
-    raise PaperError("could not fetch %s: %s" % (yahoo_symbol(m, t), last))
-
-
-def fetch_minutes(m, t, days=1):
-    """1-minute candles [(utc, o, h, l, c)] of the last `days` days (1..7), oldest first, or [] (F&O, or no data).
-    Used by check_once to see what happened BETWEEN two checks: a stop or target touched and left again in the
-    minutes in between."""
-    k = kite_mod() if m in ("NSE", "BSE", "NFO") else None
-    if k:
-        try:
-            now = datetime.now(timezone.utc)
-            out = k.minutes(key(m, t), now - timedelta(days=max(1, min(7, int(days)))), now)
-            if out:
-                return out
-        except Exception:
-            pass
-    if m in ("NFO", "USOPT"):           # no 1-minute option candles: the checks use the live premium
-        return []
-    if m == "US":                        # Alpaca IEX 1-minute bars (paper key, data only)
-        try:
-            import alpaca
-            if alpaca.configured():
-                now = datetime.now(timezone.utc)
-                out = alpaca.minutes(t, now - timedelta(days=max(1, min(7, int(days)))), now)
-                if out:
-                    return out
-        except Exception:
-            pass
-    ysym = urllib.parse.quote(yahoo_symbol(m, t), safe="")
-    rng = "%dd" % max(1, min(7, int(days)))
-    for host in ("query2", "query1"):
-        url = "https://%s.finance.yahoo.com/v8/finance/chart/%s?range=%s&interval=1m" % (host, ysym, rng)
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": UA})
-            with urllib.request.urlopen(req, timeout=8) as r:
-                doc = json.loads(r.read())
-            res = ((doc.get("chart") or {}).get("result") or [None])[0]
-            if not res:
-                return []
-            q = ((res.get("indicators") or {}).get("quote") or [{}])[0]
-            out = []
-            for ts, o, h, l, c in zip(res.get("timestamp") or [], q.get("open") or [], q.get("high") or [],
-                                      q.get("low") or [], q.get("close") or []):
-                if None not in (ts, o, h, l, c):
-                    out.append((datetime.fromtimestamp(ts, timezone.utc), float(o), float(h), float(l), float(c)))
-            if out:
-                return out
-        except Exception:
-            continue
-    if m == "CRYPTO":  # Coinbase public 1-minute candles: [time, low, high, open, close, volume], newest first
-        try:
-            req = urllib.request.Request("https://api.exchange.coinbase.com/products/%s-USD/candles?granularity=60" % t,
-                                         headers={"User-Agent": "trader-bot", "Accept": "application/json"})
-            with urllib.request.urlopen(req, timeout=10) as r:
-                rows = json.loads(r.read())
-            return sorted((datetime.fromtimestamp(x[0], timezone.utc), float(x[3]), float(x[2]), float(x[1]), float(x[4]))
-                          for x in rows)
-        except Exception:
-            return []
-    return []
-
-
 def _iso(x):
     """ISO text -> aware datetime (a time saved without a zone is taken as UTC), or None."""
     try:
@@ -795,7 +365,10 @@ def path_since(pos, bars, now, price):
     # position was not checked in the last 15 minutes (the old rule); otherwise a resting stop fills at the stop.
     seen = _iso(pos.get("last_seen"))
     watched = bool(seen) and (now - seen) <= timedelta(minutes=15)
-    path.append((now, price, price, price, price, not bars and not watched))
+    # an option has no 1-minute candles (fetch_minutes): its premium jumps, and with no candles we cannot know it
+    # traded at the stop, so a live premium past the stop fills there, not at the stop
+    no_candles = pos.get("market") in ("NFO", "USOPT")
+    path.append((now, price, price, price, price, not bars and (not watched or no_candles)))
     return path
 
 
@@ -832,6 +405,16 @@ def today_closed(led, m, utc):
     d = local_now(m, utc).date().isoformat()
     acc = account_of(m)
     return [c for c in led["closed"] if account_of(c["market"]) == acc and c["exit_date"] == d]
+
+
+def ist_day(rec):
+    """The India date a closed trade ended on, for the dashboard, alerts and state.json. exit_date is the market's
+    own date (UTC for crypto, New York for US), which the risk limits use; a US trade closed at 01:00 IST belongs
+    to the India day it closed on."""
+    try:
+        return datetime.fromisoformat(rec["exit_time"]).astimezone(IST).date().isoformat()
+    except (KeyError, TypeError, ValueError):
+        return rec.get("exit_date") or ""
 
 
 def trades_today(led, m, utc):
@@ -965,6 +548,14 @@ def rulebook_guards(led, m, acc, now, short):
                              % (cap, "short" if short else "long", name, ", ".join(p["key"] for p in same)))
 
 
+def margin_x(acc, m, kind="equity"):
+    """The intraday margin a trade gets: India / US stocks (14 Nov 2026) and crypto (owner, 17 Nov 2026: 5x, like
+    Indian crypto futures) tie up qty x price / this; 1 = none. Options and futures: 1 (futures use their margin %)."""
+    if kind != "equity" or m not in ("NSE", "BSE", "US", "CRYPTO"):
+        return 1.0
+    return max(1.0, min(float(acc.get("intraday_leverage") or 1), 5.0))
+
+
 def cmd_buy(a, cfg, led):
     now = datetime.now(timezone.utc)
     m, t = parse_symbol(a.symbol, cfg)
@@ -1026,9 +617,7 @@ def cmd_buy(a, cfg, led):
     max_loss = acc.get("max_loss_per_trade_fno", acc["max_loss_per_trade"]) if fno_trade else acc["max_loss_per_trade"]
     pos_pct = acc.get("max_position_pct_fno", acc["max_position_pct"]) if fno_trade else acc["max_position_pct"]
     equity = book["cash"] + sum(held_value(p) for p in led["open"] if account_of(p["market"]) == account_of(m))
-    # margin: India / US stocks (14 Nov 2026) and crypto (owner, 17 Nov 2026: 5x, like Indian crypto futures)
-    lev = float(acc.get("intraday_leverage") or 1) if (kind == "equity" and m in ("NSE", "BSE", "US", "CRYPTO")) else 1.0
-    lev = max(1.0, min(lev, 5.0))
+    lev = margin_x(acc, m, kind)
     if kind == "futures":
         unit_cost = entry * acc.get("futures_margin_pct", 12) / 100
     else:
@@ -1263,6 +852,16 @@ def tm_react(pos, bars, now, price, tm):
     return None
 
 
+def liquidation_px(pos):
+    """Where a margin trade (pos["leverage"] > 1: intraday stocks, 5x crypto) has lost all its margin: entry -/+ margin
+    / qty, i.e. a 20% move at 5x, 25% at 4x. The broker / exchange closes it there (a simplification: real ones close a
+    little earlier, at their maintenance margin). None for a trade without margin."""
+    if not pos.get("leverage") or float(pos["leverage"]) <= 1 or not pos.get("margin") or not pos.get("qty"):
+        return None
+    room = float(pos["margin"]) / float(pos["qty"])
+    return pos["entry"] + room if is_short(pos) else pos["entry"] - room
+
+
 def step_bar(led, cfg, pos, acc, b, now, sh):
     """One candle (utc, o, h, l, c) of the path for an open position: the stop first (when a candle touches both,
     assume the stop: we cannot know the order inside a minute, so the worse case), then the target, then move the
@@ -1271,11 +870,19 @@ def step_bar(led, cfg, pos, acc, b, now, sh):
     t, o, h, l, c = b[:5]
     live = len(b) > 5                 # the live-price step (b[5]: may it count as a gap?)
     when = t if t < now else now
-    stop_hit = (h >= pos["stop"]) if sh else (l <= pos["stop"])
+    stop, liq = pos["stop"], liquidation_px(pos)
+    liquidated = liq is not None and ((liq < stop) if sh else (liq > stop))   # the margin runs out before the stop
+    if liquidated:
+        stop = liq
+    stop_hit = (h >= stop) if sh else (l <= stop)
     if stop_hit:
-        gapped = b[5] if live else ((o > pos["stop"]) if sh else (o < pos["stop"]))   # opened past it: the open, worse
-        fill = o if gapped else pos["stop"]
-        why = ("trailing stop" if pos.get("trailing") else "profit lock stop" if pos.get("locked")
+        gapped = b[5] if live else ((o > stop) if sh else (o < stop))   # opened past it: the open, worse
+        fill = o if gapped else stop
+        if liq is not None and m == "CRYPTO" and ((fill > liq) if sh else (fill < liq)):
+            # crypto futures, isolated margin: the exchange liquidates at the margin, the loss never passes it
+            fill, liquidated, gapped = liq, True, False
+        why = ("liquidated (margin used up)" if liquidated else
+               "trailing stop" if pos.get("trailing") else "profit lock stop" if pos.get("locked")
                else "breakeven stop" if pos.get("breakeven") else "stop")
         if why in ("profit lock stop", "breakeven stop") and tm_cfg(acc):
             tm_event(pos, "%s hit at %s (%+.2fR) instead of the original stop" % (why, money(m, fill), r_of(pos, fill)),
@@ -1632,285 +1239,14 @@ def main(argv=None):
         return 1
 
 
+# the price feeds (quotes.py) and the Scanner-setup agents (agents.py), split out on 18 Nov 2026: their names stay
+# reachable as paper.<name> for every caller
+from quotes import (  # noqa: E402,F401
+    _MONTHS, _nasdaq_quote, _newest_quote, _stooq_quote, crypto_live_price, fetch_minutes, fetch_price, kite_mod,
+    kite_price, us_backup_quote, us_live_price)
+from agents import (  # noqa: E402,F401
+    INDEX_UNDERLYINGS, _option_setup, setup_account, setup_decision, v4_timemachine)
+
+
 if __name__ == "__main__":
     sys.exit(main())
-
-
-# ------------------------------------------------------------------ Scanner v3 setups: the agents, then the paper broker
-
-INDEX_UNDERLYINGS = ("NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY")
-
-
-def v4_timemachine(market, symbol, s, acc, entry, stop, target):
-    """The v4 time machine (timemachine_v4.py) on the candles the scanner just read: history of the rule on this
-    chart + replays of the rest of the session. Information only (owner, 14 Nov 2026): never blocks a trade."""
-    if s.get("scanner") != "v4":
-        return None
-    try:
-        import smc_playbook as PB
-        import scanner_v4 as V4
-        import timemachine_v4 as TM
-        got = PB.LAST_ROWS.get("%s:%s" % (market, symbol))
-        if not got:
-            return "not run: the scanner's candles for this chart are not in memory (setup came from elsewhere)"
-        rows, day_of, intraday = got
-        res = TM.run(rows, day_of, intraday, s["side"], entry, stop, target, V4.tm_settings(acc),
-                     chart="%s:%s" % (market, symbol))
-        return res or "not run: too few candles"
-    except Exception as e:   # never lose the decision over the time machine
-        return "not run: %s" % str(e)[:160]
-
-
-def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields, mk="NFO"):
-    """setup_decision for an option trade: an Indian index / F&O stock (NFO) or QQQ / SPY (USOPT): the ATM option is
-    paper bought."""
-    word = {"CE": "call", "PE": "put"}[op["kind"]] if mk == "USOPT" else op["kind"]
-    entry, stop = s["price"], s["stop"]
-    target = s.get("target") or s.get("target_2r")
-    name = s.get("name") or s["setup"]
-    risk_u = op["premium"] - op["stop"]
-    st["4_exit"] = {"instrument": mk + ":" + op["name"], "why": "%s setup -> buy the ATM %s" % (s["side"], word),
-                    "premium": op["premium"], "premium_stop": op["stop"], "premium_target": op["target"],
-                    "stock_entry": entry, "stock_stop": stop, "stock_target": target, "lot": op["lot"],
-                    "iv": op["iv"], "delta": op["delta"], "expiry": op["expiry"],
-                    "r_multiple": round((op["target"] - op["premium"]) / risk_u, 2)}
-    st["5_timemachine"] = v4_timemachine("US" if mk == "USOPT" else "NSE", symbol, s, acc, entry, stop, target) or \
-        "n/a (backtest: research.py %s)" % ("usopt-sv4" if mk == "USOPT" else "fno-sv4 / bnf-sv4")
-    if not acc.get("trade_setups", True):
-        st["6-8_budget_risk_broker"] = {"verdict": "pass, NOT sent to the broker (trade_setups off)"}
-        st["9_alerts"] = "no trade, nothing to watch"
-        return done("LOG ONLY", "%s on %s: ATM %s %s recorded only (trade_setups is off)" % (name, symbol, word,
-                                                                                            op["name"]))
-    import contextlib
-    import io
-    if led is None:
-        led = load_ledger(cfg)
-    key = mk + ":" + op["name"]
-    args = type("A", (), {"symbol": key, "stop": str(op["stop"]), "target": str(op["target"]), "qty": None,
-                          "price": None, "note": "scanner %s: %s on %s (stock stop %s, target %s)" % (
-                              version, name, symbol, stop, target), "force": False, "side": "long",
-                          "setup": s["setup"], "setup_name": name, "scanner": version,
-                          "liquidity": s.get("liquidity"),
-                          "entry_reason": "Scanner %s %s on %s at %s: bought the ATM %s (IV %.0f%%, delta %.2f); "
-                                          "premium stop / target = the option's value at the underlying's stop %s / target %s"
-                                          % (version, s["side"], symbol, entry, word, op["iv"] * 100,
-                                             op["delta"], stop, target), **v4_fields})()
-    buf = io.StringIO()
-    try:
-        with contextlib.redirect_stdout(buf):
-            pos = cmd_buy(args, cfg, led)
-        save_json(LEDGER, led)
-    except PaperError as e:
-        st["6-8_budget_risk_broker"] = "BLOCK: %s" % e
-        return done("blocked", str(e))
-    if version == "v4" and stop is not None:
-        # the v4 plan on the underlying's own chart (owner, 17 Nov 2026): the option also exits when QQQ / Nifty
-        # reaches the v4 stop or target, as the engine and the backtests do; the premium stop / target still count
-        pos["underlying_plan"] = {"market": "US" if mk == "USOPT" else "NSE", "symbol": symbol, "side": s["side"],
-                                  "stop": float(stop), "target": float(target) if target is not None else None}
-        save_json(LEDGER, led)
-    st["6-8_budget_risk_broker"] = {"verdict": "PASS, paper option bought", "qty": pos["qty"], "entry": pos["entry"],
-                                    "stop": pos["stop"], "target": pos["target"],
-                                    "max_loss": round(abs(pos["entry"] - pos["stop"]) * pos["qty"]
-                                                      + pos.get("entry_fee", 0), 2),
-                                    "report": buf.getvalue().strip().splitlines()}
-    st["9_alerts"] = "live.py / Trade Manager watch the premium: stop %s, target %s" % (pos["stop"], pos["target"]) + (
-        "; and %s itself: exit when it reaches the v4 stop %s or target %s" % (symbol, stop, target)
-        if pos.get("underlying_plan") else "")
-    return done("PAPER BUY", "%s %s @ %s, stop %s, target %s (Scanner %s: %s on %s)" % (
-        pos["qty"], pos["key"], pos["entry"], pos["stop"], pos["target"], version, name, symbol))
-
-
-def setup_decision(market, symbol, s, news=None, now_iso=None):
-    """One of the owner's setups found by the Scanner (v3; smc_playbook.owner_setups dict), taken through the agents
-    Entry (the candle close), Exit (stop, 2R or the v3 liquidity target, costs in R), Budget (size from this account's limits), Risk (costs <=
-    0.25R, at least one unit), then the Broker: a paper trade at the live price with that stop and 2R target (the
-    owner's decision for paper testing, 4 Nov 2026), or LOG ONLY when the account's trade_setups is off.
-    Returns the decision record for decisions.jsonl."""
-    rec = {"time": now_iso or datetime.now(IST).isoformat(), "symbol": "%s:%s" % (market, symbol),
-           "setup": s["setup"], "scanner_v2": True, "steps": {}, "result": None}
-    st = rec["steps"]
-    st["1_scanner"] = {"scanner": s.get("scanner", "v3"), "setup": s["setup"], "setup_name": s.get("name"),
-                       "side": s["side"], "liquidity": s.get("liquidity"), "bar_end": s.get("bar_end"),
-                       "price": s["price"], **(s.get("details") or {})}
-    st["2_news"] = news if news is not None else "not fetched for stock setups (hundreds a day)"
-
-    def done(result, why):
-        if rec.get("flipped_from"):
-            why = "flip, closed %s first: %s" % (rec["flipped_from"], why)
-        rec["result"], rec["why"] = result, why
-        return rec
-
-    # Scanner v3's sweep reversal carries its own target (the opposing liquidity); the older setups use 2R
-    cfg = load_config()
-    acc = cfg["accounts"][MARKETS[market]["account"]] if market in MARKETS else cfg["accounts"]["US"]
-    if market in ("NSE", "BSE") and symbol.upper() in INDEX_UNDERLYINGS:
-        acc = cfg["accounts"].get("FNO", acc)   # an index setup is an F&O trade: the FNO account's switches
-    fno_acc = cfg["accounts"].get("FNO", acc)
-    usf_acc = cfg["accounts"].get("USFNO") or {}
-    us_opt = market == "US" and symbol.upper() in [u.upper() for u in (usf_acc.get("usopt_underlyings") or [])]
-    if us_opt:
-        acc = usf_acc                            # QQQ / SPY setups are US F&O trades: the USFNO account's switches
-    version = acc.get("scanner_version", "v3")
-    st["1_scanner"]["scanner"] = version
-    # versions never mix (owner, 5 and 7 Nov 2026): a setup of another version (switched after it was scanned) is
-    # skipped
-    import smc_playbook as _PB
-    sv = _PB.setup_version(s["setup"])
-    if sv != version:
-        return done("skipped", "this account runs Scanner %s: %s setups are off" % (version, sv))
-    if version == "v4" and s["setup"] not in acc.get("v4_setups", _PB.V4_SETUPS):
-        return done("skipped", "%s is unticked in Settings (Scanner v4: setups traded)" % (s.get("name") or s["setup"]))
-    if version == "v5" and s["setup"] not in acc.get("v5_setups", _PB.V5_SETUPS):
-        return done("skipped", "%s is unticked in Settings (Scanner v5: setups traded)" % (s.get("name") or s["setup"]))
-    led, v4_fields = None, {}
-    if version == "v4":
-        import scanner_v4 as V4
-        chart = key(market, symbol)
-        led = load_ledger(cfg)
-        opened, closed = V4.chart_state(led, chart)
-        signal = _iso(s.get("v4_signal_at"))
-        flipped = None
-        opens = V4.chart_open(led, chart) or ([opened] if opened else [])
-        if opens:
-            det = s.get("details") or {}
-            prim = s["setup"].startswith("v4_primary_")
-            olds = [o for o in opens if (o.get("setup") or "").startswith("v4_primary_")
-                    and V4.direction(o) != s["side"]]
-            if prim and det.get("flip") and olds:
-                # the flip rule (owner, 14 Nov 2026): an open trade came from an earlier day's BOS setup and the
-                # opposite side's setup of today's BOS triggered: close it at the current price, then take this one
-                import contextlib
-                import io
-                done_flip = []
-                for o in olds:
-                    try:
-                        px, _ = fetch_price(o["market"], o["symbol"])
-                        with contextlib.redirect_stdout(io.StringIO()):
-                            done_flip.append(close_position(led, cfg, o, px, "v4 flip: today's opposite BOS setup (%s)"
-                                                            % s["side"], datetime.now(timezone.utc)))
-                        save_json(LEDGER, led)
-                    except Exception as e:
-                        return done("blocked", "v4 flip: could not close %s first: %s" % (o["key"], str(e)[:160]))
-                flipped = done_flip[0]
-                rec["flipped_from"] = ", ".join(c["key"] for c in done_flip)
-                st["0_flip"] = {"closed": rec["flipped_from"], "side": V4.direction(olds[0]),
-                                "exit": flipped["exit"], "pnl": round(sum(c["pnl"] for c in done_flip), 4),
-                                "r": round(sum(c["r"] for c in done_flip), 2),
-                                "why": "previous day's BOS trade closed: today's opposite BOS setup triggered"}
-                opens = [o for o in opens if o not in olds]
-            elif prim and det.get("latest_bos") and len(opens) < int(V4.DEFAULTS["max_open"]):
-                # the latest-BOS rule (owner, 14 Nov 2026): a setup of a BOS newer than the open trade's triggered:
-                # take it as well (its own position, key ...#2)
-                st["0_latest_bos"] = {"open": [o["key"] for o in opens],
-                                      "why": "a newer BOS's setup triggered while a trade is open: taken as well"}
-            elif prim and det.get("latest_bos"):
-                return done("skipped", "v4: a newer BOS's setup, but %d trades are open on this chart already (max %d)"
-                            % (len(opens), int(V4.DEFAULTS["max_open"])))
-            elif not det.get("flip") and not det.get("latest_bos"):
-                # the v4 engine had no trade open on this chart (its stop or target on the chart was hit) but the
-                # paper position is still open, e.g. an option whose premium stop was not reached (owner, 17 Nov)
-                return done("skipped", "v4: %s is still open on this chart, so this trigger is skipped (the v4 "
-                                       "engine had already closed that trade on the chart)" % ", ".join(o["key"] for o in opens))
-            else:
-                return done("skipped", "v4: wait for the open trade on this chart to close")
-        exited = _iso(closed.get("exit_time")) if closed else None
-        if signal is None or (not flipped and exited is not None and signal <= exited):
-            return done("skipped", "v4: no fresh confirmed signal after the last exit")
-        if s["setup"].startswith("v4_secondary_"):
-            details = s.get("details") or {}
-            primary = _iso(details.get("primary_at"))
-            tap = _iso(details.get("tapped_at"))
-            if (not closed or closed.get("setup") != "v4_primary_" + s["side"]
-                    or primary is None or primary != _iso(closed.get("v4_signal_at"))
-                    or exited is None or tap is None or not exited < tap <= signal):
-                return done("skipped", "v4: secondary needs a matching closed primary and a later confirmed zone tap")
-        v4_fields = {"v4_chart": chart, "v4_signal_at": signal.isoformat()}
-        if opens:
-            v4_fields["allow_second"] = True
-    entry, stop, short = s["price"], s.get("stop"), s["side"] == "short"
-    target = s.get("target") or s.get("target_2r")
-    st["3_entry"] = {"side": s["side"], "price_now": entry, "note": "entry = the close of the candle that completed it"}
-    risk = ((stop - entry) if short else (entry - stop)) if stop is not None else 0
-    if risk <= 0:
-        return done("skipped", "price %s is already past the stop %s" % (entry, stop))
-    is_index = symbol.upper() in INDEX_UNDERLYINGS
-    fno_ok = [u.upper() for u in (fno_acc.get("fno_underlyings") or ["NIFTY", "BANKNIFTY"])]
-    if market in ("NSE", "BSE") and (is_index or fno_acc.get("fno_stock_options")):
-        # F&O only on the owner's underlyings (12 Nov 2026: Nifty 50 and Bank Nifty): an index setup buys its ATM option; a
-        # stock's setup buys the option only if the stock is listed there, else the shares (backtests: research.py
-        # bnf-sv4, fno-sv4)
-        op = None
-        if symbol.upper() not in fno_ok:
-            if is_index:
-                return done("skipped", "F&O is traded only on %s (owner, 12 Nov 2026)" % ", ".join(fno_ok))
-        else:
-            import fno_stock as _FS
-            try:
-                op = _FS.plan(symbol, s)
-            except _FS.NoOption as e:
-                if is_index or "has no F&O" not in str(e):
-                    st["4_exit"] = {"underlying_entry": entry, "underlying_stop": stop, "underlying_target": target}
-                    return done("skipped", "option: %s" % e)
-        if op:
-            return _option_setup(st, done, cfg, fno_acc, symbol, s, op, version, led, v4_fields)
-    if us_opt:
-        # US F&O (owner, 13 Nov 2026): a QQQ / SPY setup buys its ATM weekly option, never the ETF's shares
-        import us_options as _UO
-        try:
-            op = _UO.plan(symbol, s)
-        except _UO.NoOption as e:
-            st["4_exit"] = {"underlying_entry": entry, "underlying_stop": stop, "underlying_target": target}
-            return done("skipped", "option: %s" % e)
-        return _option_setup(st, done, cfg, usf_acc, symbol, s, op, version, led, v4_fields, mk="USOPT")
-    units = min(acc["max_loss_per_trade"] / risk, acc["capital"] * acc["max_position_pct"] / 100 / entry)
-    qty = units if market == "CRYPTO" else int(units)
-    cost = None
-    if market in ("NSE", "BSE"):
-        if qty >= 1:
-            o, c = ("sell", "buy") if short else ("buy", "sell")
-            cost = (charges(cfg, "NSE", symbol, o, qty * entry) + charges(cfg, "NSE", symbol, c, qty * target)) / (qty * risk)
-    else:
-        cost = (entry + target) * float(acc.get("fee_pct") or 0) / 100 / risk
-    st["4_exit"] = {"entry": entry, "stop": stop, "target": target, "r_multiple": round(abs(target - entry) / risk, 2),
-                    "stop_pct": round(risk / entry * 100, 3), "fee_r": round(cost, 3) if cost is not None else None}
-    st["5_timemachine"] = v4_timemachine(market, symbol, s, acc, entry, stop, target) or \
-        "n/a (these setups are backtested instead: research_v3 / research_smcp / research_abcd)"
-    if qty <= 0 or (market != "CRYPTO" and qty < 1):
-        return done("skipped", "0 units fit: the stop is %s away and the max loss is %s" % (round(risk, 6),
-                                                                                      acc["max_loss_per_trade"]))
-    if cost is not None and cost > 0.25:
-        return done("skipped", "fees eat %.2fR of the trade (max 0.25R)" % cost)
-    name = s.get("name") or s["setup"]
-    if not acc.get("trade_setups", True):
-        st["6-8_budget_risk_broker"] = {"verdict": "pass, NOT sent to the broker (trade_setups off)",
-                                        "qty": round(qty, 6) if market == "CRYPTO" else qty, "entry": entry,
-                                        "stop": stop, "target": target, "max_loss": round(risk * qty, 2)}
-        st["9_alerts"] = "no trade, nothing to watch"
-        return done("LOG ONLY", "%s: passed the agents; recorded only (trade_setups is off)" % name)
-    # paper trade it: paper.py sizes at the live price, keeps the stop / 2R target, and its own checks still apply
-    import contextlib
-    import io
-    if led is None:
-        led = load_ledger(cfg)
-    args = type("A", (), {"symbol": "%s:%s" % (market, symbol), "stop": str(stop), "target": str(target), "qty": None,
-                          "price": None, "note": "scanner %s: %s" % (version, name), "force": False,
-                          "side": "short" if short else "long", "setup": s["setup"], "setup_name": name,
-                          "scanner": version, "liquidity": s.get("liquidity"),
-                          "entry_reason": "found by Scanner %s; entry on the close of the %s candle, planned R:R %.1f" % (
-                              version, (s.get("bar_end") or "")[11:16] or "last", abs(target - entry) / risk), **v4_fields})()
-    buf = io.StringIO()
-    try:
-        with contextlib.redirect_stdout(buf):
-            pos = cmd_buy(args, cfg, led)
-        save_json(LEDGER, led)
-    except PaperError as e:
-        st["6-8_budget_risk_broker"] = "BLOCK: %s" % e
-        return done("blocked", str(e))
-    st["6-8_budget_risk_broker"] = {"verdict": "PASS, paper %s filled" % ("short" if short else "buy"), "qty": pos["qty"],
-                                    "entry": pos["entry"], "stop": pos["stop"], "target": pos["target"],
-                                    "max_loss": round(abs(pos["entry"] - pos["stop"]) * pos["qty"] + pos.get("entry_fee", 0), 2),
-                                    "report": buf.getvalue().strip().splitlines()}
-    st["9_alerts"] = "live.py checks stop %s / target %s every cycle" % (pos["stop"], pos["target"])
-    return done("PAPER SHORT" if short else "PAPER BUY", "%s @ %s, stop %s, target %s (Scanner %s: %s)" % (
-        fmt_qty(market, pos["qty"]), pos["entry"], pos["stop"], pos["target"], version, name))

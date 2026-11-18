@@ -312,11 +312,10 @@ def setups_scan(data, market, suffix, cutoff, tz, workers=8, keep=None):
     """The Scanner (v4, v3 or v2, per Settings): the owner's setups (smc_playbook.owner_setups) completing on the last candle closed by `cutoff`,
     on today's charts `data` joined to earlier days. Returns [setup dicts with symbol / market / bar_end]."""
     import smc_playbook as PB
-    version = PB.scanner_version(market)
-    v4_ledger = None
-    if version == "v4":
-        import paper as P
-        v4_ledger = P.load_json(P.LEDGER, {"open": [], "closed": []})
+    import paper as P
+    # per chart: QQQ / SPY / DIA are decided by the US F&O account, which may run another version than US stocks
+    versions = {sym: PB.scanner_version(market, sym) for sym in data}
+    v4_ledger = P.load_json(P.LEDGER, {"open": [], "closed": []}) if "v4" in versions.values() else None
     today = cutoff.astimezone(tz).date()
     hist = earlier_days(list(data), suffix, today, tz, workers, keep)
     out = []
@@ -325,7 +324,7 @@ def setups_scan(data, market, suffix, cutoff, tz, workers=8, keep=None):
                 and (keep is None or keep(r))]
         if not rows:
             continue
-        for x in PB.owner_setups(hist.get(sym, []) + rows, lambda t: t.astimezone(tz).date(), version=version,
+        for x in PB.owner_setups(hist.get(sym, []) + rows, lambda t: t.astimezone(tz).date(), version=versions[sym],
                                 intraday=True, market=market, symbol=sym, ledger=v4_ledger):
             out.append(dict(x, symbol=sym, market=market, bar_end=(rows[-1][0] + timedelta(minutes=5)).isoformat()))
     return out

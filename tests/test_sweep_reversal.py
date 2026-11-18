@@ -127,7 +127,12 @@ if __name__ == "__main__":
     try:
         import paper as P
         P.fetch_price = lambda m, t: (100.4, None)
-        check("scanner_version defaults to v3", PB.scanner_version("CRYPTO") == "v3" and PB.scanner_version("NSE") == "v3")
+        check("scanner_version defaults to v4 (paper.DEFAULT_SCANNER)",
+              PB.scanner_version("CRYPTO") == "v4" and PB.scanner_version("NSE") == "v4")
+        cfg = P.load_config()   # the rest of this test is about Scanner v3: set it explicitly
+        for acc in ("CRYPTO", "INDIA"):
+            cfg["accounts"][acc]["scanner_version"] = "v3"
+        P.save_json(P.CONFIG, cfg)
         if v3:
             rec = P.setup_decision("CRYPTO", "TST", v3[0], news=[])
             check("v3: the sweep long is paper traded with its liquidity target",
@@ -145,6 +150,13 @@ if __name__ == "__main__":
         P.save_json(P.CONFIG, cfg)
         check("rollback is per account: INDIA v2, CRYPTO still v3",
               PB.scanner_version("NSE") == "v2" and PB.scanner_version("CRYPTO") == "v3")
+        good = open(P.CONFIG, encoding="utf-8").read()
+        with open(P.CONFIG, "w", encoding="utf-8") as fh:
+            fh.write(good[:-20])          # a broken hand edit
+        check("unreadable config: each market keeps the last version read (no silent switch)",
+              PB.scanner_version("NSE") == "v2" and PB.scanner_version("CRYPTO") == "v3")
+        with open(P.CONFIG, "w", encoding="utf-8") as fh:
+            fh.write(good)
         if v3:
             rec = P.setup_decision("NSE", "TST", dict(v3[0]), news=[])
             check("rolled back: a v3 setup reaching the broker is skipped, not traded",

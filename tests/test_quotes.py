@@ -45,13 +45,14 @@ if __name__ == "__main__":
     os.chdir(tmp)
     try:
         import paper as P
+        import quotes as Q   # the price feeds (split out of paper.py): swap their helpers here
         seen = []
         answer = {}
 
         def fake_urlopen(req, timeout=0):
             seen.append(req.full_url)
             return Resp(json.dumps(answer["doc"]).encode())
-        P.urllib.request.urlopen = fake_urlopen
+        Q.urllib.request.urlopen = fake_urlopen
 
         answer["doc"] = chart(343.47, 20, [(5, 344.9), (2, 345.6)])
         price, qt = P.fetch_price("CRYPTO", "TST")
@@ -91,19 +92,19 @@ if __name__ == "__main__":
         check("6. Stooq quote parsed (Polish time -> UTC, about 3 min ago)",
               sq and sq[0] == 350.8 and abs((datetime.now(timezone.utc) - sq[1]).total_seconds() - 180) < 120, sq)
         nodate = {"data": {"primaryData": {"lastSalePrice": "$341.03", "lastTradeTimestamp": "N/A"}}}
-        real_nq, real_sq = P._nasdaq_quote, P._stooq_quote
-        P._nasdaq_quote = lambda t, opener=None: real_nq(t, opener=lambda req, timeout=0: Resp(json.dumps(nodate).encode()))
-        P._stooq_quote = lambda t, opener=None: real_sq(t, opener=lambda req, timeout=0: Resp(b"<meta charset=utf-8>Stooq page does not exist"))
+        real_nq, real_sq = Q._nasdaq_quote, Q._stooq_quote
+        Q._nasdaq_quote = lambda t, opener=None: real_nq(t, opener=lambda req, timeout=0: Resp(json.dumps(nodate).encode()))
+        Q._stooq_quote = lambda t, opener=None: real_sq(t, opener=lambda req, timeout=0: Resp(b"<meta charset=utf-8>Stooq page does not exist"))
         bq = P.us_backup_quote("TSLA")
         check("   Nasdaq price without a readable time still counts (as now); Stooq's error page is ignored",
               bq and bq[0] == 341.03, bq)
-        P._nasdaq_quote = lambda t, opener=None: q
-        P._stooq_quote = lambda t, opener=None: sq
+        Q._nasdaq_quote = lambda t, opener=None: q
+        Q._stooq_quote = lambda t, opener=None: sq
         P.session = lambda m, now: "open"
         answer["doc"] = chart(343.47, 87, [(87, 343.47)])
         price, qt = P.fetch_price("US", "TSLA")
         check("7. Yahoo frozen 87 min, US open -> the newest backup (Nasdaq 351.12)", price == 351.12, (price, qt))
-        P.urllib.request.urlopen = lambda req, timeout=0: (_ for _ in ()).throw(OSError("yahoo down"))
+        Q.urllib.request.urlopen = lambda req, timeout=0: (_ for _ in ()).throw(OSError("yahoo down"))
         check("8. Yahoo down -> backup quote", P.fetch_price("US", "TSLA")[0] == 351.12)
     finally:
         os.chdir(old)

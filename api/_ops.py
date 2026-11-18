@@ -9,7 +9,6 @@ cycle: trader/live/auto_config.json (crypto rules), trader/paper/config.json (ri
 trader/universe_crypto.txt (coins), trader/alerts.json (Telegram).
 
 Every change made here is written to the runner log as "Dashboard: ..." so there is a record of who changed what.
-The underscore in the file name keeps Vercel from treating it as a separate function.
 """
 import csv
 import io
@@ -631,6 +630,7 @@ def _acct(m):
 
 @router.get("/performance")
 def performance():
+    import paper
     led = _read_json(LEDGER, {"accounts": {}, "open": [], "closed": []})
     prefs = dict(PREF_DEFAULT)
     prefs.update(_read_json(PREFS, {}))
@@ -649,7 +649,7 @@ def performance():
                     "best": None, "worst": None} for a in (led.get("accounts") or {}) if resets.get(a)}
     for c in closed:
         a = _acct(c.get("market"))
-        d = c.get("exit_date") or (c.get("exit_time") or "")[:10]
+        d = paper.ist_day(c)   # the India date ("today" is India's): exit_date is UTC / New York for crypto / US
         pnl = float(c.get("pnl") or 0)
         acc = accounts.setdefault(a, {"trades": 0, "wins": 0, "pnl": 0.0, "r_sum": 0.0, "today": 0.0, "d7": 0.0,
                                       "d30": 0.0, "best": None, "worst": None})
@@ -1031,13 +1031,14 @@ def _download_all():
         except Exception as e:   # never lose the export over the reviews
             z.writestr("opinions_error.txt", str(e))
         state = _read_json(os.path.join(LIVE, "state.json"), {})
+        import paper
         readme = [
             "Trader bot export, %s IST" % now.strftime("%Y-%m-%d %H:%M"),
             "Host %s. Paper trading only. Runner status: %s." % (
                 os.uname().nodename if hasattr(os, "uname") else "?", state.get("status")),
             "",
             "Scanner version per account: %s." % ", ".join(
-                "%s %s" % (k, (v or {}).get("scanner_version", "v3")) for k, v in
+                "%s %s" % (k, (v or {}).get("scanner_version", paper.DEFAULT_SCANNER)) for k, v in
                 (_paper_cfg().get("accounts") or {}).items()),
             "",
             "trades.csv          every closed paper trade, one row each (mfe_r / mae_r: how far it went for /",
@@ -1383,7 +1384,8 @@ def agents():
         _accs = _paper_cfg().get("accounts", {})
     except Exception:
         _accs = {}
-    vers = {acc: (_accs.get(acc, {}).get("scanner_version") or "v3") for acc in ("CRYPTO", "INDIA", "FNO", "US", "USFNO")}
+    import paper
+    vers = {acc: (_accs.get(acc, {}).get("scanner_version") or paper.DEFAULT_SCANNER) for acc in ("CRYPTO", "INDIA", "FNO", "US", "USFNO")}
     for n, key, name, skill in AGENTS:
         if n == 1:   # the Scanner's version per account (Settings > Risk limits; v2 = the rollback)
             u = sorted(set(vers.values()))

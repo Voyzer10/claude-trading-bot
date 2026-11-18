@@ -188,6 +188,7 @@ def guard_checks():
 
 
 if __name__ == "__main__":
+    os.chdir(tempfile.mkdtemp())   # the scanner reads paper's config: make it here, never in the repo
     rows = engine_checks()
     zone_checks()
     guard_checks()

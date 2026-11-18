@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CI smoke test for the dashboard API in local (PC/VPS) mode, with no network and a throwaway data folder.
+"""CI smoke test for the dashboard API, with no network and a throwaway data folder.
 
 Starts nothing: it calls the FastAPI app in-process with fastapi.testclient, checks that the read endpoints
 answer, that a settings change is validated and saved, and that a runner command is queued.
@@ -23,13 +23,11 @@ with open(os.path.join(work, "trader", "live", "dashboard_snapshot.json"), "w") 
     json.dump({"version": 1, "generated_at": "2026-01-01T00:00:00+05:30"}, fh)
 os.chdir(work)
 sys.path.insert(0, work)
-for k in ("VERCEL", "KV_REST_API_URL", "UPSTASH_REDIS_REST_URL", "DASHBOARD_PASSWORD"):
-    os.environ.pop(k, None)
+os.environ.pop("DASHBOARD_PASSWORD", None)
 
 from fastapi.testclient import TestClient  # noqa: E402
 import api.index as index  # noqa: E402
 
-assert index.LOCAL, "the API should run in local mode without Redis"
 c = TestClient(index.app)
 fails = []
 
@@ -42,7 +40,7 @@ def check(name, cond, detail=""):
 
 r = c.get("/api/py/health"); check("health", r.status_code == 200 and r.json()["ok"], r.text[:120])
 r = c.get("/api/py/snapshot"); check("snapshot", r.status_code == 200 and r.json()["snapshot"]["version"] == 1)
-r = c.get("/api/py/control"); check("control", r.status_code == 200 and r.json()["mode"] == "local")
+r = c.get("/api/py/control"); check("control", r.status_code == 200 and r.json()["control"]["paused"] is False)
 r = c.get("/api/py/ops/settings"); check("ops settings", r.status_code == 200 and "rules" in r.json())
 r = c.post("/api/py/ops/settings/rules", json={"changes": {"target_r": 99}})
 check("rule limits enforced", r.status_code == 400, r.text[:80])
