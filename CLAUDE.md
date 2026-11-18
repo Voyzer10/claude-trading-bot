@@ -28,7 +28,7 @@ Owner: Ansh. Replies in Hinglish, direct and candid.
 
 ## Layout
 
-`live.py` runner · `paper.py` paper engine · `scan_crypto.py` / `scan_nse.py` scanners ·
+`live.py` runner · `paper.py` paper engine (`quotes.py` its price feeds, `agents.py` Scanner setup -> paper trade) · `scan_crypto.py` / `scan_nse.py` scanners ·
 `auto_crypto.py` / `auto_nse.py` / `auto_fno.py` / `auto_us.py` agents · `research.py` backtests ·
 `api/index.py` + `api/_ops.py` backend · `app/`, `components/`, `lib/` dashboard · `deploy/` VPS scripts ·
 `.github/workflows/` CI and deploy.
