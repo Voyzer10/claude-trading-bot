@@ -110,7 +110,9 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             #   latest_signal: the trigger needs the most recent signal candle (a newer one replaces an older one)
             #   replace_newer: a setup whose BOS is newer than the open trade's replaces it, either side ("naya bos
             #     wala purani trade ki jgha lelo, same side ho to bhi"); one trade per chart (flip / latest-BOS off)
-            "bos_pick": "oldest", "skip_open_bos": False, "latest_signal": False, "replace_newer": False,
+            # bos_pick "newest" and latest_signal ON (owner, 18 Nov 2026: "Krdo on"; Nifty 50 backtest out-of-sample:
+            #   newest -0.33R vs -0.30R a trade, latest_signal -0.30R, i.e. about even; live test)
+            "bos_pick": "newest", "skip_open_bos": False, "latest_signal": True, "replace_newer": False,
             # the latest-BOS rule (owner, 14 Nov 2026): see _latest(); max_open = trades open at once on one chart
             "latest_bos": True, "max_open": 2}
 

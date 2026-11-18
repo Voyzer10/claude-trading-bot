@@ -164,7 +164,9 @@ if __name__ == "__main__":
     check("    crypto, yesterday's unswept BOS still trades today", [t["kind"] for t in longs(d2)] == ["primary"],
           longs(d2))
     check("    with the rule off (backtest no_day_rule; the POV's higher timeframes) every setup stays",
-          [t["kind"] for t in first(longs(d3, day_carry=False))] == ["primary"], longs(d3, day_carry=False))
+          # (bos_pick "oldest": with "newest", on 18 Nov, a newer BOS triggering on the same candle is taken instead)
+          [t["kind"] for t in first(longs(d3, day_carry=False, bos_pick="oldest"))] == ["primary"],
+          longs(d3, day_carry=False, bos_pick="oldest"))
     # day 1 = 3 Nov 19:00-23:10 UTC (4 Nov IST), quiet candles 4 Nov 01:00 UTC (4 Nov IST), the sweep 5 Nov 00:05 UTC.
     # UTC days: 3, 4, 5 Nov -> day 1's BOS is gone on the third day. IST days would be 4, 4, 5 Nov -> it would trade.
     late = [(r[0] + timedelta(hours=19), *r[1:]) for r in build([])]

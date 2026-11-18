@@ -48,6 +48,9 @@ if __name__ == "__main__":
     import scanner_v4 as V4
     check("defaults: sweep only from the BOS start, target from the opposite BOS with the big-swing cap",
           V4.DEFAULTS["sweep_post_bos"] is False and V4.DEFAULTS["target_rule"] == "opp_bos_cap")
+    check("defaults (18 Nov): the newest BOS is taken and the latest signal candle decides; replace stays off",
+          V4.DEFAULTS["bos_pick"] == "newest" and V4.DEFAULTS["latest_signal"] is True
+          and V4.DEFAULTS["replace_newer"] is False and V4.DEFAULTS["skip_open_bos"] is False)
 
     names, old_names, diff, n, wrong_side = set(), set(), 0, 0, 0
     for seed in range(10):
