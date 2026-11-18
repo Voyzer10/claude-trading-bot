@@ -64,6 +64,7 @@ def longs(rows, **kw):
 
 
 if __name__ == "__main__":
+    os.chdir(tempfile.mkdtemp())   # the scanner reads paper's config: make it here, never in the repo
     full = build([SWEEP, INV, TRIG, UP1, TP])
     s = longs(full)
     p1 = s[0] if s else {}
