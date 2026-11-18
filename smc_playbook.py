@@ -423,21 +423,28 @@ def v5_params(market):
             "target": acc.get("v5_target", "leg")}
 
 
-def scanner_version(market):
+def scanner_version(market, symbol=None):
     """Which Scanner a market runs: "v4" (the owner's v4 rules of 11 Nov, Final Trading Workflow + his answers: primary sweep reversal, then a sequential OB/FVG
     secondary), "v3" (the 5 Nov workflow: sweep reversal + FVG/OB retest) or "v2" (A-B-C-D, playbook doji / star /
     hammer, FVG / order-block retests). Versions never mix (owner, 5 and 7 Nov 2026).
     One switch per paper account (paper_config.json accounts.<X>.scanner_version, Settings > Risk limits). Missing:
     paper.DEFAULT_SCANNER. If the config cannot be read (a typo in a hand edit), the last version read for that market
-    stays: never a silent switch to another strategy."""
+    stays: never a silent switch to another strategy.
+    With a symbol: the account that DECIDES that chart's setups (paper.setup_account: QQQ / SPY / DIA -> USFNO, an
+    index -> FNO), so the scanner looks for the version the broker will take."""
     import paper as P
+    memo = (market, symbol) if symbol else market
     try:
-        acc = P.MARKETS.get(market, {}).get("account", market)
-        v = P.load_config()["accounts"].get(acc, {}).get("scanner_version", P.DEFAULT_SCANNER)
+        cfg = P.load_config()
+        if symbol and market in P.MARKETS:
+            acc_cfg = P.setup_account(cfg, market, symbol)
+        else:
+            acc_cfg = cfg["accounts"].get(P.MARKETS.get(market, {}).get("account", market), {})
+        v = acc_cfg.get("scanner_version", P.DEFAULT_SCANNER)
         v = v if v in SCANNER_VERSIONS else P.DEFAULT_SCANNER
     except Exception:
-        return _LAST_VERSION.get(market, P.DEFAULT_SCANNER)
-    _LAST_VERSION[market] = v
+        return _LAST_VERSION.get(memo, P.DEFAULT_SCANNER)
+    _LAST_VERSION[memo] = v
     return v
 
 

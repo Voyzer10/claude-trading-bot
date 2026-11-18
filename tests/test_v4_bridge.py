@@ -55,6 +55,24 @@ if __name__ == "__main__":
         check("a scanner error: no setups, and it is printed (not hidden)",
               out == [] and "Scanner v4 failed on US:AAPL" in buf.getvalue(), buf.getvalue())
         V4.live_candidate = real
+
+        # QQQ / SPY / DIA are decided by USFNO: the scanner must look for USFNO's version on those charts
+        cfg = P.load_config()
+        cfg["accounts"]["US"]["scanner_version"], cfg["accounts"]["USFNO"]["scanner_version"] = "v3", "v4"
+        P.save_json(P.CONFIG, cfg)
+        check("scanner_version per chart: QQQ -> USFNO's v4, AAPL -> US's v3, no symbol -> US's v3",
+              PB.scanner_version("US", "QQQ") == "v4" and PB.scanner_version("US", "AAPL") == "v3"
+              and PB.scanner_version("US") == "v3")
+        import scan_nse as S
+        asked = {}
+        S.earlier_days = lambda syms, suffix, today, tz, workers, keep: {x: [] for x in syms}
+        S.chart_rows = lambda d, tz: d
+        PB.owner_setups = lambda rows, day_of, version="v3", **k: asked.update({k.get("symbol"): version}) or []
+        from datetime import datetime, timedelta, timezone
+        t = datetime(2026, 11, 18, 15, 0, tzinfo=timezone.utc)
+        S.setups_scan({"QQQ": [(t, 1, 1, 1, 1, 1)], "AAPL": [(t, 1, 1, 1, 1, 1)]}, "US", "", t + timedelta(minutes=10),
+                      timezone.utc)
+        check("the US scan asks each chart for its own version", asked == {"QQQ": "v4", "AAPL": "v3"}, asked)
     finally:
         os.chdir(old)
         shutil.rmtree(tmp, ignore_errors=True)
