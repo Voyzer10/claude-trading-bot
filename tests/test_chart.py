@@ -180,6 +180,18 @@ if __name__ == "__main__":
               seen.get("key") == "NSE:NIFTY50" and got[-1][4] == 24050.0, (seen, got[-1]))
         CH.top_up("NSE", "TCS", list(yh), now=now)
         check("   a stock reads NSE:<symbol>", seen.get("key") == "NSE:TCS", seen)
+
+        # 9. Yahoo's live point (stamped 16:46) joins the forming 16:45 candle instead of drawing as its own candle
+        #    (VPS, 18 Nov 2026: BTC and NFLX both showed a one-price "16:46" candle)
+        t0 = 1795000000 - 1795000000 % 300
+        rows = [(t0, 100.0, 101.0, 99.5, 100.5), (t0 + 300, 100.5, 101.2, 100.2, 100.8), (t0 + 360, 102.0, 102.0, 102.0, 102.0)]
+        got = CH.on_grid(rows)
+        check("9. the off-grid live point joins its 5-minute candle (high / close move to it, no extra candle)",
+              got == [rows[0], (t0 + 300, 100.5, 102.0, 100.2, 102.0)], got)
+        got = CH.on_grid(rows[:1] + [(t0 + 420, 99.0, 99.0, 99.0, 99.0)])
+        check("   a live point past the last candle starts its own candle (on the grid)",
+              got[-1] == (t0 + 300, 99.0, 99.0, 99.0, 99.0) and len(got) == 2, got)
+        check("   on-grid candles are unchanged", CH.on_grid(rows[:2]) == rows[:2])
     finally:
         os.chdir(old)
         shutil.rmtree(tmp, ignore_errors=True)
