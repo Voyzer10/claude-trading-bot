@@ -48,8 +48,8 @@ bot and its logs and restart the services, nothing else as root, and it cannot r
 ## CI / CD (GitHub Actions)
 
 - **CI** (`.github/workflows/ci.yml`) runs on every push and pull request: the dashboard build (lint and type
-  checks), a compile check of every Python file, the API smoke test (`tests/smoke_api.py`, no network), every
-  `tests/test_*.py` (a new test file runs without editing ci.yml), and shellcheck on `deploy/*.sh`.
+  checks), a compile check of every Python file plus an API smoke test (`tests/smoke_api.py`, no network), and
+  shellcheck on `deploy/*.sh`.
 - **Deploy** (`.github/workflows/deploy.yml`) runs after CI passes on `main`: it SSHes into the VPS, pulls `main`
   and runs `deploy/update.sh`, then checks the three services. It needs repository secrets `VPS_HOST`,
   `VPS_USER` and `VPS_SSH_KEY` (a separate key for GitHub; its public half goes into the VPS user's
@@ -71,13 +71,9 @@ bot and its logs and restart the services, nothing else as root, and it cannot r
   target the next liquidity, trailing +1R -> entry, +2R -> +1R; after that trade closed, one OB / FVG secondary.
   Only yesterday's unswept BOS setups carry into today (NSE / US: the session; crypto: the day from 00:00 UTC). `v5`, `v3`, `v2` and `rules`
   are the older versions. The broker skips a setup of another version. Backtest first: Backtest > "Scanner v4 ...".
-  An account with no version set runs v4 (`paper.DEFAULT_SCANNER`); if the config cannot be read, each market keeps
-  the version it last read.
-- **Accounts** (budget of 17 Nov 2026, 3% max loss a trade): INDIA (NSE stocks, Rs 1,00,000), FNO (Nifty 50 / Bank
-  Nifty options, Rs 1,00,000), US (stocks, $1,000, 4x intraday margin), USFNO (QQQ / SPY / DIA ATM weekly options,
-  $1,200; Alpaca options data, indicative feed; backtest `research.py usopt-sv4`), CRYPTO ($1,000, 5x margin). All
-  paper money. The account cards show equity: cash plus the open trades at their live P&L. "Today" is India's day for
-  every market. The US watch list includes the Nasdaq-100 and the Dow 30.
+- **Accounts**: INDIA (NSE stocks, Rs 50,000), FNO (Nifty 50 / Bank Nifty options, Rs 1,00,000), US (stocks,
+  $50,000), USFNO (QQQ / SPY / DIA ATM weekly options, $50,000; Alpaca options data, indicative feed; backtest
+  `research.py usopt-sv4`), CRYPTO ($1,000). All paper money. The US watch list includes the Nasdaq-100 and the Dow 30.
 - **Bigger picture (POV)**: chips 1h / 4h / D / W / M next to each chart: the direction of the last complete v4
   setup on that timeframe (`pov.py`, hourly). Display only.
 - **Trade Manager** (Settings > Trade Manager): ONE set per market account, for every scanner's trades (v2 / v3 /
@@ -91,6 +87,11 @@ bot and its logs and restart the services, nothing else as root, and it cannot r
   (trades CSV, ledger, log, decisions, settings).
 - **Backtest**: runs research.py on the machine with fresh data and shows the report.
 - **Alerts**: Telegram messages for trades, errors, runner restarts and a daily summary.
+
+## Cloud mode (parked)
+
+`api/index.py` can also run against Upstash Redis instead of local files (it switches automatically when Redis is
+configured); `cloud_seed.py` copies the bot's files there. Not used: everything runs on the VPS.
 
 ## Before real money
 

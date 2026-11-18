@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""The owner's budget of 17 Nov 2026 and the P&L since the reset. Offline.
+"""The owner's budget of 17 Nov 2026, applied once. Offline.
 
-  1. The defaults: Rs 1 lakh for INDIA / FNO, $1,000 for US / crypto, $1,200 for US options; max loss per trade
-     (stocks and F&O) 3%, daily loss limit 9%. (The one-time change of an older config ran on the VPS on 17 Nov and
-     was removed on 18 Nov 2026.)
-  2. A Bank Nifty lot (risk ~Rs 2,600) fits the FNO account's max loss per trade.
-  3. The dashboard's P&L counts only the trades closed after each book's budget reset (the ledger's "budget_reset"
-     note); older trades stay in the ledger as history.
-  4. A capital change in Settings is a top-up / withdrawal of the difference: the P&L is kept.
+  1. An existing config (old limits) gets Rs 1 lakh for INDIA / FNO, $1,000 for US / crypto, $1,200 for US options;
+     max loss per trade (stocks and F&O) 3%, daily loss limit 9%. A second load changes nothing; a later edit in
+     Settings is kept.
+  2. The ledger: every book restarts at its budget, minus what open positions tie up (margin or entry value); the
+     closed trades stay; it runs once; the old cash is noted.
+  3. A Bank Nifty lot (risk ~Rs 2,600) now fits the FNO account's max loss per trade.
 
     python tests/test_budget.py
 """
+import json
 import os
 import shutil
 import sys
@@ -32,7 +32,34 @@ if __name__ == "__main__":
     os.chdir(tmp)
     try:
         import paper as P
-        a = P.load_config()["accounts"]
+        os.makedirs(os.path.dirname(P.CONFIG), exist_ok=True)
+        # an existing install before 17 Nov: the old budgets and limits, no _budget_1117 flag
+        cfg0 = json.loads(json.dumps(P.DEFAULT_CONFIG))
+        olds = {"INDIA": (50000, 500, 1500, 2500), "FNO": (100000, 1500, 1500, 5000), "US": (50000, 50, None, 150),
+               "USFNO": (50000, 500, 500, 1500), "CRYPTO": (1000, 10, None, 30)}
+        for name, (cap, ml, mlf, dl) in olds.items():
+            a = cfg0["accounts"][name]
+            a.update(capital=cap, max_loss_per_trade=ml, daily_loss_limit=dl)
+            if mlf is not None:
+                a["max_loss_per_trade_fno"] = mlf
+        cfg0["_tm_global"] = True
+        cfg0.pop("_budget_1117", None)
+        P.save_json(P.CONFIG, cfg0)
+        led0 = {"accounts": {"INDIA": {"cash": 47427.96, "start_capital": 50000.0},
+                             "FNO": {"cash": 101397.2, "start_capital": 100000.0},
+                             "US": {"cash": 51288.21, "start_capital": 50000.0},
+                             "USFNO": {"cash": 50472.49, "start_capital": 50000.0},
+                             "CRYPTO": {"cash": 331.77, "start_capital": 1000.0}},
+                "open": [{"key": "CRYPTO:HYPE", "market": "CRYPTO", "symbol": "HYPE", "side": "long", "qty": 10.0,
+                          "entry": 40.0, "stop": 39.0, "target": 42.0, "entry_fee": 0.4},
+                         {"key": "US:AAPL", "market": "US", "symbol": "AAPL", "side": "long", "qty": 4.0, "entry": 200.0,
+                          "stop": 199.0, "target": 202.0, "margin": 200.0, "leverage": 4}],
+                "closed": [{"key": "US:MSFT", "market": "US", "pnl": 1288.21, "r": 1.2},
+                           {"key": "NSE:TCS", "market": "NSE", "pnl": -2572.04, "r": -1.0}]}
+        P.save_json(P.LEDGER, led0)
+
+        cfg = P.load_config()
+        a = cfg["accounts"]
         want = {"INDIA": 100000, "FNO": 100000, "US": 1000, "USFNO": 1200, "CRYPTO": 1000}
         check("1. budgets: INDIA / FNO Rs 1 lakh, US / crypto $1,000, US options $1,200",
               {k: a[k]["capital"] for k in want} == want, {k: a[k]["capital"] for k in want})
@@ -41,38 +68,43 @@ if __name__ == "__main__":
                   for k, v in want.items())
               and a["FNO"]["max_loss_per_trade_fno"] == 3000 and a["USFNO"]["max_loss_per_trade_fno"] == 36,
               {k: (a[k]["max_loss_per_trade"], a[k].get("max_loss_per_trade_fno"), a[k]["daily_loss_limit"]) for k in want})
+        a["US"]["max_loss_per_trade"] = 25        # the owner edits it later in Settings
+        P.save_json(P.CONFIG, cfg)
+        check("   applied once: a later Settings edit is kept", P.load_config()["accounts"]["US"]["max_loss_per_trade"] == 25)
 
-        lot_risk = 30 * (300.0 - 213.7)            # one Bank Nifty lot, premium 300 -> stop 213.7 = Rs 2,589
-        check("2. a Bank Nifty lot (risk Rs %.0f) fits the FNO max loss per trade (Rs %s)" % (lot_risk,
-              a["FNO"]["max_loss_per_trade_fno"]), lot_risk <= a["FNO"]["max_loss_per_trade_fno"])
-
-        # 3. the dashboard's P&L after the reset (a VPS ledger carries each book's budget_reset note)
         led = P.load_ledger(P.load_config())
-        at = "2026-11-17T12:00:00+00:00"
-        for name in led["accounts"]:
-            led["accounts"][name]["budget_reset"] = {"at": at}
+        b = led["accounts"]
+        check("2. every book restarts at its budget (old P&L gone from the cash)",
+              b["INDIA"]["cash"] == 100000 and b["FNO"]["cash"] == 100000 and b["USFNO"]["cash"] == 1200
+              and all(b[k]["start_capital"] == v for k, v in want.items()), {k: b[k]["cash"] for k in b})
+        check("   minus what open positions tie up: crypto 10 x $40 = $400, US margin $200",
+              b["CRYPTO"]["cash"] == 600 and b["US"]["cash"] == 800, (b["CRYPTO"]["cash"], b["US"]["cash"]))
+        check("   open positions and closed trades stay in the ledger (history)",
+              len(led["open"]) == 2 and len(led["closed"]) == 2)
+        check("   the old cash is noted", b["US"]["budget_reset"]["old_cash"] == 51288.21 and led.get("_budget_1117"))
+        led["accounts"]["US"]["cash"] = 777.0
+        P.save_json(P.LEDGER, led)
+        check("   it runs once (later cash moves are not reset again)",
+              P.load_ledger(P.load_config())["accounts"]["US"]["cash"] == 777.0)
+
+        fno = P.load_config()["accounts"]["FNO"]
+        lot_risk = 30 * (300.0 - 213.7)            # one Bank Nifty lot, premium 300 -> stop 213.7 = Rs 2,589
+        check("3. a Bank Nifty lot (risk Rs %.0f) fits the FNO max loss per trade (Rs %s)" % (lot_risk,
+              fno["max_loss_per_trade_fno"]), lot_risk <= fno["max_loss_per_trade_fno"])
+        # 4. the dashboard's P&L counts only trades closed after the reset (the old ones stay as history)
+        import api._ops as O
+        led = P.load_ledger(P.load_config())
+        at = led["accounts"]["US"]["budget_reset"]["at"]
         led["closed"] = [{"key": "US:MSFT", "market": "US", "pnl": 1288.21, "r": 1.2, "exit_time": "2026-11-16T20:00:00+00:00",
                           "exit_date": "2026-11-16"},
                          {"key": "US:AAPL", "market": "US", "pnl": -12.5, "r": -0.4, "exit_time": "2099-01-01T00:00:00+00:00",
                           "exit_date": "2099-01-01"}]
         P.save_json(P.LEDGER, led)
-        import api._ops as O
         O.LEDGER, O.PREFS = os.path.abspath(P.LEDGER), os.path.join(tmp, "prefs.json")
         perf = O.performance()
-        check("3. dashboard P&L: only trades after the reset count; every account shows (from zero)",
+        check("4. dashboard P&L: only trades after the reset count; every account shows (from zero)",
               perf["accounts"]["US"]["trades"] == 1 and perf["accounts"]["US"]["pnl"] == -12.5
               and perf["accounts"]["INDIA"]["trades"] == 0 and perf["history_trades"] == 1 and perf["since"], perf["accounts"])
-
-        # 4. capital raised in Settings: the difference is added, the P&L kept
-        led = P.load_ledger(P.load_config())
-        led["accounts"]["US"]["cash"] = 987.5           # $12.50 lost since the reset
-        P.save_json(P.LEDGER, led)
-        cfg = P.load_config()
-        cfg["accounts"]["US"]["capital"] = 1500
-        P.save_json(P.CONFIG, cfg)
-        b = P.load_ledger(P.load_config())["accounts"]["US"]
-        check("4. capital 1,000 -> 1,500 in Settings: cash +500, the loss kept", b["cash"] == 1487.5 and b["start_capital"] == 1500,
-              b)
     finally:
         os.chdir(old)
         shutil.rmtree(tmp, ignore_errors=True)
