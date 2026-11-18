@@ -1147,6 +1147,16 @@ def tm_react(pos, bars, now, price, tm):
     return None
 
 
+def liquidation_px(pos):
+    """Where a margin trade (pos["leverage"] > 1: intraday stocks, 5x crypto) has lost all its margin: entry -/+ margin
+    / qty, i.e. a 20% move at 5x, 25% at 4x. The broker / exchange closes it there (a simplification: real ones close a
+    little earlier, at their maintenance margin). None for a trade without margin."""
+    if not pos.get("leverage") or float(pos["leverage"]) <= 1 or not pos.get("margin") or not pos.get("qty"):
+        return None
+    room = float(pos["margin"]) / float(pos["qty"])
+    return pos["entry"] + room if is_short(pos) else pos["entry"] - room
+
+
 def step_bar(led, cfg, pos, acc, b, now, sh):
     """One candle (utc, o, h, l, c) of the path for an open position: the stop first (when a candle touches both,
     assume the stop: we cannot know the order inside a minute, so the worse case), then the target, then move the
@@ -1155,11 +1165,19 @@ def step_bar(led, cfg, pos, acc, b, now, sh):
     t, o, h, l, c = b[:5]
     live = len(b) > 5                 # the live-price step (b[5]: may it count as a gap?)
     when = t if t < now else now
-    stop_hit = (h >= pos["stop"]) if sh else (l <= pos["stop"])
+    stop, liq = pos["stop"], liquidation_px(pos)
+    liquidated = liq is not None and ((liq < stop) if sh else (liq > stop))   # the margin runs out before the stop
+    if liquidated:
+        stop = liq
+    stop_hit = (h >= stop) if sh else (l <= stop)
     if stop_hit:
-        gapped = b[5] if live else ((o > pos["stop"]) if sh else (o < pos["stop"]))   # opened past it: the open, worse
-        fill = o if gapped else pos["stop"]
-        why = ("trailing stop" if pos.get("trailing") else "profit lock stop" if pos.get("locked")
+        gapped = b[5] if live else ((o > stop) if sh else (o < stop))   # opened past it: the open, worse
+        fill = o if gapped else stop
+        if liq is not None and m == "CRYPTO" and ((fill > liq) if sh else (fill < liq)):
+            # crypto futures, isolated margin: the exchange liquidates at the margin, the loss never passes it
+            fill, liquidated, gapped = liq, True, False
+        why = ("liquidated (margin used up)" if liquidated else
+               "trailing stop" if pos.get("trailing") else "profit lock stop" if pos.get("locked")
                else "breakeven stop" if pos.get("breakeven") else "stop")
         if why in ("profit lock stop", "breakeven stop") and tm_cfg(acc):
             tm_event(pos, "%s hit at %s (%+.2fR) instead of the original stop" % (why, money(m, fill), r_of(pos, fill)),
