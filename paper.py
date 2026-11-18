@@ -178,21 +178,12 @@ def yahoo_symbol(m, t):
     return t + MARKETS[m]["suffix"]
 
 
-def us_offset(utc):
-    """US Eastern offset: DST from the 2nd Sunday of March to the 1st Sunday of November (2 AM local)."""
-    y = utc.year
-    mar1 = datetime(y, 3, 1, tzinfo=timezone.utc)
-    start = mar1 + timedelta(days=(6 - mar1.weekday()) % 7 + 7, hours=7)
-    nov1 = datetime(y, 11, 1, tzinfo=timezone.utc)
-    end = nov1 + timedelta(days=(6 - nov1.weekday()) % 7, hours=6)
-    return timedelta(hours=-4) if start <= utc < end else timedelta(hours=-5)
-
-
 def local_now(m, utc):
     if m in ("NSE", "BSE", "NFO"):
         return utc.astimezone(IST)
     if m == "US":
-        return utc.astimezone(timezone(us_offset(utc)))
+        from us import ustime
+        return utc.astimezone(timezone(timedelta(hours=ustime.eastern_offset(utc))))
     return utc
 
 
@@ -202,7 +193,7 @@ def hm(s):
 
 
 def session(m, utc):
-    """'open', 'closed' or 'always'. Exchange holidays are not known here."""
+    """'open', 'closed' or 'always'. US holidays and early closes come from us/ustime.py; India's are not known here."""
     spec = MARKETS[m]
     if spec["open"] is None:
         return "always"
@@ -211,6 +202,12 @@ def session(m, utc):
         return "closed"
     o = loc.replace(hour=hm(spec["open"])[0], minute=hm(spec["open"])[1], second=0, microsecond=0)
     c = loc.replace(hour=hm(spec["close"])[0], minute=hm(spec["close"])[1], second=0, microsecond=0)
+    if m == "US":
+        from us import ustime
+        hours = ustime.session(loc.date())
+        if hours is None:
+            return "closed"
+        c = loc.replace(hour=hours[1].hour, minute=hours[1].minute, second=0, microsecond=0)
     return "open" if o <= loc < c else "closed"
 
 
@@ -219,6 +216,11 @@ def past_flat_by(m, acc, utc):
         return False
     loc = local_now(m, utc)
     h, mm = hm(acc["flat_by"])
+    if m == "US":  # on a 1:00 p.m. early close the flat-by moves up with the close (15:55 -> 12:55), like exit.py
+        from us import ustime
+        hours = ustime.session(loc.date())
+        if hours and hours[1] != ustime.CLOSE:
+            h -= ustime.CLOSE.hour - hours[1].hour
     return (loc.hour, loc.minute) >= (h, mm)
 
 

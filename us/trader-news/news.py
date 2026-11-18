@@ -52,6 +52,9 @@ import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # us/, for ustime.py
+from ustime import to_eastern  # noqa: E402
+
 YAHOO = "https://feeds.finance.yahoo.com/rss/2.0/headline?s=%s&region=US&lang=en-US"
 CHART = "https://%s.finance.yahoo.com/v8/finance/chart/%s?range=1d&interval=5m"
 SEC_FEED = ("https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=%s&type=%s"
@@ -93,27 +96,6 @@ class NewsError(Exception):
 
 
 # ---------------------------------------------------------------- time
-
-def _nth_sunday(year, month, n):
-    d = _dt.date(year, month, 1)
-    d += _dt.timedelta(days=(6 - d.weekday()) % 7)
-    return d + _dt.timedelta(weeks=n - 1)
-
-
-def eastern_offset(utc):
-    """Hours from UTC for New York: -4 in daylight time, -5 otherwise (US rule since 2007)."""
-    y = utc.year
-    start = _dt.datetime.combine(_nth_sunday(y, 3, 2), _dt.time(7, 0))   # 2:00 EST
-    end = _dt.datetime.combine(_nth_sunday(y, 11, 1), _dt.time(6, 0))    # 2:00 EDT
-    naive = utc.replace(tzinfo=None)
-    return -4 if start <= naive < end else -5
-
-
-def to_eastern(utc):
-    """Aware or naive UTC -> naive New York wall-clock time."""
-    if utc.tzinfo is not None:
-        utc = utc.astimezone(_dt.timezone.utc)
-    return utc.replace(tzinfo=None) + _dt.timedelta(hours=eastern_offset(utc))
 
 
 # ---------------------------------------------------------------- inputs
