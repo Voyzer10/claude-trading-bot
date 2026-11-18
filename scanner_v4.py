@@ -110,7 +110,13 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             #   latest_signal: the trigger needs the most recent signal candle (a newer one replaces an older one)
             #   replace_newer: a setup whose BOS is newer than the open trade's replaces it, either side ("naya bos
             #     wala purani trade ki jgha lelo, same side ho to bhi"); one trade per chart (flip / latest-BOS off)
-            "bos_pick": "oldest", "skip_open_bos": False, "latest_signal": False, "replace_newer": False,
+            # bos_pick "newest" and latest_signal ON (owner, 18 Nov 2026: "Krdo on"; Nifty 50 backtest out-of-sample:
+            #   newest -0.33R vs -0.30R a trade, latest_signal -0.30R, i.e. about even; live test)
+            "bos_pick": "newest", "skip_open_bos": False, "latest_signal": True, "replace_newer": False,
+            # sweep_shift (owner, 18 Nov 2026: "sweep sirf bos origin tak and entry ke paas wala swing bhi"): after the
+            #   BOS-start sweep, a later close below an older swing low that is beyond it (lower) moves the sweep there,
+            #   so the stop sits under the sweep nearest the entry; a swing inside the move (above the origin) never sweeps
+            "sweep_shift": True,
             # the latest-BOS rule (owner, 14 Nov 2026): see _latest(); max_open = trades open at once on one chart
             "latest_bos": True, "max_open": 2}
 
@@ -319,6 +325,14 @@ class _Side:
             else:
                 still.append(st)
         self.waiting = still
+        if p.get("sweep_shift"):
+            # a swept, untraded setup: a close below a confirmed swing low beyond its sweep level moves the sweep there
+            for st in self.setups:
+                if st["used"] or st["sweep"] is None or st["sweep"] >= j:
+                    continue
+                deeper = [px for idx, px in ctx.sl_known[j - 1] if px < st["lvl"] and c < px]
+                if deeper:
+                    st["lvl_name"], st["lvl"], st["sweep"] = "near_swing", max(deeper), j
         open_candle = bool(p.get("skip_open_bos") and p.get("_intraday") and self.day is not None
                            and (j == 0 or self.day[j] != self.day[j - 1]))
         if ctx.bull[j] and ctx.sh_known[j - 1] and not open_candle:

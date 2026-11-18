@@ -618,7 +618,8 @@ def v4_setups(rows, day_of, i, intraday=False, ledger=None, chart=None):
         if prim:
             liq = "closed %s %s %s %s, then a %s" % ("above" if short else "below",
                                                  "the swing high" if short else "the swing low",
-                                                 "(BOS start)" if t["level_name"] == "bos_origin" else "(after BOS)",
+                                                 {"bos_origin": "(BOS start)", "near_swing": "(near the entry, beyond the BOS start)"}
+                                                 .get(t["level_name"], "(after BOS)"),
                                                  _r(t["level"]), t["signal_pattern"])
             det = {"swept": t["level_name"], "swept_px": _r(t["level"]), "BOS_at": rows[t["bos"]][0].isoformat(),
                    "sweep_at": rows[t["sweep"]][0].isoformat(), "signal": t["signal_pattern"],
