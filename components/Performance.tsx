@@ -30,7 +30,7 @@ export default function Performance({ refreshKey }: { refreshKey: number }) {
     getJSON<Perf>(`${OPS}/performance`).then((x) => { setP(x); setErr(null); }).catch((e) => setErr(errText(e)));
   }, [refreshKey]);
 
-  if (err) return null; // the ops API is not available (cloud mode)
+  if (err) return null; // the dashboard API is not reachable; the page shows that error already
   if (!p) return null;
   const goal = p.prefs.daily_goal_inr;
   const monthPct = p.month.goal_inr > 0 ? Math.max(0, Math.min(100, (p.month.pnl_inr / p.month.goal_inr) * 100)) : 0;

@@ -1,9 +1,0 @@
-# Vercel gets the Next.js app, api/ (the Python backend + cloud runner) and the bot's .py modules the runner
-# imports. The bot's data, logs, caches and Windows launchers stay on your PC.
-/trader
-/us
-/*.bat
-/__pycache__
-/node_modules
-/.next
-/research.py

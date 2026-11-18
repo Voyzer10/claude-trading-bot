@@ -19,7 +19,7 @@ const STALE_MIN = 12; // the runner pushes every 5 minutes; silence beyond this 
 export default function Dashboard() {
   const [data, setData] = useState<SnapshotResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tick, setTick] = useState(0);
+  const [, setTick] = useState(0); // re-render every 15 s so "last heard" ages
   const [refreshKey, setRefreshKey] = useState(0);
 
   const load = useCallback(async () => {
@@ -49,7 +49,7 @@ export default function Dashboard() {
   }, [load]);
 
   const snap = data?.snapshot ?? null;
-  const nowSec = (data?.now ?? Math.floor(Date.now() / 1000)) + tick * 0; // re-render on tick
+  const nowSec = data?.now ?? Math.floor(Date.now() / 1000);
   const ageSec = data?.received ? Math.floor(Date.now() / 1000) - data.received : null;
 
   return (
@@ -131,7 +131,7 @@ function RunnerSection({ snap, ageSec }: { snap: Snapshot; ageSec: number | null
     <section id="runner" className="panel" aria-labelledby="runner-h">
       <div className="panel-head">
         <div>
-          <h2 id="runner-h">Runner{snap.runner.mode ? ` · ${({ cloud: "cloud (Vercel)", vps: "VPS", pc: "PC" } as Record<string, string>)[snap.runner.mode] ?? snap.runner.mode}` : ""}</h2>
+          <h2 id="runner-h">Runner{snap.runner.mode ? ` · ${snap.runner.mode === "vps" ? "VPS" : "PC"}` : ""}</h2>
           <p>{r.status ?? "unknown"}</p>
         </div>
         {stale ? (
@@ -143,11 +143,9 @@ function RunnerSection({ snap, ageSec }: { snap: Snapshot; ageSec: number | null
       {stale && (
         <div className="notice bad" style={{ marginBottom: 12 }}>
           No update for {ageSec !== null ? ago(ageSec) : "a long time"}.{" "}
-          {snap.runner.mode === "cloud"
-            ? "The scheduler (cron-job.org or the GitHub Action) has stopped calling /api/py/cron/tick, or the tick is failing: check /api/py/health."
-            : snap.runner.mode === "vps"
-              ? "The runner service may have stopped: see Operations below, or run sudo systemctl status trader-runner on the VPS."
-              : "The PC runner window may be closed, or the PC asleep."}
+          {snap.runner.mode === "vps"
+            ? "The runner service may have stopped: see Operations below, or run sudo systemctl status trader-runner on the VPS."
+            : "The PC runner window may be closed, or the PC asleep."}
         </div>
       )}
       <div className="runner">
@@ -285,6 +283,7 @@ const STATE_CHIP: Record<string, string> = {
 
 function CoinsSection({ snap }: { snap: Snapshot }) {
   const c = snap.crypto;
+  const rules = (snap.rules.crypto ?? {}) as Record<string, unknown>;
   const counts = c.coins.reduce<Record<string, number>>((a, x) => ((a[x.state] = (a[x.state] ?? 0) + 1), a), {});
   return (
     <section id="coins" className="panel" aria-labelledby="coins-h">
@@ -311,8 +310,8 @@ function CoinsSection({ snap }: { snap: Snapshot }) {
       </div>
       <p className="muted small" style={{ margin: "10px 0 0" }}>
         The bar under each price is the last 4 hours&apos; range (low to high) and where the price sits in it. A long
-        needs a close above the high with volume ≥ the rule&apos;s minimum, a stop ≥ 1% away and BTC above its own 4h
-        midpoint.
+        needs a close above the high with volume ≥ {String(rules.min_vol_x ?? "?")}× the 4h average, a stop ≥{" "}
+        {String(rules.min_stop_pct ?? "?")}% away{rules.btc_regime ? " and BTC above its own 4h midpoint" : ""}.
       </p>
     </section>
   );
@@ -536,6 +535,8 @@ function DecisionsSection({ decisions }: { decisions: Decision[] }) {
 
 // ------------------------------------------------------------------ ledger
 
+const ACCOUNTS = ["INDIA", "US", "CRYPTO"]; // paper.py's accounts (old ledgers may still hold NSE/BSE entries)
+
 function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => void }) {
   const { accounts, open, closed } = snap.ledger;
   const { cmds, send, available } = useCommands(onChange);
@@ -549,6 +550,9 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
     try { await send(key ? "close" : "close_all", key); } catch (e) { setErr(errText(e)); }
   }
   const acctOf = (m: string) => (m === "NSE" || m === "BSE" || m === "NFO" ? "INDIA" : m);
+  // what an open position ties up, as paper.py books it: the futures margin, else qty x entry (also for shorts)
+  const tiedUp = (name: string) =>
+    open.filter((p) => acctOf(p.market) === name).reduce((s, p) => s + (p.margin ?? p.qty * p.entry), 0);
   return (
     <section id="ledger" className="panel" aria-labelledby="led-h">
       <div className="panel-head">
@@ -560,16 +564,19 @@ function LedgerSection({ snap, onChange }: { snap: Snapshot; onChange: () => voi
         </div>
       </div>
       <div className="markets" style={{ marginBottom: 14 }}>
-        {Object.entries(accounts).map(([name, a]) => {
-          const d = a.cash - a.start_capital;
+        {Object.entries(accounts).filter(([name]) => ACCOUNTS.includes(name)).map(([name, a]) => {
+          const held = tiedUp(name);
+          const equity = a.cash + held;
+          const d = Math.round((equity - a.start_capital) * 100) / 100;
           const cur = currencyOf(name);
           return (
             <div key={name} className="stat">
               <span className="label">{name}</span>
-              <span className="value" style={{ fontSize: 19 }}>{money(a.cash, cur)}</span>
+              <span className="value" style={{ fontSize: 19 }}>{money(equity, cur)}</span>
               <span className={`sub ${d > 0 ? "pos" : d < 0 ? "neg" : ""}`}>
                 {d === 0 ? "untouched" : `${d > 0 ? "+" : ""}${money(d, cur)} on ${money(a.start_capital, cur)}`}
               </span>
+              {held > 0 && <span className="sub">cash {money(a.cash, cur)} · {money(held, cur)} in open trades (at entry)</span>}
             </div>
           );
         })}

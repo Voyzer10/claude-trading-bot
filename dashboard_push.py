@@ -1,24 +1,17 @@
 #!/usr/bin/env python3
 """
-dashboard_push.py - builds a snapshot of the bot's state and pushes it to the web dashboard.
+dashboard_push.py - builds a snapshot of the bot's state for the dashboard.
 
-live.py calls push(state) after every cycle. The snapshot holds: runner status and uptime, every
-crypto coin watched and its latest scan, the other markets' modes, the agents' decisions with their
-skip reasons, the paper ledger, the live rules and the last log lines.
+live.py calls push(state) after every cycle; it writes trader/live/dashboard_snapshot.json, which the
+dashboard API reads. The snapshot holds: runner status and uptime, every crypto coin watched and its
+latest scan, the other markets' modes, the agents' decisions with their skip reasons, the paper ledger,
+the live rules and the last log lines.
 
-Setup (once): put the dashboard's address and the ingest token in trader/dashboard.json
-    {"url": "https://your-app.vercel.app", "token": "the INGEST_TOKEN you set on Vercel"}
-or in the environment variables DASHBOARD_URL and DASHBOARD_TOKEN.
-Without them the snapshot is only written to trader/live/dashboard_snapshot.json (handy for testing).
-
-    python dashboard_push.py          # build and push once, print the result
-    python dashboard_push.py --print  # build, write the local file, do not push
+    python dashboard_push.py          # build and write the snapshot once
 """
 import json
 import os
 import re
-import sys
-import urllib.request
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
@@ -29,7 +22,6 @@ LOG = os.path.join(LIVE, "log.txt")
 DECISIONS = os.path.join(LIVE, "decisions.jsonl")
 LEDGER = os.path.join("trader", "paper", "ledger.json")
 LOCAL_COPY = os.path.join(LIVE, "dashboard_snapshot.json")
-CFG = os.path.join("trader", "dashboard.json")
 UNIVERSE_CRYPTO = os.path.join("trader", "universe_crypto.txt")
 RULE_FILES = {"crypto": "auto_config.json", "nse": "auto_nse_config.json", "fno": "auto_fno_config.json",
               "us": "auto_us_config.json"}
@@ -187,7 +179,7 @@ def build(state=None):
                           "stop": ex.get("stop"), "target": ex.get("target"), "stop_pct": ex.get("stop_pct"),
                           "vol": sc.get("vol_ratio") if sc.get("vol_ratio") is not None else sc.get("vol_x_recent")})
     today = now.date().isoformat()
-    # the current run: from the last start line or the last silence > 20 min (the cloud runner has no start line)
+    # the current run: from the last start line or the last silence > 20 min
     run_start = segs[-1][0] if segs else started_at
     since = run_start.isoformat() if run_start else None
     reasons = {
@@ -203,7 +195,7 @@ def build(state=None):
     snap = {
         "version": 1,
         "generated_at": now.isoformat(),
-        "runner": {"mode": state.get("runner_mode") or ("vps" if os.environ.get("TRADER_SERVICE") else "pc"), "status": state.get("status"), "updated": state.get("updated"), "next_run": state.get("next_run"),
+        "runner": {"mode": "vps" if os.environ.get("TRADER_SERVICE") else "pc", "status": state.get("status"), "updated": state.get("updated"), "next_run": state.get("next_run"),
                    "markets": state.get("markets_scanned"), "pid": state.get("pid"),
                    "started_at": since, "errors": state.get("errors") or [],
                    "uptime_24h_hours": round(up24, 2),
@@ -235,33 +227,16 @@ def build(state=None):
     return snap
 
 
-def _cfg():
-    c = _json(CFG, {}) or {}
-    return (os.environ.get("DASHBOARD_URL") or c.get("url") or "").rstrip("/"), \
-        os.environ.get("DASHBOARD_TOKEN") or c.get("token") or ""
-
-
-def push(state=None, send=True):
-    snap = build(state)
-    body = json.dumps(snap, default=str).encode()
-    try:
-        with open(LOCAL_COPY, "w", encoding="utf-8") as fh:
-            fh.write(body.decode())
-    except Exception:
-        pass
-    url, token = _cfg()
-    if not send or not url or not token:
-        return {"pushed": False, "bytes": len(body), "why": "no dashboard url/token (trader/dashboard.json)" if send else "--print"}
-    req = urllib.request.Request(url + "/api/py/ingest", data=body, method="POST",
-                                 headers={"Content-Type": "application/json", "Authorization": "Bearer " + token,
-                                          "User-Agent": "trader-bot"})
-    with urllib.request.urlopen(req, timeout=15) as r:
-        out = json.loads(r.read() or b"{}")
-    out["pushed"] = True
-    return out
+def push(state=None):
+    """Write the snapshot. Write-then-rename, so the dashboard API never reads a half-written file."""
+    body = json.dumps(build(state), default=str)
+    os.makedirs(LIVE, exist_ok=True)
+    tmp = LOCAL_COPY + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        fh.write(body)
+    os.replace(tmp, LOCAL_COPY)
+    return {"bytes": len(body)}
 
 
 if __name__ == "__main__":
-    res = push(send="--print" not in sys.argv)
-    print(json.dumps(res))
-    print("Local copy: %s" % LOCAL_COPY)
+    print("Wrote %s (%d bytes)." % (LOCAL_COPY, push()["bytes"]))

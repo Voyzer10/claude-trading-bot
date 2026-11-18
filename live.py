@@ -62,21 +62,16 @@ def save_state(state):
 
 
 def push_dashboard(state):
-    """Send the snapshot to the web dashboard (dashboard_push.py). Never stops the runner."""
+    """Write the dashboard snapshot (dashboard_push.py). Never stops the runner."""
     try:
         import dashboard_push
-        res = dashboard_push.push(state)
-        if state.get("runner_mode") == "cloud":
-            return  # the cloud runner stores the snapshot itself
-        if res.get("pushed") and not _push_note["done"]:
-            log("Dashboard: pushed (%s bytes, storage %s)." % (res.get("bytes"), res.get("storage")))
-            _push_note["done"] = True
-        elif not res.get("pushed") and not _push_note["done"]:
+        dashboard_push.push(state)
+        if not _push_note["done"]:
             log("Dashboard: snapshot saved to trader/live/dashboard_snapshot.json (open it with start_dashboard.bat).")
             _push_note["done"] = True
     except Exception as e:
         if not _push_note.get("err"):
-            log("Dashboard push failed: %s (the runner keeps going)" % e)
+            log("Dashboard snapshot failed: %s (the runner keeps going)" % e)
             _push_note["err"] = True
 
 
@@ -102,7 +97,8 @@ def universe(market, a):
 
 
 def paper_snapshot():
-    """Run paper.py's stop/target/flat-by check and return the open and today's closed trades."""
+    """Run paper.py's stop/target/flat-by check and return the open and today's closed trades
+    (the dashboard reads the ledger itself; this copy is for state.json)."""
     try:
         import paper as P
     except ImportError:
@@ -115,16 +111,7 @@ def paper_snapshot():
         P.check_once(cfg, led)
         P.save_json(P.LEDGER, led)
     today = now_ist().date().isoformat()
-    opens = []
-    for p in led["open"]:
-        row = dict(p)
-        try:
-            row["last"] = P.fetch_price(p["market"], p["symbol"])[0]
-            row["open_pnl"] = round((row["last"] - p["entry"]) * p["qty"], 2)
-        except Exception:
-            pass
-        opens.append(row)
-    return {"open": opens, "closed_today": [c for c in led["closed"] if c.get("exit_date") == today]}
+    return {"open": led["open"], "closed_today": [c for c in led["closed"] if P.ist_day(c) == today]}
 
 
 COOLDOWN = timedelta(hours=6)  # one evaluated breakout per coin per 6 h, like the backtest's one trade at a time

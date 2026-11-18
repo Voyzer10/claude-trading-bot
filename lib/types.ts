@@ -1,9 +1,9 @@
-// Shape of the snapshot the bot pushes (dashboard_push.py, version 1).
+// Shape of the snapshot the runner writes (dashboard_push.py, version 1).
 
 export type Segment = { start: string; end: string };
 
 export type Runner = {
-  mode?: "cloud" | "pc" | "vps";
+  mode?: "pc" | "vps";
   status: string | null;
   updated: string | null;
   next_run: string | null;
@@ -53,6 +53,7 @@ export type Position = {
   stop: number;
   target: number;
   side?: string;
+  margin?: number;
   entry_time?: string;
   exit?: number;
   exit_time?: string;

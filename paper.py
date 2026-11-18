@@ -324,6 +324,15 @@ def today_closed(led, m, utc):
     return [c for c in led["closed"] if account_of(c["market"]) == acc and c["exit_date"] == d]
 
 
+def ist_day(rec):
+    """The India date a closed trade ended on, for the dashboard and alerts (exit_date is the market's own
+    date: UTC for crypto, which paper.py's daily limits use)."""
+    try:
+        return datetime.fromisoformat(rec["exit_time"]).astimezone(IST).date().isoformat()
+    except (KeyError, TypeError, ValueError):
+        return rec.get("exit_date") or ""
+
+
 def trades_today(led, m, utc):
     d = local_now(m, utc).date().isoformat()
     acc = account_of(m)

@@ -9,7 +9,6 @@ cycle: trader/live/auto_config.json (crypto rules), trader/paper/config.json (ri
 trader/universe_crypto.txt (coins), trader/alerts.json (Telegram).
 
 Every change made here is written to the runner log as "Dashboard: ..." so there is a record of who changed what.
-The underscore in the file name keeps Vercel from treating it as a separate function.
 """
 import csv
 import io
@@ -21,8 +20,6 @@ import subprocess
 import sys
 import threading
 import time
-import urllib.error
-import urllib.request
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
@@ -44,7 +41,6 @@ COMMANDS_DONE = os.path.join(LIVE, "commands_done.jsonl")
 LOG = os.path.join(LIVE, "log.txt")
 JOBS = os.path.join(T, "research", "jobs")
 IST = timezone(timedelta(hours=5, minutes=30))
-UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 
 router = APIRouter(prefix="/api/py/ops")
 
@@ -170,7 +166,7 @@ def settings_get():
     rules.update(_read_json(RULES, {}))
     cfg = _paper_cfg()
     risk = {name: {k: acc.get(k) for k in list(RISK_FIELDS) + ["capital"] if k in acc}
-            for name, acc in cfg["accounts"].items()}
+            for name, acc in cfg["accounts"].items() if name in _paper_defaults()["accounts"]}
     try:
         with open(UNIVERSE, encoding="utf-8") as fh:
             coins = [x.strip() for x in fh if x.strip() and not x.startswith("#")]
@@ -233,7 +229,7 @@ async def settings_risk(request: Request):
     body = await request.json()
     acct, changes = body.get("account"), body.get("changes") or {}
     cfg = _paper_cfg()
-    if acct not in cfg["accounts"]:
+    if acct not in _paper_defaults()["accounts"]:  # INDIA, US, CRYPTO: the accounts paper.py trades
         raise HTTPException(400, "unknown account %r" % acct)
     acc = cfg["accounts"][acct]
     diffs = []
@@ -422,45 +418,12 @@ def system():
     return out
 
 
-def _probe(name, url, kind):
-    t0 = time.time()
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=10) as r:
-            raw = r.read()
-        ms = int((time.time() - t0) * 1000)
-        doc = json.loads(raw)
-        if kind == "yahoo":
-            res = (doc.get("chart") or {}).get("result") or []
-            ts = (res[0].get("timestamp") or []) if res else []
-            if not ts:
-                return {"name": name, "ok": False, "ms": ms, "detail": "answered but no candles"}
-            age = int(time.time() - ts[-1])
-            return {"name": name, "ok": True, "ms": ms, "detail": "%d candles, last %d min ago" % (len(ts), age // 60)}
-        rows = doc if isinstance(doc, list) else []
-        if not rows:
-            return {"name": name, "ok": False, "ms": ms, "detail": "answered but no candles"}
-        return {"name": name, "ok": True, "ms": ms,
-                "detail": "%d candles, last %d min ago" % (len(rows), int(time.time() - rows[0][0]) // 60)}
-    except urllib.error.HTTPError as e:
-        return {"name": name, "ok": False, "ms": int((time.time() - t0) * 1000),
-                "detail": "HTTP %s %s (blocked or rate-limited?)" % (e.code, e.reason)}
-    except Exception as e:
-        return {"name": name, "ok": False, "ms": int((time.time() - t0) * 1000), "detail": str(e)[:200]}
-
-
 @router.post("/datacheck")
 def datacheck():
     """Can this machine get market data? The first thing to check on a new VPS: Yahoo blocks some datacenters."""
-    y = "https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=15m&range=1d"
-    probes = [("Yahoo crypto (BTC-USD)", y % "BTC-USD", "yahoo"),
-              ("Yahoo NSE (RELIANCE.NS)", y % "RELIANCE.NS", "yahoo"),
-              ("Yahoo US (AAPL)", y % "AAPL", "yahoo"),
-              ("Yahoo index (^NSEI)", y % "%5ENSEI", "yahoo"),
-              ("Coinbase crypto fallback (BTC-USD)",
-               "https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=900", "coinbase")]
-    with ThreadPoolExecutor(5) as ex:
-        res = list(ex.map(lambda p: _probe(*p), probes))
+    from deploy.check_data import PROBES, probe
+    with ThreadPoolExecutor(len(PROBES)) as ex:
+        res = list(ex.map(lambda p: probe(*p), PROBES))
     audit("data check: " + ", ".join("%s %s" % (r["name"].split(" (")[0], "ok" if r["ok"] else "FAILED") for r in res))
     return {"checked_at": _now().isoformat(), "results": res}
 
@@ -473,6 +436,7 @@ def _acct(m):
 
 @router.get("/performance")
 def performance():
+    import paper
     led = _read_json(LEDGER, {"accounts": {}, "open": [], "closed": []})
     prefs = dict(PREF_DEFAULT)
     prefs.update(_read_json(PREFS, {}))
@@ -483,7 +447,7 @@ def performance():
     accounts = {}
     for c in closed:
         a = _acct(c.get("market"))
-        d = c.get("exit_date") or (c.get("exit_time") or "")[:10]
+        d = paper.ist_day(c)  # India date: crypto's exit_date is the UTC date
         pnl = float(c.get("pnl") or 0)
         acc = accounts.setdefault(a, {"trades": 0, "wins": 0, "pnl": 0.0, "r_sum": 0.0, "today": 0.0, "d7": 0.0,
                                       "d30": 0.0, "best": None, "worst": None})

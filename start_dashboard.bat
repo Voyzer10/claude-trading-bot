@@ -27,10 +27,11 @@ if not exist trader mkdir trader
 echo.
 echo The dashboard will also open on your phone (same WiFi), so it needs a password.
 echo Login: any username + this password. It is saved in %PWFILE% (change or delete it any time).
-:askpw
+rem letters and digits only: cmd mangles symbols (ampersand, pipe, caret, percent, exclamation mark) when it saves the password
 set NEWPW=
-set /p NEWPW=Choose a password: 
-if "%NEWPW%"=="" goto askpw
+set /p NEWPW=Choose a password (letters and digits only; press Enter and one is made for you): 
+if "%NEWPW%"=="" for /f %%p in ('%PY% -c "import secrets; print(secrets.token_urlsafe(12))"') do set NEWPW=%%p
+echo Your dashboard password: %NEWPW%
 >"%PWFILE%" echo %NEWPW%
 :havepw
 set /p DASHBOARD_PASSWORD=<"%PWFILE%"
