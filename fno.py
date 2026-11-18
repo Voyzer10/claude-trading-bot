@@ -58,41 +58,26 @@ def _get(url, timeout=12, opener=None, headers=None):
         return r.read()
 
 
+def yahoo_bars(sym, rng="1d", interval="5m"):
+    """Bars as dict t,o,h,l,c,v,meta (nulls dropped): scan_nse's fetch, with its second host and 429 retry."""
+    import scan_nse as S
+    try:
+        d = S.yahoo_chart(sym, rng, interval, "")
+    except S.ScanError as e:
+        raise FnoError("Yahoo has no data for %s: %s" % (sym, e))
+    if not d:
+        raise FnoError("Yahoo has no data for %s" % sym)
+    return d
+
+
 def yahoo_last(sym):
     """(price, quote_time_utc, previous_close) for an index symbol like ^NSEI."""
-    url = "https://query2.finance.yahoo.com/v8/finance/chart/%s?range=1d&interval=1m" % urllib.parse.quote(sym, safe="")
-    doc = json.loads(_get(url))
-    res = (doc.get("chart") or {}).get("result") or []
-    if not res:
-        raise FnoError("Yahoo has no data for %s" % sym)
-    meta = res[0].get("meta") or {}
+    meta = yahoo_bars(sym, "1d", "1m")["meta"]
     p = meta.get("regularMarketPrice")
     if p is None:
         raise FnoError("no price for %s" % sym)
     ts = meta.get("regularMarketTime")
     return float(p), (datetime.fromtimestamp(ts, timezone.utc) if ts else datetime.now(timezone.utc)), meta.get("chartPreviousClose")
-
-
-def yahoo_bars(sym, rng="1d", interval="5m"):
-    """Bars as dict t,o,h,l,c,v (nulls dropped)."""
-    url = ("https://query2.finance.yahoo.com/v8/finance/chart/%s?range=%s&interval=%s&includePrePost=false"
-           % (urllib.parse.quote(sym, safe=""), rng, interval))
-    doc = json.loads(_get(url, timeout=20))
-    res = (doc.get("chart") or {}).get("result") or []
-    if not res:
-        raise FnoError("Yahoo has no bars for %s" % sym)
-    r = res[0]
-    ts = r.get("timestamp") or []
-    q = ((r.get("indicators") or {}).get("quote") or [{}])[0]
-    out = {"t": [], "o": [], "h": [], "l": [], "c": [], "v": []}
-    for i, t in enumerate(ts):
-        vals = [(q.get(k) or [None] * len(ts))[i] for k in ("open", "high", "low", "close", "volume")]
-        if any(x is None for x in vals[:4]):
-            continue
-        out["t"].append(t)
-        for k, x in zip("ohlcv", vals):
-            out[k].append(x or 0)
-    return out
 
 
 _chain_cache = {}

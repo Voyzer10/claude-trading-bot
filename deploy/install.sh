@@ -55,7 +55,7 @@ mkdir -p "$APP"
 if [ "$SRC" != "$APP" ]; then
   rsync -a --delete \
     --exclude node_modules --exclude .next --exclude .venv --exclude trader/ --exclude us/trader/ \
-    --exclude '__pycache__' --exclude '*.bat' "$SRC/" "$APP/"
+    --exclude '__pycache__' --exclude '*.bat' --exclude 'Claude outputs' "$SRC/" "$APP/"
 fi
 mkdir -p "$APP/trader/live" "$APP/trader/paper"
 chown -R trader:trader "$APP"

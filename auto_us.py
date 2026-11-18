@@ -26,12 +26,12 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 import paper as P
+from autolib import load_rules, record
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 US = os.path.join(ROOT, "us")
 LIVE_DIR = os.path.join("trader", "live")
 CFG_FILE = os.path.join(LIVE_DIR, "auto_us_config.json")
-DECISIONS = os.path.join(LIVE_DIR, "decisions.jsonl")
 SCAN_LOG = os.path.join(US, "trader", "scan.log")
 PY = sys.executable
 SCAN_TIMEOUT = timedelta(minutes=15)
@@ -50,17 +50,6 @@ DEFAULTS = {
 }
 
 _scan = {}  # the background scanner: {"proc", "kind", "started"}
-
-
-def load_cfg():
-    os.makedirs(LIVE_DIR, exist_ok=True)
-    if not os.path.exists(CFG_FILE):
-        with open(CFG_FILE, "w", encoding="utf-8") as fh:
-            json.dump(DEFAULTS, fh, indent=2)
-    cfg = dict(DEFAULTS)
-    with open(CFG_FILE, encoding="utf-8") as fh:
-        cfg.update(json.load(fh))
-    return cfg
 
 
 def et_now(utc):
@@ -83,11 +72,6 @@ def us_json(rel):
 def tail(text, n=6):
     lines = [ln for ln in text.strip().splitlines() if ln.strip()]
     return lines[-n:]
-
-
-def record(rec):
-    with open(DECISIONS, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps(rec) + "\n")
 
 
 def parse_at(at, day):
@@ -178,7 +162,7 @@ def finished_scan(log):
 
 
 def process(state, log, auto=True):
-    cfg = load_cfg()
+    cfg = load_rules(CFG_FILE, DEFAULTS)
     utc = datetime.now(timezone.utc)
     et = et_now(utc)
     today = et.date().isoformat()

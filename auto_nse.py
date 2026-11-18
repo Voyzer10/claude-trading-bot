@@ -26,20 +26,16 @@ Rules: trader/live/auto_nse_config.json (made on first run). Decisions: trader/l
 """
 import contextlib
 import io
-import json
 import os
-import urllib.parse
-import urllib.request
-import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 
 import paper as P
+from autolib import headlines, load_rules, record
 import scan_nse as S
 import tm_india as TM
 
 LIVE_DIR = os.path.join("trader", "live")
 CFG_FILE = os.path.join(LIVE_DIR, "auto_nse_config.json")
-DECISIONS = os.path.join(LIVE_DIR, "decisions.jsonl")
 
 DEFAULTS = {
     "_note": "Auto PAPER trading rules for NSE stocks (INDIA account). Paper money only.",
@@ -63,36 +59,6 @@ DEFAULTS = {
 }
 
 
-def load_cfg():
-    os.makedirs(LIVE_DIR, exist_ok=True)
-    if not os.path.exists(CFG_FILE):
-        with open(CFG_FILE, "w", encoding="utf-8") as fh:
-            json.dump(DEFAULTS, fh, indent=2)
-    cfg = dict(DEFAULTS)
-    with open(CFG_FILE, encoding="utf-8") as fh:
-        cfg.update(json.load(fh))
-    return cfg
-
-
-def hm(s):
-    h, m = s.split(":")
-    return int(h), int(m)
-
-
-def headlines(sym, suffix=".NS", n=3):
-    url = ("https://feeds.finance.yahoo.com/rss/2.0/headline?s=%s&region=IN&lang=en-IN"
-           % urllib.parse.quote(sym + suffix))
-    req = urllib.request.Request(url, headers={"User-Agent": S.UA})
-    with urllib.request.urlopen(req, timeout=15) as r:
-        root = ET.fromstring(r.read())
-    out = []
-    for item in root.iter("item"):
-        out.append({"title": (item.findtext("title") or "").strip(), "published": (item.findtext("pubDate") or "").strip()})
-        if len(out) >= n:
-            break
-    return out
-
-
 def regime(now):
     """Nifty 50 vs its own opening range and open, from today's 5-minute bars."""
     d = S.yahoo_chart("^NSEI", "1d", "5m", "")
@@ -111,11 +77,6 @@ def regime(now):
             "bearish": last < (hi + lo) / 2 and last < day_open}
 
 
-def record(rec):
-    with open(DECISIONS, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps(rec) + "\n")
-
-
 def run_one(h, cfg, reg, now, log):
     sym = h["symbol"]
     rec = {"time": datetime.now(S.IST).isoformat(), "symbol": "NSE:" + sym, "setup": "orb", "steps": {}, "result": None}
@@ -132,7 +93,7 @@ def run_one(h, cfg, reg, now, log):
         return rec
 
     try:
-        st["2_news"] = headlines(sym)
+        st["2_news"] = headlines(sym + ".NS", "IN", "en-IN")
     except Exception as e:
         st["2_news"] = "unavailable: %s" % e
 
@@ -217,16 +178,16 @@ def run_one(h, cfg, reg, now, log):
 
 def process(state, res, log):
     """Called by live.py after an NSE ORB scan (res = scan_nse.orb_scan result with new/first_seen flags)."""
-    cfg = load_cfg()
+    cfg = load_rules(CFG_FILE, DEFAULTS)
     now = datetime.now(S.IST)
-    if not (S.at(now, hm(cfg["entry_start"])) <= now < S.at(now, hm(cfg["entry_end"]))):
+    if not (S.at(now, P.hm(cfg["entry_start"])) <= now < S.at(now, P.hm(cfg["entry_end"]))):
         return []
     cutoff = datetime.fromisoformat(res["as_of"])
     cands = []
     for h in res.get("hits", []):
         if not h.get("new") or not h.get("holding"):
             continue
-        trig = S.at(now, hm(h["time"]))
+        trig = S.at(now, P.hm(h["time"]))
         if cutoff - trig > timedelta(minutes=cfg["fresh_minutes"]):
             continue
         cands.append(h)
@@ -245,6 +206,10 @@ def process(state, res, log):
             out.append(run_one(h, cfg, reg, now, log))
         except Exception as e:
             log("AUTO NSE %s failed: %s" % (h["symbol"], e))
+    for h in cands[cfg["max_new_per_cycle"]:]:  # never evaluated (they are not "new" again): say so in the log
+        record({"time": datetime.now(S.IST).isoformat(), "symbol": "NSE:" + h["symbol"], "setup": "orb", "steps": {},
+                "result": "skipped", "why": "max %d new breakouts per cycle (the ones with the most volume were taken)"
+                % cfg["max_new_per_cycle"]})
     auto = state.setdefault("auto", {"recent": []})
     auto["recent"] = (auto.get("recent", []) + [{"time": r["time"], "symbol": r["symbol"], "result": r["result"],
                                                  "why": r["why"]} for r in out])[-20:]

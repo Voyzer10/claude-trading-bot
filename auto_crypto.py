@@ -27,19 +27,16 @@ import contextlib
 import io
 import json
 import os
-import random
-import urllib.parse
-import urllib.request
-import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
 import paper as P
+import tm_india as TM
+from autolib import headlines, record
 import scan_crypto as C
 import scan_nse as S
 
 LIVE_DIR = os.path.join("trader", "live")
 AUTO_CONFIG = os.path.join(LIVE_DIR, "auto_config.json")
-DECISIONS = os.path.join(LIVE_DIR, "decisions.jsonl")
 
 DEFAULTS = {
     "_note": "Auto PAPER trading rules for crypto. Paper money only.",
@@ -84,21 +81,6 @@ def load_cfg():
 
 # ------------------------------------------------------------------ news
 
-def headlines(sym, n=3):
-    url = ("https://feeds.finance.yahoo.com/rss/2.0/headline?s=%s&region=US&lang=en-US"
-           % urllib.parse.quote(sym + C.SUFFIX))
-    req = urllib.request.Request(url, headers={"User-Agent": S.UA})
-    with urllib.request.urlopen(req, timeout=15) as r:
-        root = ET.fromstring(r.read())
-    out = []
-    for item in root.iter("item"):
-        out.append({"title": (item.findtext("title") or "").strip(),
-                    "published": (item.findtext("pubDate") or "").strip(),
-                    "link": (item.findtext("link") or "").strip()})
-        if len(out) >= n:
-            break
-    return out
-
 
 # ------------------------------------------------------------------ time machine
 
@@ -114,33 +96,12 @@ def candles(d):
 
 def simulate(rows, entry, stop, target, paths, bars, seed):
     """Replay `bars` candles `paths` times, each drawn whole (as moves vs the prior close)
-    from the coin's own history. A candle touching both levels counts as the stop (cautious)."""
+    from the coin's own history (tm_india.walk). A candle touching both levels counts as the stop (cautious)."""
     moves = [(rows[i][0] / rows[i - 1][2], rows[i][1] / rows[i - 1][2], rows[i][2] / rows[i - 1][2])
              for i in range(1, len(rows)) if rows[i - 1][2] > 0]
     if len(moves) < 100:
         return None
-    rnd = random.Random(seed)
-    risk = entry - stop
-    tgt = stp = 0
-    total_r = 0.0
-    for _ in range(paths):
-        px = entry
-        r = None
-        for _ in range(bars):
-            mh, ml, mc = moves[rnd.randrange(len(moves))]
-            if px * ml <= stop:
-                r, stp = -1.0, stp + 1
-                break
-            if px * mh >= target:
-                r, tgt = (target - entry) / risk, tgt + 1
-                break
-            px *= mc
-        if r is None:
-            r = (px - entry) / risk
-        total_r += r
-    return {"paths": paths, "bars": bars, "target_first": round(tgt / paths, 3),
-            "stop_first": round(stp / paths, 3), "neither": round((paths - tgt - stp) / paths, 3),
-            "avg_r": round(total_r / paths, 3)}
+    return dict({"paths": paths, "bars": bars}, **TM.walk(moves, entry, stop, target, bars, paths, seed))
 
 
 def history(rows, target_r, bars, stop_mode):
@@ -188,11 +149,6 @@ def history(rows, target_r, bars, stop_mode):
 
 # ------------------------------------------------------------------ pipeline
 
-def record(rec):
-    os.makedirs(LIVE_DIR, exist_ok=True)
-    with open(DECISIONS, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps(rec) + "\n")
-
 
 _btc_cache = {}
 
@@ -232,7 +188,7 @@ def run_one(h, cfg, log):
         return rec
 
     try:
-        st["2_news"] = headlines(sym)
+        st["2_news"] = headlines(sym + C.SUFFIX)
     except Exception as e:
         st["2_news"] = "unavailable: %s" % e
 

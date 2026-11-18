@@ -116,6 +116,12 @@ def replay(d, entry, stop, target, now_ist, direction="up", flat_by="15:15", pat
     n = max(0, int((flat - now_ist).total_seconds() // 300))
     if n == 0:
         return None
+    return dict({"paths": paths, "bars_left": n}, **walk(moves, entry, stop, target, n, paths, seed, direction, cost_r))
+
+
+def walk(moves, entry, stop, target, bars, paths=2000, seed=None, direction="up", cost_r=0.0):
+    """`paths` replays of `bars` candles from `entry`, each candle drawn whole from `moves` (high, low and close
+    as ratios to the prior close). A candle touching both levels counts as the stop. Also used by auto_crypto."""
     rnd = random.Random(seed)
     risk = (entry - stop) if direction == "up" else (stop - entry)
     reward = abs(target - entry)
@@ -124,7 +130,7 @@ def replay(d, entry, stop, target, now_ist, direction="up", flat_by="15:15", pat
     for _ in range(paths):
         px = entry
         r = None
-        for _ in range(n):
+        for _ in range(bars):
             mh, ml, mc = moves[rnd.randrange(len(moves))]
             hi, lo = px * mh, px * ml
             if direction == "up":
@@ -145,5 +151,5 @@ def replay(d, entry, stop, target, now_ist, direction="up", flat_by="15:15", pat
         if r is None:
             r = ((px - entry) if direction == "up" else (entry - px)) / risk
         total += r - cost_r
-    return {"paths": paths, "bars_left": n, "target_first": round(tgt / paths, 3), "stop_first": round(stp / paths, 3),
+    return {"target_first": round(tgt / paths, 3), "stop_first": round(stp / paths, 3),
             "neither": round((paths - tgt - stp) / paths, 3), "avg_r": round(total / paths, 3)}

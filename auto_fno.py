@@ -28,17 +28,17 @@ estimate, not a market quote). Rules: trader/live/auto_fno_config.json.
 """
 import contextlib
 import io
-import json
 import os
 from datetime import datetime, timedelta, timezone
 
 import fno as F
 import paper as P
+import scan_nse as S
+from autolib import load_rules, record
 import tm_india as TM
 
 LIVE_DIR = os.path.join("trader", "live")
 CFG_FILE = os.path.join(LIVE_DIR, "auto_fno_config.json")
-DECISIONS = os.path.join(LIVE_DIR, "decisions.jsonl")
 IST = F.IST
 
 DEFAULTS = {
@@ -61,32 +61,6 @@ DEFAULTS = {
 }
 
 
-def load_cfg():
-    os.makedirs(LIVE_DIR, exist_ok=True)
-    if not os.path.exists(CFG_FILE):
-        with open(CFG_FILE, "w", encoding="utf-8") as fh:
-            json.dump(DEFAULTS, fh, indent=2)
-    cfg = dict(DEFAULTS)
-    with open(CFG_FILE, encoding="utf-8") as fh:
-        cfg.update(json.load(fh))
-    return cfg
-
-
-def hm(s):
-    h, m = s.split(":")
-    return int(h), int(m)
-
-
-def at(day, s):
-    h, m = hm(s)
-    return day.replace(hour=h, minute=m, second=0, microsecond=0)
-
-
-def record(rec):
-    with open(DECISIONS, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps(rec) + "\n")
-
-
 def orb_break(d, now):
     """Today's 15-minute range and the first completed 5-minute close beyond it (up or down)."""
     bars = []
@@ -97,7 +71,7 @@ def orb_break(d, now):
         if st + timedelta(minutes=5) > now:
             continue  # still forming
         bars.append((st, o, h, l, c))
-    o_start = at(now, "09:15")
+    o_start = S.at(now, S.OPEN)
     rng = [b for b in bars if o_start <= b[0] < o_start + timedelta(minutes=15)]
     if len(rng) < 3:
         return None
@@ -214,10 +188,10 @@ def run_one(idx, brk, cfg, now, log):
 
 
 def process(state, log):
-    cfg = load_cfg()
+    cfg = load_rules(CFG_FILE, DEFAULTS)
     now = datetime.now(IST)
     ms = state.setdefault("markets", {}).setdefault("FNO", {})
-    if now.weekday() >= 5 or not (at(now, cfg["entry_start"]) <= now < at(now, cfg["entry_end"])):
+    if now.weekday() >= 5 or not (S.at(now, P.hm(cfg["entry_start"])) <= now < S.at(now, P.hm(cfg["entry_end"]))):
         ms["status"] = "outside the F&O entry window (%s-%s IST)" % (cfg["entry_start"], cfg["entry_end"])
         return []
     today = now.date().isoformat()
@@ -236,7 +210,7 @@ def process(state, log):
         k = "%s/%s" % (idx, brk["direction"])
         if k in done_today:
             continue
-        if now - at(now, brk["time"]) > timedelta(minutes=cfg["fresh_minutes"]):
+        if now - S.at(now, P.hm(brk["time"])) > timedelta(minutes=cfg["fresh_minutes"]):
             done_today[k] = "stale at %s" % now.strftime("%H:%M")
             log("FNO %s %s break at %s is older than %d min: not traded" % (idx, brk["direction"], brk["time"], cfg["fresh_minutes"]))
             continue

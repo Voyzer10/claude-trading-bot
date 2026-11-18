@@ -2,7 +2,7 @@
 """
 live.py - hands-off live scanner for NSE, BSE and crypto.
 
-Start it once (start_live.bat) and leave the window open. During NSE/BSE hours
+Start it once (start_all.bat) and leave the window open. During NSE/BSE hours
 it re-scans every few minutes; crypto is scanned around the clock (a new
 15-minute candle = a new scan). Every cycle also checks your paper trades.
 Everything lands in trader/live/:

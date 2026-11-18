@@ -637,8 +637,12 @@ def main(argv=None):
         grid = {"entry_end": ["10:30", "11:30", "13:00", "14:30"], "min_vol_x": [0.0, 1.0, 1.5, 2.0],
                 "min_stop_pct": [0.3, 0.5], "max_gap": [3.0, 99], "regime": [False, True],
                 "min_hist_r": [None, 0.0, 0.1], "target_r": [1.0, 1.5, 2.0], "breakeven": [False, True]}
-        live = {"entry_end": "11:30", "min_vol_x": 1.5, "min_stop_pct": 0.5, "max_gap": 3.0, "regime": True,
-                "min_hist_r": 0.1, "target_r": 2.0, "breakeven": True}
+        import auto_nse  # the live rules, from the same file the runner uses
+        from autolib import load_rules
+        r = load_rules(auto_nse.CFG_FILE, auto_nse.DEFAULTS)
+        live = {"entry_end": r["entry_end"], "min_vol_x": r["min_vol_x"], "min_stop_pct": r["min_stop_pct"],
+                "max_gap": r["max_gap_pct"], "regime": r["regime_filter"], "min_hist_r": r["min_history_avg_r"],
+                "target_r": r["target_r"], "breakeven": bool(P.load_config()["accounts"]["INDIA"].get("breakeven_at_r"))}
         max_per_day = a.max_per_day or 10**6
     else:
         import scan_crypto as C
@@ -673,9 +677,13 @@ def main(argv=None):
                     "max_gap": [99], "regime": [False, True], "min_hist_r": [None],
                     "target_r": [1.0, 1.5, 2.0, 3.0], "breakeven": [False, True],
                     "trend": ["off", "btc"], "stop_mode": ["skip"], "range": ["4h", "1h"]}
-        # the live long rules (v3); for crypto-short, the same filters applied to breakdowns
-        live = {"entry_end": "23:59", "min_vol_x": 1.5, "min_stop_pct": 1.0, "max_gap": 99, "regime": True,
-                "min_hist_r": None, "target_r": 2.0, "breakeven": False, "trend": "off", "stop_mode": "skip"}
+        # the live long rules, from the runner's own rules file; for crypto-short, the same filters on breakdowns
+        import auto_crypto
+        r = auto_crypto.load_cfg()
+        live = {"entry_end": "23:59", "min_vol_x": r["min_vol_x"], "min_stop_pct": r["min_stop_pct"], "max_gap": 99,
+                "regime": bool(r["btc_regime"]), "min_hist_r": None, "target_r": r["target_r"],
+                "breakeven": bool(P.load_config()["accounts"]["CRYPTO"].get("breakeven_at_r")), "trend": "off",
+                "stop_mode": "skip"}
         if a.mode == "crypto-5m":  # the live filters on 5-minute bars with a 4h range
             live = dict(live, range="4h")
         max_per_day = a.max_per_day or 10**6
@@ -683,6 +691,9 @@ def main(argv=None):
     if not events:
         print("No events: no data came back (check the internet / Yahoo).")
         return 1
+    for k, v in live.items():  # make sure the live rules are one of the tested combinations
+        if v not in grid[k]:
+            grid[k] = grid[k] + [v]
     days = sorted({e["day"] for e in events})
     split = days[int(len(days) * 0.7)]
     print("%d charts (%d failed), %d trading days %s to %s, %d raw breakouts. In-sample: days before %s."

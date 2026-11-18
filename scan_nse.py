@@ -39,7 +39,6 @@ OUT_DIR = "trader"
 SUFFIX = {"NSE": ".NS", "BSE": ".BO"}
 UNIVERSE_FILES = {"NSE": os.path.join(OUT_DIR, "universe_nse.txt"),
                   "BSE": os.path.join(OUT_DIR, "universe_bse.txt")}
-UNIVERSE_FILE = UNIVERSE_FILES["NSE"]
 WATCHLIST_FILE = os.path.join(OUT_DIR, "watchlist.json")
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
