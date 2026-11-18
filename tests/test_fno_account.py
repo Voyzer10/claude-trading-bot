@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """F&O in its own paper account (owner, 12 Nov 2026): INDIA = NSE / BSE stocks (Rs 50,000), FNO = NFO (Rs 1,00,000),
-F&O only on Nifty 50 and Bank Nifty. Checks the one-time split of an old shared INDIA config and ledger. Offline.
+F&O only on Nifty 50 and Bank Nifty. Offline. (The one-time split of an older shared INDIA account ran on the VPS
+and was removed on 18 Nov 2026.)
 
     python tests/test_fno_account.py
 """
@@ -29,52 +30,21 @@ if __name__ == "__main__":
         import paper as P
         import _old_budget
         _old_budget.apply(P)   # written against the pre-17-Nov budgets
-        # an old install: one INDIA account for stocks and F&O, on Scanner v4, capital raised to 80,000
-        old_india = dict(P.DEFAULT_CONFIG["accounts"]["INDIA"], capital=80000, scanner_version="v4",
-                         v4_setups=["v4_primary_long"], max_loss_per_trade_fno=1200, fno_stock_options=True,
-                         fno_underlyings=["BANKNIFTY"])
-        os.makedirs(os.path.dirname(P.CONFIG), exist_ok=True)
-        json.dump({"accounts": {"INDIA": old_india}}, open(P.CONFIG, "w"))
-        # ledger: INDIA started 80,000; a closed stock trade +300, a closed option trade -900, an open option (2 lots
-        # of 30 @ 250 + Rs 25 fee) and an open stock (10 @ 1,000 + Rs 5 fee)
-        opt = {"key": "NFO:BANKNIFTY-20261124-52500-CE", "market": "NFO", "symbol": "BANKNIFTY-20261124-52500-CE",
-               "qty": 60, "entry": 250.0, "stop": 200.0, "target": 350.0, "entry_fee": 25.0, "kind": "option",
-               "entry_date": "2026-11-12", "entry_time": "2026-11-12T05:00:00+00:00", "side": "long"}
-        stk = {"key": "NSE:TCS", "market": "NSE", "symbol": "TCS", "qty": 10, "entry": 1000.0, "stop": 990.0,
-               "target": 1020.0, "entry_fee": 5.0, "kind": "equity", "entry_date": "2026-11-12",
-               "entry_time": "2026-11-12T05:00:00+00:00", "side": "long"}
-        cash = 80000 + 300 - 900 - (60 * 250 + 25) - (10 * 1000 + 5)
-        json.dump({"accounts": {"INDIA": {"cash": cash, "start_capital": 80000}}, "open": [opt, stk],
-                   "closed": [{"market": "NSE", "symbol": "INFY", "pnl": 300.0, "exit_date": "2026-11-11"},
-                              {"market": "NFO", "symbol": "BANKNIFTY-X-CE", "pnl": -900.0, "exit_date": "2026-11-11"}]},
-                  open(P.LEDGER, "w"))
-
         cfg = P.load_config()
         india, fno = cfg["accounts"]["INDIA"], cfg["accounts"]["FNO"]
-        check("1. config: INDIA stocks = Rs 50,000, FNO = Rs 1,00,000", india["capital"] == 50000 and fno["capital"] == 100000,
-              (india["capital"], fno["capital"]))
-        check("   FNO keeps INDIA's Scanner switches (v4, ticked setups, F&O max loss)",
-              fno["scanner_version"] == "v4" and fno["v4_setups"] == ["v4_primary_long"]
-              and fno["max_loss_per_trade_fno"] == 1200, fno)
-        check("   F&O list = Nifty 50 + Bank Nifty, stock options off; the F&O keys leave INDIA",
+        check("1. config: INDIA (stocks) and FNO (F&O) are separate accounts",
+              india["capital"] == 50000 and fno["capital"] == 100000, (india["capital"], fno["capital"]))
+        check("   F&O list = Nifty 50 + Bank Nifty, stock options off; the F&O keys live in FNO only",
               fno["fno_underlyings"] == ["NIFTY", "BANKNIFTY"] and fno["fno_stock_options"] is False
               and "fno_underlyings" not in india and "fno_stock_options" not in india, (fno, india))
-        again = P.load_config()
-        check("   one time only: a later change to FNO stays", again["accounts"]["FNO"] == fno)
-
         led = P.load_ledger(cfg)
-        a, f = led["accounts"]["INDIA"], led["accounts"]["FNO"]
-        check("2. ledger: FNO = 1,00,000 + the options' realised P&L - the open option's cost",
-              abs(f["cash"] - (100000 - 900 - 15025)) < 1e-6 and f["start_capital"] == 100000, f)
-        check("   INDIA = 50,000 + the stocks' P&L - the open stock's cost (the capital cut to 50,000 is a withdrawal)",
-              abs(a["cash"] - (50000 + 300 - 10005)) < 1e-6 and a["start_capital"] == 50000, a)
-        led2 = P.load_ledger(P.load_config())
-        check("   the split happens once", led2["accounts"] == led["accounts"])
+        check("2. ledger: one book each, at its capital",
+              led["accounts"]["INDIA"]["cash"] == 50000 and led["accounts"]["FNO"]["cash"] == 100000, led["accounts"])
         check("3. NFO trades belong to FNO, NSE / BSE to INDIA",
               P.account_of("NFO") == "FNO" and P.account_of("NSE") == "INDIA" and P.account_of("BSE") == "INDIA")
         fee = P.charges(cfg, "NFO", "BANKNIFTY-20261124-52500-CE", "sell", 15000)
         check("   F&O still pays Indian option charges (STT etc.), not a fee_pct", fee > 20, fee)
-        check("   F&O sizing uses the FNO account's limits", P.acct_cfg(cfg, "NFO")["max_loss_per_trade_fno"] == 1200)
+        check("   F&O sizing uses the FNO account's limits", P.acct_cfg(cfg, "NFO") is cfg["accounts"]["FNO"])
 
         # auto_fno: Nifty 50 joins Bank Nifty once, even if an old config file listed Bank Nifty only
         import auto_fno as AF

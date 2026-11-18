@@ -109,19 +109,13 @@ if __name__ == "__main__":
                                            v4_setups=["v4_primary_long", "v4_primary_short"])}}, open(P.CONFIG, "w"))
         cfg = P.load_config()
         u = cfg["accounts"]["USFNO"]
-        check("3. USFNO account: $50,000, its own limits, US's scanner switches copied once, QQQ / SPY / DIA only",
-              u["capital"] == 50000 and u["scanner_version"] == "v4" and u["v4_setups"] == ["v4_primary_long", "v4_primary_short"]
+        check("3. USFNO account: $50,000, its own limits and Scanner switches (v4), QQQ / SPY / DIA only",
+              u["capital"] == 50000 and u["scanner_version"] == "v4" and "v4_primary_long" in u["v4_setups"]
               and u["usopt_underlyings"] == ["QQQ", "SPY", "DIA"] and P.account_of("USOPT") == "USFNO"
               and P.lot_of("USOPT", "x") == 100 and P.kind_of("USOPT", "QQQ261118C00500000") == "options", u)
         dia = UO.plan("DIA", dict(setup, price=500.3), now=NOW, chain=[dict(r, symbol=r["symbol"].replace("QQQ", "DIA"))
                                                                         for r in A.option_chain("QQQ", "call")])
         check("   DIA (the Dow) is a US F&O underlying too", dia["name"] == "DIA261118C00500000", dia)
-        prev = dict(cfg)
-        prev["accounts"] = dict(cfg["accounts"], USFNO=dict(u, usopt_underlyings=["QQQ", "SPY"]))
-        prev.pop("_usopt_dia", None)
-        json.dump(prev, open(P.CONFIG, "w"))
-        check("   an older USFNO (QQQ / SPY) gets DIA added once", P.load_config()["accounts"]["USFNO"]["usopt_underlyings"]
-              == ["QQQ", "SPY", "DIA"])
         P.session = lambda m, n: "open"
         P.past_flat_by = lambda m, a, n: False
         P.fetch_price = lambda m, t: (5.0, datetime.now(timezone.utc)) if m == "USOPT" else (190.0, datetime.now(timezone.utc))

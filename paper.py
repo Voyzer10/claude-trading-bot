@@ -143,31 +143,6 @@ DEFAULT_CONFIG = {
 }
 
 
-# the strategy switches FNO starts with: INDIA's, so F&O keeps running the Scanner version it ran before the split
-FNO_FROM_INDIA = ("scanner_version", "v4_setups", "v5_setups", "v5_constant", "v5_move", "v5_target", "trade_setups",
-                  "risk_limits", "trade_manager", "tm_be_r", "tm_trail", "tm_trail_step", "tm_trail_gap", "tm_lock_at",
-                  "tm_lock_keep", "tm_reversal",
-                  "tm_rev_min_r", "tm_stale_min", "tm_candle_min", "max_loss_per_trade_fno", "futures_margin_pct",
-                  "flat_by", "cooldown_losses", "cooldown_minutes", "weekly_loss_x")
-
-
-def tm_one_set(acc):
-    """Fold an account's two Trade Managers (v4: trailing only, v4_*; others: tm_*) into one set, keeping what its
-    trades ran with: on Scanner v4 the v4 trailing (and the other exits off); otherwise the tm_* exits (no trailing)."""
-    v4 = acc.get("scanner_version") == "v4"
-    if v4:
-        acc["tm_be_r"] = acc.get("v4_be_r", 1.0)
-        acc["tm_trail"] = bool(acc.get("v4_trail", True))
-        acc["tm_lock_at"], acc["tm_reversal"], acc["tm_stale_min"] = 0.0, False, 0
-        acc["trade_manager"] = True
-    else:
-        acc["tm_trail"] = False
-    acc["tm_trail_step"] = acc.get("v4_trail_step", 1.0)
-    acc["tm_trail_gap"] = acc.get("v4_trail_gap", 1.0)
-    for k in ("v4_trail", "v4_be_r", "v4_trail_step", "v4_trail_gap"):
-        acc.pop(k, None)
-
-
 class PaperError(Exception):
     pass
 
@@ -189,90 +164,36 @@ def save_json(path, doc):
     os.replace(tmp, path)
 
 
-# The owner's budget of 17 Nov 2026: Rs 1 lakh per Indian account, $1,000 per US / crypto account ($1,200 for US
-# options); max loss per trade 3% of it, the daily loss limit 3 trades (9%). Applied once to the live config, and
-# once to the ledger: every book restarts at its budget (cash = budget - what open positions tie up), the old trades
-# stay in the ledger as history ("purana data 0 kardo, sirf data ledger m rehne do").
-BUDGET_1117 = {"INDIA": 100000, "FNO": 100000, "US": 1000, "USFNO": 1200, "CRYPTO": 1000}
-
-
-def budget_limits(capital):
-    # max_loss_per_trade_fno is what an option / futures trade is sized by (Bank Nifty's lot needs ~Rs 2,600)
-    return {"capital": capital, "max_loss_per_trade": round(capital * 0.03, 2),
-            "max_loss_per_trade_fno": round(capital * 0.03, 2), "daily_loss_limit": round(capital * 0.09, 2)}
-
-
-# the one-time config changes below; a NEW config already holds their results (DEFAULT_CONFIG), so it starts with
-# them marked done (a fresh install ran _tm_global and lost the default trailing stop on every account)
-ONE_TIME_FLAGS = ("_crypto_lev_1117", "_budget_1117", "_tm_global", "_usopt_dia", "_fees_coindcx")
+# One-time changes of an older config / ledger (the F&O and US F&O accounts of 12-13 Nov, one Trade Manager per
+# account, the CoinDCX fee, the 17 Nov budget and its ledger reset) ran on the VPS and were removed on 18 Nov 2026;
+# DEFAULT_CONFIG holds their results for a new install. The ledger keeps each book's "budget_reset" note, which the
+# dashboard's P&L reads.
 
 
 def load_config():
     if not os.path.exists(CONFIG):
-        save_json(CONFIG, dict(DEFAULT_CONFIG, **{f: True for f in ONE_TIME_FLAGS}))
+        save_json(CONFIG, DEFAULT_CONFIG)
         print("Made %s with default paper accounts (edit it to change capital and limits)." % CONFIG)
     cfg = load_json(CONFIG, DEFAULT_CONFIG)
     changed = False
     accs = cfg.setdefault("accounts", {})
-    if "FNO" not in accs:  # one-time (owner, 12 Nov 2026): F&O gets its own account; INDIA = stocks, Rs 50,000
-        fno = dict(DEFAULT_CONFIG["accounts"]["FNO"])
-        india = accs.get("INDIA") or {}
-        for k in FNO_FROM_INDIA:
-            if k in india:
-                fno[k] = india[k]
-        accs["FNO"] = fno
-        if india:
-            india["capital"] = 50000
-            for k in ("fno_underlyings", "fno_stock_options"):
-                india.pop(k, None)
-        changed = True
-    if not cfg.get("_crypto_lev_1117") and "CRYPTO" in accs:  # one-time (owner, 17 Nov 2026): crypto on 5x margin
-        accs["CRYPTO"].setdefault("intraday_leverage", 5)
-        cfg["_crypto_lev_1117"] = changed = True
-    if not cfg.get("_budget_1117"):  # one-time (owner, 17 Nov 2026): see BUDGET_1117
-        for name, cap in BUDGET_1117.items():
-            if name in accs:
-                accs[name].update(budget_limits(cap))
-        cfg["_budget_1117"] = changed = True
-    if not cfg.get("_tm_global"):   # one-time (owner, 13 Nov 2026): one Trade Manager per account, every scanner
-        for acc in accs.values():
-            tm_one_set(acc)
-        cfg["_tm_global"] = changed = True
-    usf_old = accs.get("USFNO")
-    if usf_old and "DIA" not in (usf_old.get("usopt_underlyings") or []) and not cfg.get("_usopt_dia"):
-        usf_old["usopt_underlyings"] = list(usf_old.get("usopt_underlyings") or []) + ["DIA"]   # one-time: the Dow
-        cfg["_usopt_dia"] = changed = True
-    if "USFNO" not in accs:   # one-time (owner, 13 Nov 2026): US F&O gets its own account, US's scanner switches
-        usf = dict(DEFAULT_CONFIG["accounts"]["USFNO"])
-        us = accs.get("US") or {}
-        for k in FNO_FROM_INDIA:
-            if k in us and k not in ("max_loss_per_trade_fno", "futures_margin_pct", "flat_by"):
-                usf[k] = us[k]
-        accs["USFNO"] = usf
-        changed = True
-    for name, acc in DEFAULT_CONFIG["accounts"].items():
+    for name, acc in DEFAULT_CONFIG["accounts"].items():   # new keys (and new accounts) get their defaults
         merged = dict(acc)
-        merged.update(cfg.get("accounts", {}).get(name, {}))
-        if cfg.get("accounts", {}).get(name) != merged:
+        merged.update(accs.get(name, {}))
+        if accs.get(name) != merged:
             changed = True
-        cfg.setdefault("accounts", {})[name] = merged
-    crypto = cfg["accounts"].get("CRYPTO", {})
-    if not cfg.get("_fees_coindcx") and crypto.get("fee_pct") == 0.1:  # one-time: the old generic 0.1% -> CoinDCX
-        crypto["fee_pct"] = DEFAULT_CONFIG["accounts"]["CRYPTO"]["fee_pct"]
-        cfg["_fees_coindcx"] = True
-        changed = True
+        accs[name] = merged
     if "india_charges" not in cfg:
         cfg["india_charges"] = DEFAULT_CONFIG["india_charges"]
         changed = True
-    if changed:  # write the new defaults (e.g. the INDIA account) into the user's file once
+    if changed:  # write the new defaults into the user's file once
         save_json(CONFIG, cfg)
     return cfg
 
 
 def load_ledger(cfg):
     led = load_json(LEDGER, {"accounts": {}, "open": [], "closed": []})
-    topped = split_fno(led, cfg)
-    topped = budget_reset(led, cfg) or topped
+    topped = False
     for name, acc in cfg["accounts"].items():
         if name in ACCOUNT_MARKET:
             book = led["accounts"].setdefault(name, {"cash": float(acc["capital"]), "start_capital": float(acc["capital"])})
@@ -285,44 +206,6 @@ def load_ledger(cfg):
     if topped and os.path.exists(LEDGER):
         save_json(LEDGER, led)
     return led
-
-
-def budget_reset(led, cfg):
-    """One-time (owner, 17 Nov 2026): every book restarts at its configured budget; open positions stay open and
-    keep the money they tie up (margin, or the entry value); closed trades stay as history. True if it ran."""
-    if led.get("_budget_1117") or not cfg.get("_budget_1117"):
-        return False
-    books = led.setdefault("accounts", {})
-    at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    for name, acc in cfg.get("accounts", {}).items():
-        if name not in ACCOUNT_MARKET:
-            continue
-        cap = float(acc["capital"])
-        tied = sum((p["margin"] if p.get("margin") is not None else p["qty"] * p["entry"])
-                   for p in led.get("open", []) if MARKETS.get(p.get("market"), {}).get("account") == name)
-        old = books.get(name) or {}
-        books[name] = {"cash": round(cap - tied, 6), "start_capital": cap,
-                       "budget_reset": {"at": at, "old_cash": old.get("cash"), "old_start": old.get("start_capital"),
-                                        "tied": round(tied, 4)}}
-    led["_budget_1117"] = at
-    return True
-
-
-def split_fno(led, cfg):
-    """One-time (owner, 12 Nov 2026): F&O moves out of INDIA into its own FNO book. Each book's cash stays
-    start + realised P&L - money tied in open positions: the NFO trades' realised P&L and the cash their open
-    positions tie up move from INDIA to FNO. Returns True if the ledger changed."""
-    books = led.setdefault("accounts", {})
-    if "FNO" in books or "INDIA" not in books or "FNO" not in cfg.get("accounts", {}):
-        return False
-    cap = float(cfg["accounts"]["FNO"]["capital"])
-    realised = sum(float(c.get("pnl") or 0) for c in led.get("closed", []) if c.get("market") == "NFO")
-    tied = sum((p["margin"] if p.get("margin") is not None else p["qty"] * p["entry"]) + float(p.get("entry_fee") or 0)
-               for p in led.get("open", []) if p.get("market") == "NFO")
-    books["INDIA"]["cash"] = round(float(books["INDIA"]["cash"]) - realised + tied, 6)
-    books["FNO"] = {"cash": round(cap + realised - tied, 6), "start_capital": cap,
-                    "split_from_india": {"realised": round(realised, 4), "tied": round(tied, 4)}}
-    return True
 
 
 def account_of(m):
