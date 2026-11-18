@@ -1,0 +1,14 @@
+[Unit]
+Description=Trader dashboard API (FastAPI on 127.0.0.1:8000)
+After=network-online.target
+
+[Service]
+User=trader
+WorkingDirectory=/opt/trader
+EnvironmentFile=/etc/trader/trader.env
+ExecStart=/opt/trader/.venv/bin/python -m uvicorn api.index:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

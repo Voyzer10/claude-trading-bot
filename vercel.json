@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 60,
+      "includeFiles": "{live,paper,scan_nse,scan_crypto,auto_crypto,auto_nse,auto_fno,auto_us,fno,tm_india,dashboard_push}.py"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+[Unit]
+Description=Trader bot runner (live.py: scans, paper trades, stop/target checks)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=trader
+WorkingDirectory=/opt/trader
+EnvironmentFile=/etc/trader/trader.env
+ExecStart=/opt/trader/.venv/bin/python -u live.py --markets ${RUNNER_MARKETS} --auto-paper
+# exit code 3 = "restart" from the dashboard; any crash also restarts
+Restart=always
+RestartSec=10
+Nice=5
+
+[Install]
+WantedBy=multi-user.target
