@@ -427,15 +427,21 @@ def scanner_version(market):
     """Which Scanner a market runs: "v4" (the owner's v4 rules of 11 Nov, Final Trading Workflow + his answers: primary sweep reversal, then a sequential OB/FVG
     secondary), "v3" (the 5 Nov workflow: sweep reversal + FVG/OB retest) or "v2" (A-B-C-D, playbook doji / star /
     hammer, FVG / order-block retests). Versions never mix (owner, 5 and 7 Nov 2026).
-    One switch per paper account (paper_config.json accounts.<X>.scanner_version, Settings > Risk limits). Defaults
-    to v3 if the config cannot be read."""
+    One switch per paper account (paper_config.json accounts.<X>.scanner_version, Settings > Risk limits). Missing:
+    paper.DEFAULT_SCANNER. If the config cannot be read (a typo in a hand edit), the last version read for that market
+    stays: never a silent switch to another strategy."""
+    import paper as P
     try:
-        import paper as P
         acc = P.MARKETS.get(market, {}).get("account", market)
-        v = P.load_config()["accounts"].get(acc, {}).get("scanner_version", "v3")
-        return v if v in SCANNER_VERSIONS else "v3"
+        v = P.load_config()["accounts"].get(acc, {}).get("scanner_version", P.DEFAULT_SCANNER)
+        v = v if v in SCANNER_VERSIONS else P.DEFAULT_SCANNER
     except Exception:
-        return "v3"
+        return _LAST_VERSION.get(market, P.DEFAULT_SCANNER)
+    _LAST_VERSION[market] = v
+    return v
+
+
+_LAST_VERSION = {}   # the last scanner_version read per market (used only when the config cannot be read)
 
 
 # the candles each chart's v4 setups came from (owner, 14 Nov 2026): paper.py's v4 time machine replays them

@@ -53,6 +53,8 @@ MARKETS = {
     "US":     {"suffix": "",     "cur": "$",  "open": "09:30", "close": "16:00", "fractional": False, "account": "US"},
     "CRYPTO": {"suffix": "-USD", "cur": "$",  "open": None,    "close": None,    "fractional": True,  "account": "CRYPTO"},
 }
+# the Scanner version an account runs when its config does not say (Settings > Risk limits): the owner trades v4
+DEFAULT_SCANNER = "v4"
 ACCOUNT_MARKET = {"INDIA": "NSE", "FNO": "NFO", "US": "US", "USFNO": "USOPT", "CRYPTO": "CRYPTO"}  # currency formatting
 INDIA_ACCOUNTS = ("INDIA", "FNO")   # Indian charges (india_charges), not fee_pct
 
@@ -70,7 +72,7 @@ DEFAULT_CONFIG = {
                    "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
                    "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "scanner_version": DEFAULT_SCANNER, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
@@ -84,7 +86,7 @@ DEFAULT_CONFIG = {
                    "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
                    "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": False,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "scanner_version": DEFAULT_SCANNER, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
@@ -99,7 +101,7 @@ DEFAULT_CONFIG = {
                    "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:50", "fee_pct": 0.5,
                    "breakeven_at_r": 1.0, "allow_short": False,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "scanner_version": DEFAULT_SCANNER, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
@@ -110,7 +112,7 @@ DEFAULT_CONFIG = {
                    "daily_loss_limit": 90, "max_trades_per_day": 5, "min_reward_risk": 1.0,
                    "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "scanner_version": DEFAULT_SCANNER, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
@@ -120,7 +122,7 @@ DEFAULT_CONFIG = {
                    "daily_loss_limit": 90, "max_trades_per_day": 10, "min_reward_risk": 1.0,
                    "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "max_same_side": 3, "risk_limits": False, "trade_setups": True,
-                   "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
+                   "scanner_version": DEFAULT_SCANNER, "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
@@ -220,9 +222,14 @@ def budget_limits(capital):
             "max_loss_per_trade_fno": round(capital * 0.03, 2), "daily_loss_limit": round(capital * 0.09, 2)}
 
 
+# the one-time config changes below; a NEW config already holds their results (DEFAULT_CONFIG), so it starts with
+# them marked done (a fresh install ran _tm_global and lost the default trailing stop on every account)
+ONE_TIME_FLAGS = ("_crypto_lev_1117", "_budget_1117", "_tm_global", "_usopt_dia", "_fees_coindcx")
+
+
 def load_config():
     if not os.path.exists(CONFIG):
-        save_json(CONFIG, DEFAULT_CONFIG)
+        save_json(CONFIG, dict(DEFAULT_CONFIG, **{f: True for f in ONE_TIME_FLAGS}))
         print("Made %s with default paper accounts (edit it to change capital and limits)." % CONFIG)
     cfg = load_json(CONFIG, DEFAULT_CONFIG)
     changed = False
@@ -273,11 +280,6 @@ def load_config():
     if not cfg.get("_fees_coindcx") and crypto.get("fee_pct") == 0.1:  # one-time: the old generic 0.1% -> CoinDCX
         crypto["fee_pct"] = DEFAULT_CONFIG["accounts"]["CRYPTO"]["fee_pct"]
         cfg["_fees_coindcx"] = True
-        changed = True
-    us = cfg["accounts"].get("US", {})
-    if not cfg.get("_us_capital_50k") and float(us.get("capital", 0)) == 5000:   # one-time: owner raised US to $50k
-        us["capital"] = 50000
-        cfg["_us_capital_50k"] = True
         changed = True
     if "india_charges" not in cfg:
         cfg["india_charges"] = DEFAULT_CONFIG["india_charges"]
@@ -795,7 +797,10 @@ def path_since(pos, bars, now, price):
     # position was not checked in the last 15 minutes (the old rule); otherwise a resting stop fills at the stop.
     seen = _iso(pos.get("last_seen"))
     watched = bool(seen) and (now - seen) <= timedelta(minutes=15)
-    path.append((now, price, price, price, price, not bars and not watched))
+    # an option has no 1-minute candles (fetch_minutes): its premium jumps, and with no candles we cannot know it
+    # traded at the stop, so a live premium past the stop fills there, not at the stop
+    no_candles = pos.get("market") in ("NFO", "USOPT")
+    path.append((now, price, price, price, price, not bars and (not watched or no_candles)))
     return path
 
 
@@ -1730,7 +1735,7 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     rec = {"time": now_iso or datetime.now(IST).isoformat(), "symbol": "%s:%s" % (market, symbol),
            "setup": s["setup"], "scanner_v2": True, "steps": {}, "result": None}
     st = rec["steps"]
-    st["1_scanner"] = {"scanner": s.get("scanner", "v3"), "setup": s["setup"], "setup_name": s.get("name"),
+    st["1_scanner"] = {"scanner": s.get("scanner", DEFAULT_SCANNER), "setup": s["setup"], "setup_name": s.get("name"),
                        "side": s["side"], "liquidity": s.get("liquidity"), "bar_end": s.get("bar_end"),
                        "price": s["price"], **(s.get("details") or {})}
     st["2_news"] = news if news is not None else "not fetched for stock setups (hundreds a day)"
@@ -1751,7 +1756,7 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     us_opt = market == "US" and symbol.upper() in [u.upper() for u in (usf_acc.get("usopt_underlyings") or [])]
     if us_opt:
         acc = usf_acc                            # QQQ / SPY setups are US F&O trades: the USFNO account's switches
-    version = acc.get("scanner_version", "v3")
+    version = acc.get("scanner_version", DEFAULT_SCANNER)
     st["1_scanner"]["scanner"] = version
     # versions never mix (owner, 5 and 7 Nov 2026): a setup of another version (switched after it was scanned) is
     # skipped

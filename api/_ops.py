@@ -1031,13 +1031,14 @@ def _download_all():
         except Exception as e:   # never lose the export over the reviews
             z.writestr("opinions_error.txt", str(e))
         state = _read_json(os.path.join(LIVE, "state.json"), {})
+        import paper
         readme = [
             "Trader bot export, %s IST" % now.strftime("%Y-%m-%d %H:%M"),
             "Host %s. Paper trading only. Runner status: %s." % (
                 os.uname().nodename if hasattr(os, "uname") else "?", state.get("status")),
             "",
             "Scanner version per account: %s." % ", ".join(
-                "%s %s" % (k, (v or {}).get("scanner_version", "v3")) for k, v in
+                "%s %s" % (k, (v or {}).get("scanner_version", paper.DEFAULT_SCANNER)) for k, v in
                 (_paper_cfg().get("accounts") or {}).items()),
             "",
             "trades.csv          every closed paper trade, one row each (mfe_r / mae_r: how far it went for /",
@@ -1383,7 +1384,8 @@ def agents():
         _accs = _paper_cfg().get("accounts", {})
     except Exception:
         _accs = {}
-    vers = {acc: (_accs.get(acc, {}).get("scanner_version") or "v3") for acc in ("CRYPTO", "INDIA", "FNO", "US", "USFNO")}
+    import paper
+    vers = {acc: (_accs.get(acc, {}).get("scanner_version") or paper.DEFAULT_SCANNER) for acc in ("CRYPTO", "INDIA", "FNO", "US", "USFNO")}
     for n, key, name, skill in AGENTS:
         if n == 1:   # the Scanner's version per account (Settings > Risk limits; v2 = the rollback)
             u = sorted(set(vers.values()))

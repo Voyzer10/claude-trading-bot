@@ -949,15 +949,23 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
       {show("accounts") && (
       <div className="accounts" style={{ marginBottom: part === "accounts" ? 0 : 14 }}>
         {Object.entries(accounts).map(([name, a]) => {
-          const d = a.cash - a.start_capital;
+          // equity, not cash: an open trade's margin / cost leaves the cash while it is open, so cash alone made
+          // every open trade look like a loss. Open trades count at their live P&L when the runner has priced them.
+          const mine = open.filter((p) => acctOf(p.market) === name);
+          const held = mine.reduce((s, p) => s + investedOf(p) + (p.open_pnl ?? 0), 0);
+          const equity = a.cash + held;
+          const d = Math.round((equity - a.start_capital) * 100) / 100;
           const cur = currencyOf(name);
           return (
             <div key={name} className="stat">
               <span className="label">{ACCOUNT_LABEL[name] ?? name}</span>
-              <span className="value" style={{ fontSize: 19 }}>{money(a.cash, cur)}</span>
+              <span className="value" style={{ fontSize: 19 }}>{money(equity, cur)}</span>
               <span className={`sub ${d > 0 ? "pos" : d < 0 ? "neg" : ""}`}>
                 {d === 0 ? "untouched" : `${d > 0 ? "+" : ""}${money(d, cur)} on ${money(a.start_capital, cur)}`}
               </span>
+              {mine.length > 0 && (
+                <span className="sub">cash {money(a.cash, cur)} · {mine.length} open ({money(held, cur)})</span>
+              )}
             </div>
           );
         })}
