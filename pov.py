@@ -79,7 +79,7 @@ def pov_of(rows):
         # higher timeframes: no day rule (owner: the old no-cancel rules on 1h / 4h / D / W / M); the 2-candle swings
         # and gap BOS of before 19 Nov (the display stays as it was; the 19 Nov BOS rules are for the 5-minute trades)
         seq = V4.sequence(rows, lambda t: t.date(), intraday=False, day_carry=False, swing_k=2, bos_gap_skip=False,
-                          structure_bos=False)
+                          structure_bos=False, bos_rule="swings")
     except Exception as e:
         return {"pov": None, "why": "error: %s" % e}
     if not seq:

@@ -141,6 +141,9 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             # structure_bos (owner's BOS concept PDF, 20 Nov 2026): BOS only with the trend (HH + HL for a buy, LH + LL for
             #   a sell), swings of 3 candles each side
             "structure_bos": True,
+            # bos_rule "legs" (owner, 20 Nov 2026): the swings are the trend's legs (see legs()); "swings" = the k-candle
+            #   swings above
+            "bos_rule": "legs",
             # the latest-BOS rule (owner, 14 Nov 2026): see _latest(); max_open = trades open at once on one chart
             "latest_bos": True, "max_open": 2}
 
@@ -377,7 +380,15 @@ class _Side:
             self.setups = [st for st in self.setups if all(st is not g for g in gone)]
         open_candle = bool(p.get("skip_open_bos") and p.get("_intraday") and self.day is not None
                            and (j == 0 or self.day[j] != self.day[j - 1]))
-        if ctx.bull[j] and ctx.sh_known[j - 1] and not open_candle:
+        if p.get("bos_rule") == "legs":
+            ev = getattr(ctx, "legs", {}).get(j)
+            if ev and not open_candle and not (p.get("bos_gap_skip") and b[j][1] > ev[0]):
+                st = {"bos": j, "level": ev[0], "origin": ev[1], "sweep": None, "used": False,
+                      "day": self.day[j] if self.day is not None else None}
+                self.setups.append(st)
+                self.waiting.append(st)
+                self.bos_hist.append((j, st["origin"]))
+        elif ctx.bull[j] and ctx.sh_known[j - 1] and not open_candle:
             ok, _ = bos_quality(b, ctx, j, p)
             if ok:
                 sh_i, sh_px = ctx.sh_known[j - 1][-1]
@@ -606,11 +617,84 @@ def _fill(bars, day, t, intraday):
     return o, None
 
 
+def legs(rows):
+    """The owner's market structure (20 Nov 2026): swings come from the trend's own legs, not from a candle count.
+
+    Uptrend: the swing high is the top of the current leg (it rises with the price until a pullback starts: a
+    candle with a lower low; one candle is enough). The pullback low is the lowest low after that top. A close above
+    the swing high is a bullish BOS; its origin (the Higher Low) is that pullback low, which becomes the protected
+    low; the next leg starts. A close below the protected low is a bearish CHoCH: the trend turns down (no setup);
+    the downtrend's first BOS is a close below its first leg's low. The downtrend mirrors all of it. Before the
+    first break the range's high / low are the swings.
+
+    Returns {candle j: ("long" | "short", broken level, origin, origin candle)} for every BOS (not the CHoCH)."""
+    out, n = {}, len(rows)
+    if n < 3:
+        return out
+    trend = None
+    hi, hi_i, lo, lo_i = rows[0][2], 0, rows[0][3], 0            # the current leg's extreme / the range
+    pb, pb_i, pulling = None, None, False                         # the pullback extreme since that extreme
+    prot = None                                                    # the protected HL (uptrend) / LH (downtrend)
+    for j in range(1, n):
+        o, h, l, c = rows[j][1], rows[j][2], rows[j][3], rows[j][4]
+        if trend is None:
+            if c > hi:
+                trend, prot, pulling = "up", lo, False
+                hi, hi_i = h, j
+            elif c < lo:
+                trend, prot, pulling = "down", hi, False
+                lo, lo_i = l, j
+            else:
+                if h > hi:
+                    hi, hi_i = h, j
+                if l < lo:
+                    lo, lo_i = l, j
+            continue
+        if trend == "up":
+            if c < prot:                                   # CHoCH: the trend turns down, no setup; the leg's top
+                trend, prot, pulling = "down", hi, False   # is the high that protects the downtrend
+                lo, lo_i = l, j
+                continue
+            if pulling and c > hi:                         # BOS: the close is above the leg's top after a pullback
+                out[j] = ("long", hi, pb, pb_i)
+                prot, pulling = pb, False
+                hi, hi_i = h, j
+                continue
+            if not pulling:
+                if h > hi:
+                    hi, hi_i = h, j
+                if l < rows[j - 1][3] and j > hi_i:          # a lower low after the top: the pullback starts
+                    pulling, pb, pb_i = True, l, j
+            elif l < pb:                                   # (a wick above the top without a close keeps the level)
+                pb, pb_i = l, j
+        else:
+            if c > prot:                                   # CHoCH up
+                trend, prot, pulling = "up", lo, False
+                hi, hi_i = h, j
+                continue
+            if pulling and c < lo:                         # bearish BOS
+                out[j] = ("short", lo, pb, pb_i)
+                prot, pulling = pb, False
+                lo, lo_i = l, j
+                continue
+            if not pulling:
+                if l < lo:
+                    lo, lo_i = l, j
+                if h > rows[j - 1][2] and j > lo_i:          # a higher high after the bottom: the pullback starts
+                    pulling, pb, pb_i = True, h, j
+            elif h > pb:
+                pb, pb_i = h, j
+    return out
+
+
 def contexts(rows, day_of, htf=True, k=2):
     """Everything sequence() needs that does not depend on the settings (but the swing size k): build once per
     chart, pass as ctxs=."""
     m = mirror(rows)
     cl, cs = PB.Context(rows, day_of, k=k), PB.Context(m, day_of, k=k)
+    lg = legs(rows)                                       # the owner's leg structure, in src terms per side
+    cl.legs = {j: (lv, og, oi) for j, (sd, lv, og, oi) in lg.items() if sd == "long"}
+    cs.legs = {j: (-lv, -og, oi) for j, (sd, lv, og, oi) in lg.items() if sd == "short"}
     return {"rows": rows, "mirror": m, "ctx": (cl, cs), "day": [day_of(r[0]) for r in rows], "k": k,
             "htf": (htf_dirs(rows, day_of), htf_dirs(m, day_of)) if htf else (None, None)}
 

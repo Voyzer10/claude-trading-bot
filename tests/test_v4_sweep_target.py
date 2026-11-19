@@ -61,7 +61,7 @@ if __name__ == "__main__":
         return out
 
     def bos_of(rows, **kw):
-        p = dict(V4.DEFAULTS, **kw)
+        p = dict(V4.DEFAULTS, **dict({"bos_rule": "swings"}, **kw))   # the 3-candle structure swings (20 Nov, early)
         cx = V4.contexts(rows, day_of, k=p["swing_k"])
         L = V4._Side(rows, cx["ctx"][0], None, p, None)
         S = V4._Side(cx["mirror"], cx["ctx"][1], None, p, None)
@@ -78,6 +78,13 @@ if __name__ == "__main__":
           bos_of(up, structure_bos=False))
     dn = zig([110, 107, 109, 106, 108, 104, 106.5, 102, 104, 101])
     check("   in a downtrend: sell BOS only", bos_of(dn) == ([], [22, 32, 43]), bos_of(dn))
+    ul = V4.legs(zig([100, 102, 100.5, 103, 101, 104, 102, 106, 103.5, 101, 102.5, 100]))
+    check("legs (owner, 20 Nov): BOS above each leg's top after a pullback, origin = the pullback low; the close below "
+          "the Higher Low is a CHoCH (no setup); the downtrend's first BOS breaks its first leg's low, origin = the "
+          "Lower High", [(j, sd) for j, (sd, lv, og, oi) in sorted(ul.items())] == [(13, "long"), (23, "long"),
+          (32, "long"), (53, "short")] and abs(ul[23][2] - 100.95) < 1e-6 and abs(ul[53][2] - 102.55) < 1e-6, ul)
+    check("defaults (20 Nov): the leg structure makes the BOS", V4.DEFAULTS["bos_rule"] == "legs")
+    V4.DEFAULTS.update(bos_rule="swings")
     V4.DEFAULTS.update(swing_k=2, bos_gap_skip=False, structure_bos=False)   # the checks below: 2-candle swings
     check("defaults (18 Nov): the newest BOS is taken and the latest signal candle decides; replace stays off",
           V4.DEFAULTS["bos_pick"] == "newest" and V4.DEFAULTS["latest_signal"] is True
