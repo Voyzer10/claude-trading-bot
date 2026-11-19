@@ -132,8 +132,9 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             #   session's first candle) does not make a BOS; the break has to happen inside the candle
             "bos_gap_skip": True,
             # signal_on_sweep (owner, 19 Nov 2026, HLT): the sweep candle itself may be the signal candle (a hammer /
-            #   doji that closed beyond the level); the next 1-2 candles' break and close of it is the entry
-            "signal_on_sweep": True,
+            #   doji that closed beyond the level); the next 1-2 candles' break and close of it is the entry.
+            #   Backtest 19 Nov (Nifty 50 primaries, out-of-sample): +29 trades at about -0.8R each: off (owner's call)
+            "signal_on_sweep": False,
             # the latest-BOS rule (owner, 14 Nov 2026): see _latest(); max_open = trades open at once on one chart
             "latest_bos": True, "max_open": 2}
 
