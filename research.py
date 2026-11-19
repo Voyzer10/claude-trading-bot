@@ -51,9 +51,20 @@ UTC = timezone.utc
 
 # ------------------------------------------------------------------ data
 
+LONG = os.path.join(OUT, "long")      # broker history from research_data.py (owner, 19 Nov 2026)
+USE_LONG = False                      # --long: only those files, no Yahoo
+
+
 def fetch(sym, suffix, interval, workers_note=""):
+    name = "%s%s_%s.json" % (sym.replace("^", "_"), suffix, interval)
+    if USE_LONG:
+        path = os.path.join(LONG, name)
+        if not os.path.exists(path):
+            return None
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
     os.makedirs(CACHE, exist_ok=True)
-    path = os.path.join(CACHE, "%s%s_%s.json" % (sym.replace("^", "_"), suffix, interval))
+    path = os.path.join(CACHE, name)
     if os.path.exists(path) and (datetime.now().timestamp() - os.path.getmtime(path)) < 12 * 3600:
         with open(path, encoding="utf-8") as fh:
             return json.load(fh)
@@ -622,12 +633,16 @@ def main(argv=None):
     p = argparse.ArgumentParser(description="Walk-forward backtest of the breakout rules. Not financial advice.")
     p.add_argument("mode", choices=["nse", "nse-v2", "crypto", "crypto-short", "crypto-mr", "crypto-5m", "crypto-live", "crypto-v4", "crypto-v4-5m", "crypto-v4-short", "crypto-smc", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-abcd", "crypto-abcd-5m", "nse-abcd", "us-abcd", "us-orb", "crypto-v3", "crypto-v3-5m", "nse-v3", "us-v3", "crypto-sv4", "crypto-sv4-5m", "nse-sv4", "us-sv4", "us-tm", "nse-tm", "crypto-tm", "crypto-tm-5m", "fno", "fno-sv4", "bnf-sv4", "nifty-sv4", "usopt-sv4", "crypto-sv5", "crypto-sv5-5m", "us-sv5", "nse-sv5", "gold-sv5"])
     p.add_argument("--limit", type=int, default=0)
+    p.add_argument("--long", action="store_true", help="backtest on the broker history of research_data.py "
+                   "(trader/research/long/) instead of Yahoo's 60 days")
     p.add_argument("--workers", type=int, default=6)
     p.add_argument("--top", type=int, default=10)
     p.add_argument("--universe", help="crypto: a symbols file instead of trader/universe_crypto.txt "
                                       "(e.g. trader/universe_crypto_wide.txt)")
     p.add_argument("--max-per-day", type=int, default=0, help="0 = every qualifying trade (best for comparing filters)")
     a = p.parse_args(argv)
+    global USE_LONG
+    USE_LONG = a.long
     os.makedirs(OUT, exist_ok=True)
 
     if a.mode == "fno":
