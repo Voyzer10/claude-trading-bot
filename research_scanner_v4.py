@@ -50,6 +50,7 @@ FILTERS = {"all": {}, "with_weak_bos": {"bos_body_atr": 0.8, "bos_vol_x": 1.2},
            "swing_k5": {"swing_k": 5},
            "bos_gap_skip": {"bos_gap_skip": True},
            "swing_k2_19nov": {"swing_k": 2, "bos_gap_skip": False},
+           "no_signal_on_sweep": {"signal_on_sweep": False},
            # the Trade Manager (PYTH, 19 Nov: +0.91R given back, the breakeven move waits for +1R)
            "tm_be_05": {"tm_be_r": 0.5},
            "tm_be_075": {"tm_be_r": 0.75},

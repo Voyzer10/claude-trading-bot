@@ -77,7 +77,10 @@ if __name__ == "__main__":
           p1.get("entry") == UP1[0] and p1.get("signal_close") == TRIG[3] and 99.3 < p1.get("stop", 0) < 99.5
           and p1.get("target") == 103.0 and p1.get("exit_reason") == "target", p1)
     check("2. a wick below the old low (close back above) is not a sweep: no trade",
-          not longs(build([WICK, INV, TRIG, UP1, TP])))
+          not longs(build([WICK, INV, TRIG, UP1, TP]), signal_on_sweep=False))
+    w2 = longs(build([WICK, INV, TRIG, UP1, TP]))
+    check("   (19 Nov, signal_on_sweep) the inverted hammer after it closes under 99.8: it is the sweep AND the signal",
+          len(w2) == 1 and w2[0]["sweep"] == w2[0]["signal"] == 46, w2)
     check("3. a hammer at the low is not a BUY signal", not longs(build([SWEEP, HAMMER, TRIG, UP1, TP])))
     # hammer wick >= 1x the body (owner, 13 Nov 2026). The real QCOM 5m candle of 12 Nov 21:55 IST (o h l c):
     # a red candle at the top, lower wick 0.57 = 1.27x its 0.45 body -> a SELL hammer now (2x said no)
@@ -129,6 +132,13 @@ if __name__ == "__main__":
     check("5b. (owner, 19 Nov; off by default after its backtest) with sweep_max_atr 0.5 that sweep candle closed too "
           "far under the level: a breakout, no trade", not longs(deep, sweep_max_atr=0.5), longs(deep, sweep_max_atr=0.5))
     check("    by default (sweep_max_atr 0) it still trades", len(longs(deep)) == 1, longs(deep))
+    dsw = (99.76, 99.95, 99.55, 99.74)               # the sweep candle (closes under 99.8) is itself a long-legged doji
+    ssw = longs(build([dsw, TRIG, UP1, TP]))
+    check("    (owner, 19 Nov, HLT) the sweep candle is itself the signal: the next candle's close above its high is "
+          "the entry", len(ssw) == 1 and ssw[0]["signal"] == ssw[0]["sweep"] == 45 and ssw[0]["i"] == 46, ssw)
+    check("    with signal_on_sweep off: no trade from it", not longs(build([dsw, TRIG, UP1, TP]), signal_on_sweep=False))
+    check("    the signal right after the sweep still trades", [(t["sweep"], t["signal"]) for t in
+          longs(build([SWEEP, INV, TRIG, UP1, TP]))] == [(45, 46)])
     full_g = build([SWEEP, INV, TRIG, UP1, TP])
     gapped = full_g[:40] + [(full_g[40][0], 100.7, *full_g[40][2:])] + full_g[41:]   # the BOS candle opens above 100.6
     check("    (owner, 19 Nov, AWL) bos_gap_skip: a BOS candle that OPENS above the swing high makes no BOS",

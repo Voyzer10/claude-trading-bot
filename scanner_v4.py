@@ -131,6 +131,9 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             # bos_gap_skip (owner, 19 Nov 2026, AWL): a candle that OPENS beyond the swing (a gap through it, mostly the
             #   session's first candle) does not make a BOS; the break has to happen inside the candle
             "bos_gap_skip": True,
+            # signal_on_sweep (owner, 19 Nov 2026, HLT): the sweep candle itself may be the signal candle (a hammer /
+            #   doji that closed beyond the level); the next 1-2 candles' break and close of it is the entry
+            "signal_on_sweep": True,
             # the latest-BOS rule (owner, 14 Nov 2026): see _latest(); max_open = trades open at once on one chart
             "latest_bos": True, "max_open": 2}
 
@@ -387,7 +390,8 @@ class _Side:
             liq = _targets(ctx, b, j, c)          # the swing-high liquidity, the same for every setup
             self.setups = [st for st in self.setups if not st["used"]]
             for st in self.setups:              # oldest BOS first
-                if st["used"] or st["sweep"] is None or st["sweep"] >= s:
+                # the signal candle comes after the sweep, or (signal_on_sweep) IS the sweep candle
+                if st["used"] or st["sweep"] is None or st["sweep"] > s or (st["sweep"] == s and not p.get("signal_on_sweep")):
                     continue
                 t = self._trade(st, s, j, a, liq)
                 if not t:
