@@ -127,7 +127,7 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             # swing_k (owner, 19 Nov 2026, GILLETTE / AZAD BOS): a swing is the highest high / lowest low of swing_k
             #   candles on each side; 2 makes every small edge inside a range a swing, so a 1-point poke is a BOS.
             #   Backtest 19 Nov (Nifty 50, out-of-sample): k=4 -0.31R a trade on 1,282 trades vs -0.35R on 2,054: on
-            "swing_k": 4,
+            "swing_k": 3,                 # owner's PDF, 20 Nov 2026: three candles on each side on 5-minute charts
             # bos_gap_skip (owner, 19 Nov 2026, AWL): a candle that OPENS beyond the swing (a gap through it, mostly the
             #   session's first candle) does not make a BOS; the break has to happen inside the candle
             "bos_gap_skip": True,
@@ -138,6 +138,9 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             # carry_swept (owner, 19 Nov 2026, Bank Nifty 18-19 Nov): a previous day's BOS swept that same day and not
             #   traded stays for the next day; its signal candle and break-and-close may come the next morning
             "carry_swept": True,
+            # structure_bos (owner's BOS concept PDF, 20 Nov 2026): BOS only with the trend (HH + HL for a buy, LH + LL for
+            #   a sell), swings of 3 candles each side
+            "structure_bos": True,
             # the latest-BOS rule (owner, 14 Nov 2026): see _latest(); max_open = trades open at once on one chart
             "latest_bos": True, "max_open": 2}
 
@@ -380,6 +383,17 @@ class _Side:
                 sh_i, sh_px = ctx.sh_known[j - 1][-1]
                 if p.get("bos_gap_skip") and b[j][1] > sh_px:
                     ok = False                    # opened above the swing high: a gap, not a break (AWL, 19 Nov)
+            if ok and p.get("structure_bos"):
+                # (owner's BOS concept, 20 Nov 2026) a BOS only in the direction of the 5-minute structure: the swing
+                # high being broken is a Higher High, the latest swing low a Higher Low formed after it (the pullback).
+                # A close beyond a swing against the trend is a CHoCH, not a BOS: the trend only flips once the new
+                # swings form (LH + LL), and the first setup is the new trend's first BOS.
+                # The pullback low since that high (the Higher Low being formed) need not be a confirmed swing yet: it
+                # is the lowest low after the high, and it must stay above the last swing low before the high.
+                shs, sls = ctx.sh_known[j - 1], ctx.sl_known[j - 1]
+                before = [x for x in sls if x[0] < shs[-1][0]] if shs else []
+                ok = (len(shs) >= 2 and shs[-1][1] > shs[-2][1] and bool(before) and shs[-1][0] + 1 <= j - 1
+                      and self.lows.q(shs[-1][0] + 1, j - 1) > before[-1][1])
             if ok:
                 st = {"bos": j, "level": sh_px, "origin": self.lows.q(sh_i, j), "sweep": None, "used": False,
                       "day": self.day[j] if self.day is not None else None}

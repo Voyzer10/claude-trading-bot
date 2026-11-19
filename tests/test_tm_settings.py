@@ -27,6 +27,7 @@ def check(name, ok, extra=""):
 
 if __name__ == "__main__":
     import scanner_v4 as V4
+    V4.DEFAULTS.update(structure_bos=False)   # mechanics on hand-built / random charts (the 20 Nov BOS is in test_v4_sweep_target)
     d = dict(V4.DEFAULTS)
     check("1. defaults = the owner's rule: +1R -> entry, +2R -> +1R, +3R -> +2R; no lock / reversal / stale exit",
           [V4.trail_lock_r(g, d) for g in (0.9, 1.0, 1.99, 2.0, 3.4)] == [None, 0.0, 0.0, 1.0, 2.0]

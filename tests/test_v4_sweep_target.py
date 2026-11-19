@@ -49,9 +49,36 @@ if __name__ == "__main__":
     check("defaults: sweep only from the BOS start, target from the opposite BOS with the big-swing cap",
           V4.DEFAULTS["sweep_post_bos"] is False and V4.DEFAULTS["target_rule"] == "opp_bos_cap")
     check("defaults (19 Nov): BOS on 4-candle swings, a gap is no BOS and no sweep, no sweep-distance limit",
-          V4.DEFAULTS["swing_k"] == 4 and V4.DEFAULTS["bos_gap_skip"] is True and V4.DEFAULTS["gap_cancel"] is True
+          V4.DEFAULTS["swing_k"] == 3 and V4.DEFAULTS["structure_bos"] is True and V4.DEFAULTS["bos_gap_skip"] is True and V4.DEFAULTS["gap_cancel"] is True
           and not V4.DEFAULTS["sweep_max_atr"] and V4.DEFAULTS["signal_on_sweep"] is False and V4.DEFAULTS["carry_swept"] is True)
-    V4.DEFAULTS.update(swing_k=2, bos_gap_skip=False)   # the checks below use 2-candle swings
+    # the owner's BOS concept (20 Nov): BOS only with the structure (HH + HL / LH + LL); a break against it is a CHoCH
+    def zig(pts, n=5):
+        out, prev, t0 = [], pts[0], datetime(2026, 11, 16, 4, 0, tzinfo=timezone.utc)
+        cl = [a + (b - a) * (k + 1) / n for a, b in zip(pts, pts[1:]) for k in range(n)]
+        for i, c in enumerate(cl):
+            out.append((t0 + timedelta(minutes=5 * i), prev, max(prev, c) + 0.05, min(prev, c) - 0.05, c, 1000))
+            prev = c
+        return out
+
+    def bos_of(rows, **kw):
+        p = dict(V4.DEFAULTS, **kw)
+        cx = V4.contexts(rows, day_of, k=p["swing_k"])
+        L = V4._Side(rows, cx["ctx"][0], None, p, None)
+        S = V4._Side(cx["mirror"], cx["ctx"][1], None, p, None)
+        L.other, S.other = S, L
+        for k in range(10, len(rows)):
+            L.step(k)
+            S.step(k)
+        return [st["bos"] for st in L.setups], [st["bos"] for st in S.setups]
+
+    up = zig([100, 102, 100.5, 103, 101, 104, 102, 106, 103.5, 101])       # HH / HL, then a drop below the HL
+    check("structure BOS: in an uptrend the breaks of the Higher Highs are BOS; the drop below the Higher Low (a CHoCH) "
+          "is not a sell BOS", bos_of(up) == ([23, 32], []), bos_of(up))
+    check("   without structure_bos every break was a BOS, both sides", bos_of(up, structure_bos=False)[1] == [43],
+          bos_of(up, structure_bos=False))
+    dn = zig([110, 107, 109, 106, 108, 104, 106.5, 102, 104, 101])
+    check("   in a downtrend: sell BOS only", bos_of(dn) == ([], [22, 32, 43]), bos_of(dn))
+    V4.DEFAULTS.update(swing_k=2, bos_gap_skip=False, structure_bos=False)   # the checks below: 2-candle swings
     check("defaults (18 Nov): the newest BOS is taken and the latest signal candle decides; replace stays off",
           V4.DEFAULTS["bos_pick"] == "newest" and V4.DEFAULTS["latest_signal"] is True
           and V4.DEFAULTS["replace_newer"] is False and V4.DEFAULTS["skip_open_bos"] is False)

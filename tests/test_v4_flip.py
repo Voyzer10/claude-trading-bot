@@ -54,6 +54,7 @@ def day_of(t):
 
 if __name__ == "__main__":
     import scanner_v4 as V4
+    V4.DEFAULTS.update(structure_bos=False)   # mechanics on hand-built / random charts (the 20 Nov BOS is in test_v4_sweep_target)
 
     # ------------------------------------------------------------------ 1. engine
     flips, checked = 0, True
