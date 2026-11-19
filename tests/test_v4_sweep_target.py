@@ -48,6 +48,10 @@ if __name__ == "__main__":
     import scanner_v4 as V4
     check("defaults: sweep only from the BOS start, target from the opposite BOS with the big-swing cap",
           V4.DEFAULTS["sweep_post_bos"] is False and V4.DEFAULTS["target_rule"] == "opp_bos_cap")
+    check("defaults (19 Nov): BOS on 4-candle swings, a gap is no BOS and no sweep, no sweep-distance limit",
+          V4.DEFAULTS["swing_k"] == 4 and V4.DEFAULTS["bos_gap_skip"] is True and V4.DEFAULTS["gap_cancel"] is True
+          and not V4.DEFAULTS["sweep_max_atr"])
+    V4.DEFAULTS.update(swing_k=2, bos_gap_skip=False)   # the checks below use 2-candle swings
     check("defaults (18 Nov): the newest BOS is taken and the latest signal candle decides; replace stays off",
           V4.DEFAULTS["bos_pick"] == "newest" and V4.DEFAULTS["latest_signal"] is True
           and V4.DEFAULTS["replace_newer"] is False and V4.DEFAULTS["skip_open_bos"] is False)

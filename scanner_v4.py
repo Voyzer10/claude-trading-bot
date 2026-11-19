@@ -126,10 +126,11 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             "sweep_max_atr": 0,
             # swing_k (owner, 19 Nov 2026, GILLETTE / AZAD BOS): a swing is the highest high / lowest low of swing_k
             #   candles on each side; 2 makes every small edge inside a range a swing, so a 1-point poke is a BOS.
-            "swing_k": 2,
+            #   Backtest 19 Nov (Nifty 50, out-of-sample): k=4 -0.31R a trade on 1,282 trades vs -0.35R on 2,054: on
+            "swing_k": 4,
             # bos_gap_skip (owner, 19 Nov 2026, AWL): a candle that OPENS beyond the swing (a gap through it, mostly the
             #   session's first candle) does not make a BOS; the break has to happen inside the candle
-            "bos_gap_skip": False,
+            "bos_gap_skip": True,
             # the latest-BOS rule (owner, 14 Nov 2026): see _latest(); max_open = trades open at once on one chart
             "latest_bos": True, "max_open": 2}
 

@@ -13,6 +13,9 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import scanner_v4 as V4  # noqa: E402
+# these hand-built charts test the mechanics on 2-candle swings; the 19 Nov live defaults (swing_k 4, bos_gap_skip)
+# are checked in test_v4_sweep_target
+V4.DEFAULTS.update(swing_k=2, bos_gap_skip=False)
 import smc_playbook as PB  # noqa: E402
 
 FAILS = []
