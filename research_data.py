@@ -74,8 +74,11 @@ def kite_login():
     if not K.configured():
         sys.exit("KITE_API_KEY / KITE_API_SECRET are not set (environment or .env)")
     print("1. Open this link and log in to Zerodha:\n   %s" % K.login_url())
-    print("2. After the login the browser goes to your redirect URL; copy the request_token=... value from it.")
-    tok = input("request_token: ").strip()
+    print("2. After the login the browser goes to your redirect URL (the page may not open: that is fine);")
+    print("   paste that whole URL, or just its request_token value. A token works once, within a few minutes.")
+    tok = input("request_token (or the whole URL): ").strip()
+    if "request_token=" in tok:          # the whole redirect URL was pasted: take just the token
+        tok = urllib.parse.parse_qs(urllib.parse.urlsplit(tok).query).get("request_token", [""])[0]
     K.exchange(tok)
     print("Kite session saved (valid until ~6:00 IST tomorrow).")
 
