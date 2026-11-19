@@ -123,8 +123,14 @@ if __name__ == "__main__":
     s5 = longs(deep, sweep_max_atr=0)         # (the sweep candle closes 0.7 under the level: rule B below)
     check("5. the trigger close may stay below the swept low (99.6 < 99.8): still a BUY",
           len(s5) == 1 and s5[0]["signal_close"] == 99.6, s5)
-    check("5b. (owner, 19 Nov) that sweep candle closed too far under the level (more than 0.5 ATR): a breakout, "
-          "no trade", not longs(deep), longs(deep))
+    check("5b. (owner, 19 Nov; off by default after its backtest) with sweep_max_atr 0.5 that sweep candle closed too "
+          "far under the level: a breakout, no trade", not longs(deep, sweep_max_atr=0.5), longs(deep, sweep_max_atr=0.5))
+    check("    by default (sweep_max_atr 0) it still trades", len(longs(deep)) == 1, longs(deep))
+    full_g = build([SWEEP, INV, TRIG, UP1, TP])
+    gapped = full_g[:40] + [(full_g[40][0], 100.7, *full_g[40][2:])] + full_g[41:]   # the BOS candle opens above 100.6
+    check("    (owner, 19 Nov, AWL) bos_gap_skip: a BOS candle that OPENS above the swing high makes no BOS",
+          not [t for t in longs(gapped, bos_gap_skip=True) if t["bos"] == 40]
+          and [t["bos"] for t in longs(gapped)] == [40], (longs(gapped, bos_gap_skip=True), longs(gapped)))
     s6 = longs(build([(100.6, 100.7, 99.7, 99.75), (99.5, 99.85, 99.4, 99.55), (99.55, 100.0, 99.5, 99.95), UP1, TP]))
     check("6. the signal's low (99.4) under the sweep candle's low (99.7): stop below the signal low",
           len(s6) == 1 and 99.2 < s6[0]["stop"] < 99.4, s6)

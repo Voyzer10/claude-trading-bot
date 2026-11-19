@@ -122,7 +122,14 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             "gap_cancel": True,
             # sweep_max_atr (owner, 19 Nov 2026): a sweep's close may be at most this many ATRs beyond the level; a
             #   close further beyond is a breakout and cancels the setup (also for the sweep shift). 0 = no limit
-            "sweep_max_atr": 0.5,
+            #   Backtest 19 Nov (Nifty 50, out-of-sample): 0.5 ATR -0.40R a trade vs -0.32R without: off (owner's call)
+            "sweep_max_atr": 0,
+            # swing_k (owner, 19 Nov 2026, GILLETTE / AZAD BOS): a swing is the highest high / lowest low of swing_k
+            #   candles on each side; 2 makes every small edge inside a range a swing, so a 1-point poke is a BOS.
+            "swing_k": 2,
+            # bos_gap_skip (owner, 19 Nov 2026, AWL): a candle that OPENS beyond the swing (a gap through it, mostly the
+            #   session's first candle) does not make a BOS; the break has to happen inside the candle
+            "bos_gap_skip": False,
             # the latest-BOS rule (owner, 14 Nov 2026): see _latest(); max_open = trades open at once on one chart
             "latest_bos": True, "max_open": 2}
 
@@ -357,6 +364,9 @@ class _Side:
             ok, _ = bos_quality(b, ctx, j, p)
             if ok:
                 sh_i, sh_px = ctx.sh_known[j - 1][-1]
+                if p.get("bos_gap_skip") and b[j][1] > sh_px:
+                    ok = False                    # opened above the swing high: a gap, not a break (AWL, 19 Nov)
+            if ok:
                 st = {"bos": j, "level": sh_px, "origin": self.lows.q(sh_i, j), "sweep": None, "used": False,
                       "day": self.day[j] if self.day is not None else None}
                 self.setups.append(st)
@@ -563,11 +573,12 @@ def _fill(bars, day, t, intraday):
     return o, None
 
 
-def contexts(rows, day_of, htf=True):
-    """Everything sequence() needs that does not depend on the settings: build once per chart, pass as ctxs=."""
+def contexts(rows, day_of, htf=True, k=2):
+    """Everything sequence() needs that does not depend on the settings (but the swing size k): build once per
+    chart, pass as ctxs=."""
     m = mirror(rows)
-    cl, cs = PB.Context(rows, day_of), PB.Context(m, day_of)
-    return {"rows": rows, "mirror": m, "ctx": (cl, cs), "day": [day_of(r[0]) for r in rows],
+    cl, cs = PB.Context(rows, day_of, k=k), PB.Context(m, day_of, k=k)
+    return {"rows": rows, "mirror": m, "ctx": (cl, cs), "day": [day_of(r[0]) for r in rows], "k": k,
             "htf": (htf_dirs(rows, day_of), htf_dirs(m, day_of)) if htf else (None, None)}
 
 
@@ -577,7 +588,8 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
     (entry = that candle's close; live, the paper trade fills at the current price)."""
     p = dict(DEFAULTS, **kw)
     p["_intraday"] = intraday
-    cx = ctxs or contexts(rows, day_of, bool(p.get("htf")))
+    k = int(p.get("swing_k") or 2)
+    cx = ctxs if ctxs and ctxs.get("k", 2) == k else contexts(rows, day_of, bool(p.get("htf")), k=k)
     srcs = (rows, cx["mirror"])
     carry_day = None
     if p.get("day_carry", True):
