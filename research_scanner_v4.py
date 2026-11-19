@@ -52,6 +52,8 @@ FILTERS = {"all": {}, "with_weak_bos": {"bos_body_atr": 0.8, "bos_vol_x": 1.2},
            "swing_k2_19nov": {"swing_k": 2, "bos_gap_skip": False},
            "no_signal_on_sweep": {"signal_on_sweep": False},
            "no_carry_swept": {"carry_swept": False},
+           "short_only": {"only_side": "short"},
+           "long_only": {"only_side": "long"},
            # round 1 of the rules work (owner, 19 Nov 2026): the target, with and without the Trade Manager
            "tgt_fixed_15r": {"target_rule": "fixed_r", "target_r": 1.5},
            "tgt_fixed_2r": {"target_rule": "fixed_r", "target_r": 2.0},
@@ -145,13 +147,16 @@ def events_v4(data, day_of, cost_fn, intraday=False, max_hold=48, entry_ok=None,
 PASS_R = 0.15        # the owner's bar (19 Nov 2026): out-of-sample, before costs, primaries only
 
 
-def rules_table(events, split, min_rr=0.0):
+def rules_table(events, split, min_rr=None):
     """The owner's view of a rule (19 Nov 2026): out-of-sample primaries, BEFORE costs: how often the target, the
     stop or something else ended the trade, and the average R. A rule passes at >= PASS_R a trade."""
     out = ["RULES TABLE (out-of-sample, primary trades, BEFORE costs; pass = avg >= %+.2fR):" % PASS_R,
-           "  %-22s %6s %7s %7s %7s %8s %8s" % ("setting", "trades", "TP hit", "SL hit", "other", "avg R", "after c.")]
-    for fname in FILTERS:
-        es = [e for e in events if e["filters"] == fname and e["kind"] == "primary" and e["min_rr"] == min_rr
+           "  %-28s %6s %7s %7s %7s %8s %8s %9s" % ("setting", "trades", "TP hit", "SL hit", "other", "avg R",
+                                                   "after c.", "in-sample")]
+    for rr_, fname in sorted({(rr_, f) for rr_, f in VARIANTS}, key=lambda x: (x[1] != "all", x[1], x[0])):
+        if min_rr is not None and rr_ != min_rr:
+            continue
+        es = [e for e in events if e["filters"] == fname and e["kind"] == "primary" and e["min_rr"] == rr_
               and e["day"] >= split]
         if not es:
             continue
@@ -160,9 +165,12 @@ def rules_table(events, split, min_rr=0.0):
         sl = sum(1 for e in es if e["exit_reason"] in ("stop", "stop (gapped past it)"))
         g = sum(e["r_gross"] for e in es) / n
         net = sum(e["r"] for e in es) / n
-        out.append("  %-22s %6d %6.0f%% %6.0f%% %6.0f%% %+7.2fR %+7.2fR%s" % (
-            fname, n, 100.0 * tp / n, 100.0 * sl / n, 100.0 * (n - tp - sl) / n, g, net,
-            "  PASS" if g >= PASS_R and n >= 300 else ""))
+        ins = [e["r_gross"] for e in events if e["filters"] == fname and e["kind"] == "primary" and e["min_rr"] == rr_
+               and e["day"] < split]
+        gi = sum(ins) / len(ins) if ins else 0.0
+        out.append("  %-28s %6d %6.0f%% %6.0f%% %6.0f%% %+7.2fR %+7.2fR %+8.2fR%s" % (
+            fname + (" rr>=%g" % rr_ if rr_ else ""), n, 100.0 * tp / n, 100.0 * sl / n, 100.0 * (n - tp - sl) / n, g, net,
+            gi, "  PASS" if g >= PASS_R and gi >= PASS_R and n >= 300 else ""))
     return "\n".join(out)
 
 

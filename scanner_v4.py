@@ -630,6 +630,8 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
                 still.append(tr)
         opens = still
         cands = [(s, sides[s].step(k)) for s in (0, 1)]
+        if p.get("only_side") in ("long", "short"):       # research: trade one side only (both still tracked)
+            cands = [(s, c if (s == 0) == (p["only_side"] == "long") else None) for s, c in cands]
         if opens:
             if p.get("replace_newer"):
                 extra, how = _replace(opens, sides, srcs, day, k, intraday, p), "replace"
