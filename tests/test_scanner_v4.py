@@ -13,6 +13,9 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import scanner_v4 as V4  # noqa: E402
+# these hand-built charts test the mechanics on 2-candle swings; the 19 Nov live defaults (swing_k 4, bos_gap_skip)
+# are checked in test_v4_sweep_target
+V4.DEFAULTS.update(swing_k=2, bos_gap_skip=False)
 import smc_playbook as PB  # noqa: E402
 
 FAILS = []
@@ -75,6 +78,9 @@ if __name__ == "__main__":
           and p1.get("target") == 103.0 and p1.get("exit_reason") == "target", p1)
     check("2. a wick below the old low (close back above) is not a sweep: no trade",
           not longs(build([WICK, INV, TRIG, UP1, TP])))
+    w2 = longs(build([WICK, INV, TRIG, UP1, TP]), signal_on_sweep=True)
+    check("   (19 Nov, signal_on_sweep) the inverted hammer after it closes under 99.8: it is the sweep AND the signal",
+          len(w2) == 1 and w2[0]["sweep"] == w2[0]["signal"] == 46, w2)
     check("3. a hammer at the low is not a BUY signal", not longs(build([SWEEP, HAMMER, TRIG, UP1, TP])))
     # hammer wick >= 1x the body (owner, 13 Nov 2026). The real QCOM 5m candle of 12 Nov 21:55 IST (o h l c):
     # a red candle at the top, lower wick 0.57 = 1.27x its 0.45 body -> a SELL hammer now (2x said no)
@@ -120,9 +126,24 @@ if __name__ == "__main__":
     check("   but a later doji / inverted hammer gives a new chance (same sweep): BUY above its high",
           len(s4) == 1 and s4[0]["trigger_px"] == 100.25, s4)
     deep = build([(100.6, 100.7, 99.0, 99.1), (99.12, 99.5, 99.05, 99.18), (99.2, 99.7, 99.15, 99.6), UP1, TP])
-    s5 = longs(deep)
+    s5 = longs(deep, sweep_max_atr=0)         # (the sweep candle closes 0.7 under the level: rule B below)
     check("5. the trigger close may stay below the swept low (99.6 < 99.8): still a BUY",
           len(s5) == 1 and s5[0]["signal_close"] == 99.6, s5)
+    check("5b. (owner, 19 Nov; off by default after its backtest) with sweep_max_atr 0.5 that sweep candle closed too "
+          "far under the level: a breakout, no trade", not longs(deep, sweep_max_atr=0.5), longs(deep, sweep_max_atr=0.5))
+    check("    by default (sweep_max_atr 0) it still trades", len(longs(deep)) == 1, longs(deep))
+    dsw = (99.76, 99.95, 99.55, 99.74)               # the sweep candle (closes under 99.8) is itself a long-legged doji
+    ssw = longs(build([dsw, TRIG, UP1, TP]), signal_on_sweep=True)
+    check("    (owner, 19 Nov, HLT) the sweep candle is itself the signal: the next candle's close above its high is "
+          "the entry", len(ssw) == 1 and ssw[0]["signal"] == ssw[0]["sweep"] == 45 and ssw[0]["i"] == 46, ssw)
+    check("    with signal_on_sweep off (the default after its backtest): no trade from it", not longs(build([dsw, TRIG, UP1, TP])))
+    check("    the signal right after the sweep still trades", [(t["sweep"], t["signal"]) for t in
+          longs(build([SWEEP, INV, TRIG, UP1, TP]))] == [(45, 46)])
+    full_g = build([SWEEP, INV, TRIG, UP1, TP])
+    gapped = full_g[:40] + [(full_g[40][0], 100.7, *full_g[40][2:])] + full_g[41:]   # the BOS candle opens above 100.6
+    check("    (owner, 19 Nov, AWL) bos_gap_skip: a BOS candle that OPENS above the swing high makes no BOS",
+          not [t for t in longs(gapped, bos_gap_skip=True) if t["bos"] == 40]
+          and [t["bos"] for t in longs(gapped)] == [40], (longs(gapped, bos_gap_skip=True), longs(gapped)))
     s6 = longs(build([(100.6, 100.7, 99.7, 99.75), (99.5, 99.85, 99.4, 99.55), (99.55, 100.0, 99.5, 99.95), UP1, TP]))
     check("6. the signal's low (99.4) under the sweep candle's low (99.7): stop below the signal low",
           len(s6) == 1 and 99.2 < s6[0]["stop"] < 99.4, s6)
@@ -176,6 +197,12 @@ if __name__ == "__main__":
     utc3 = late + q4 + [(t5 + timedelta(minutes=5 * k), *bar, 100) for k, bar in enumerate([SWEEP, INV, TRIG, UP1, TP])]
     check("    crypto's day starts 00:00 UTC, not IST midnight (an IST day would still trade it here)",
           late[0][0].hour == 19 and not first(longs(utc3)), longs(utc3))
+    gap = (99.4, 99.75, 99.35, 99.7)                    # the day OPENS below the 99.8 BOS start (closes back near it)
+    dg = next_days(build([]), [[gap, INV, TRIG, UP1, TP]])
+    check("    (owner, 19 Nov, GILLETTE / AZAD) the day opens beyond yesterday's BOS start: a gap, not a sweep; "
+          "the setup is cancelled", not first(longs(dg, intraday=True)), longs(dg, intraday=True))
+    check("    with gap_cancel off it would have traded", [t["kind"] for t in first(longs(dg, intraday=True,
+          gap_cancel=False))] == ["primary"], longs(dg, intraday=True, gap_cancel=False))
     swept = next_days(build([SWEEP]), [[INV, TRIG, UP1, TP]])
     check("    swept yesterday but not traded: gone today (intraday)", not first(longs(swept, intraday=True)),
           longs(swept, intraday=True))

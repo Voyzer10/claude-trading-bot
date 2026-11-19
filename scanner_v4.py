@@ -117,6 +117,24 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             #   BOS-start sweep, a later close below an older swing low that is beyond it (lower) moves the sweep there,
             #   so the stop sits under the sweep nearest the entry; a swing inside the move (above the origin) never sweeps
             "sweep_shift": True,
+            # gap_cancel (owner, 19 Nov 2026, GILLETTE / AZAD): a previous day's setup is cancelled when the session
+            #   opens beyond its BOS start (a gap through the level is not a sweep)
+            "gap_cancel": True,
+            # sweep_max_atr (owner, 19 Nov 2026): a sweep's close may be at most this many ATRs beyond the level; a
+            #   close further beyond is a breakout and cancels the setup (also for the sweep shift). 0 = no limit
+            #   Backtest 19 Nov (Nifty 50, out-of-sample): 0.5 ATR -0.40R a trade vs -0.32R without: off (owner's call)
+            "sweep_max_atr": 0,
+            # swing_k (owner, 19 Nov 2026, GILLETTE / AZAD BOS): a swing is the highest high / lowest low of swing_k
+            #   candles on each side; 2 makes every small edge inside a range a swing, so a 1-point poke is a BOS.
+            #   Backtest 19 Nov (Nifty 50, out-of-sample): k=4 -0.31R a trade on 1,282 trades vs -0.35R on 2,054: on
+            "swing_k": 4,
+            # bos_gap_skip (owner, 19 Nov 2026, AWL): a candle that OPENS beyond the swing (a gap through it, mostly the
+            #   session's first candle) does not make a BOS; the break has to happen inside the candle
+            "bos_gap_skip": True,
+            # signal_on_sweep (owner, 19 Nov 2026, HLT): the sweep candle itself may be the signal candle (a hammer /
+            #   doji that closed beyond the level); the next 1-2 candles' break and close of it is the entry.
+            #   Backtest 19 Nov (Nifty 50 primaries, out-of-sample): +29 trades at about -0.8R each: off (owner's call)
+            "signal_on_sweep": False,
             # the latest-BOS rule (owner, 14 Nov 2026): see _latest(); max_open = trades open at once on one chart
             "latest_bos": True, "max_open": 2}
 
@@ -309,9 +327,12 @@ class _Side:
             # has not happened stay active, for this day only; swept-but-untraded and older setups end
             prev = self.day[j - 1]
             keep = [st for st in self.setups if not st["used"] and st["sweep"] is None and st["day"] == prev]
+            if p.get("gap_cancel"):
+                keep = [st for st in keep if b[j][1] >= st["origin"]]   # opened beyond the BOS start: a gap, cancelled
             self.setups, self.waiting = keep, [st for st in keep]
         # sweeps first: a close below the setup's BOS-start low or a swing low confirmed after its BOS
-        still = []
+        still, gone = [], []
+        lim = (p.get("sweep_max_atr") or 0) * (ctx.atr[j] or 0)
         for st in self.waiting:
             if j <= st["bos"]:
                 still.append(st)
@@ -320,7 +341,11 @@ class _Side:
                                                    if idx > st["bos"]] if p.get("sweep_post_bos", True) else [])
             broken = [(nm, px) for nm, px in lv if c < px]
             if broken:
-                st["lvl_name"], st["lvl"] = max(broken, key=lambda x: x[1])
+                nm, px = max(broken, key=lambda x: x[1])
+                if lim and c < px - lim:
+                    gone.append(st)               # closed too far beyond the level: a breakout, not a sweep
+                    continue
+                st["lvl_name"], st["lvl"] = nm, px
                 st["sweep"] = j
             else:
                 still.append(st)
@@ -332,13 +357,21 @@ class _Side:
                     continue
                 deeper = [px for idx, px in ctx.sl_known[j - 1] if px < st["lvl"] and c < px]
                 if deeper:
+                    if lim and c < max(deeper) - lim:
+                        gone.append(st)           # broke through the deeper swing too: a breakout
+                        continue
                     st["lvl_name"], st["lvl"], st["sweep"] = "near_swing", max(deeper), j
+        if gone:
+            self.setups = [st for st in self.setups if all(st is not g for g in gone)]
         open_candle = bool(p.get("skip_open_bos") and p.get("_intraday") and self.day is not None
                            and (j == 0 or self.day[j] != self.day[j - 1]))
         if ctx.bull[j] and ctx.sh_known[j - 1] and not open_candle:
             ok, _ = bos_quality(b, ctx, j, p)
             if ok:
                 sh_i, sh_px = ctx.sh_known[j - 1][-1]
+                if p.get("bos_gap_skip") and b[j][1] > sh_px:
+                    ok = False                    # opened above the swing high: a gap, not a break (AWL, 19 Nov)
+            if ok:
                 st = {"bos": j, "level": sh_px, "origin": self.lows.q(sh_i, j), "sweep": None, "used": False,
                       "day": self.day[j] if self.day is not None else None}
                 self.setups.append(st)
@@ -358,7 +391,8 @@ class _Side:
             liq = _targets(ctx, b, j, c)          # the swing-high liquidity, the same for every setup
             self.setups = [st for st in self.setups if not st["used"]]
             for st in self.setups:              # oldest BOS first
-                if st["used"] or st["sweep"] is None or st["sweep"] >= s:
+                # the signal candle comes after the sweep, or (signal_on_sweep) IS the sweep candle
+                if st["used"] or st["sweep"] is None or st["sweep"] > s or (st["sweep"] == s and not p.get("signal_on_sweep")):
                     continue
                 t = self._trade(st, s, j, a, liq)
                 if not t:
@@ -545,11 +579,12 @@ def _fill(bars, day, t, intraday):
     return o, None
 
 
-def contexts(rows, day_of, htf=True):
-    """Everything sequence() needs that does not depend on the settings: build once per chart, pass as ctxs=."""
+def contexts(rows, day_of, htf=True, k=2):
+    """Everything sequence() needs that does not depend on the settings (but the swing size k): build once per
+    chart, pass as ctxs=."""
     m = mirror(rows)
-    cl, cs = PB.Context(rows, day_of), PB.Context(m, day_of)
-    return {"rows": rows, "mirror": m, "ctx": (cl, cs), "day": [day_of(r[0]) for r in rows],
+    cl, cs = PB.Context(rows, day_of, k=k), PB.Context(m, day_of, k=k)
+    return {"rows": rows, "mirror": m, "ctx": (cl, cs), "day": [day_of(r[0]) for r in rows], "k": k,
             "htf": (htf_dirs(rows, day_of), htf_dirs(m, day_of)) if htf else (None, None)}
 
 
@@ -559,7 +594,8 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
     (entry = that candle's close; live, the paper trade fills at the current price)."""
     p = dict(DEFAULTS, **kw)
     p["_intraday"] = intraday
-    cx = ctxs or contexts(rows, day_of, bool(p.get("htf")))
+    k = int(p.get("swing_k") or 2)
+    cx = ctxs if ctxs and ctxs.get("k", 2) == k else contexts(rows, day_of, bool(p.get("htf")), k=k)
     srcs = (rows, cx["mirror"])
     carry_day = None
     if p.get("day_carry", True):
