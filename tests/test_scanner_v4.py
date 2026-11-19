@@ -204,8 +204,13 @@ if __name__ == "__main__":
     check("    with gap_cancel off it would have traded", [t["kind"] for t in first(longs(dg, intraday=True,
           gap_cancel=False))] == ["primary"], longs(dg, intraday=True, gap_cancel=False))
     swept = next_days(build([SWEEP]), [[INV, TRIG, UP1, TP]])
-    check("    swept yesterday but not traded: gone today (intraday)", not first(longs(swept, intraday=True)),
-          longs(swept, intraday=True))
+    check("    swept yesterday but not traded: gone today with carry_swept off (intraday)",
+          not first(longs(swept, intraday=True, carry_swept=False)), longs(swept, intraday=True, carry_swept=False))
+    cs = first(longs(swept, intraday=True))
+    check("    (owner, 19 Nov, Bank Nifty) carry_swept: yesterday's BOS swept yesterday, today's signal candle and its "
+          "break and close: a BUY", [t["kind"] for t in cs] == ["primary"], longs(swept, intraday=True))
+    old2 = next_days(build([SWEEP]), [[(100.6, 100.7, 100.4, 100.5)] * 3, [INV, TRIG, UP1, TP]])
+    check("    a day later it is gone (one day only)", not first(longs(old2, intraday=True)), longs(old2, intraday=True))
 
     # 10. the v4 trailing stop: +1R -> the entry, +2R -> +1R
     risk = p1["entry"] - p1["stop"] if p1 else 0.7

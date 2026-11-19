@@ -135,6 +135,9 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             #   doji that closed beyond the level); the next 1-2 candles' break and close of it is the entry.
             #   Backtest 19 Nov (Nifty 50 primaries, out-of-sample): +29 trades at about -0.8R each: off (owner's call)
             "signal_on_sweep": False,
+            # carry_swept (owner, 19 Nov 2026, Bank Nifty 18-19 Nov): a previous day's BOS swept that same day and not
+            #   traded stays for the next day; its signal candle and break-and-close may come the next morning
+            "carry_swept": True,
             # the latest-BOS rule (owner, 14 Nov 2026): see _latest(); max_open = trades open at once on one chart
             "latest_bos": True, "max_open": 2}
 
@@ -329,7 +332,13 @@ class _Side:
             keep = [st for st in self.setups if not st["used"] and st["sweep"] is None and st["day"] == prev]
             if p.get("gap_cancel"):
                 keep = [st for st in keep if b[j][1] >= st["origin"]]   # opened beyond the BOS start: a gap, cancelled
-            self.setups, self.waiting = keep, [st for st in keep]
+            swept = []
+            if p.get("carry_swept"):
+                # (owner, 19 Nov 2026, Bank Nifty): a BOS of the previous day whose sweep also happened that day, not
+                # traded yet: its signal candle may come today (this day only)
+                swept = [st for st in self.setups if not st["used"] and st["sweep"] is not None and st["day"] == prev
+                         and self.day[st["sweep"]] == prev]
+            self.setups, self.waiting = keep + swept, [st for st in keep]
         # sweeps first: a close below the setup's BOS-start low or a swing low confirmed after its BOS
         still, gone = [], []
         lim = (p.get("sweep_max_atr") or 0) * (ctx.atr[j] or 0)

@@ -51,6 +51,7 @@ FILTERS = {"all": {}, "with_weak_bos": {"bos_body_atr": 0.8, "bos_vol_x": 1.2},
            "bos_gap_skip": {"bos_gap_skip": True},
            "swing_k2_19nov": {"swing_k": 2, "bos_gap_skip": False},
            "no_signal_on_sweep": {"signal_on_sweep": False},
+           "no_carry_swept": {"carry_swept": False},
            # round 1 of the rules work (owner, 19 Nov 2026): the target, with and without the Trade Manager
            "tgt_fixed_15r": {"target_rule": "fixed_r", "target_r": 1.5},
            "tgt_fixed_2r": {"target_rule": "fixed_r", "target_r": 2.0},
