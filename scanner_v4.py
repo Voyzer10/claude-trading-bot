@@ -925,13 +925,17 @@ def direction(pos):
 
 def _real(t, short):
     """src-terms trade -> normal prices and a side."""
+    st = t.get("setup") or {}
     t = {k: v for k, v in t.items() if k not in ("setup", "_zones", "cur_stop", "stop_kind", "_side")}
+    if st:                                                # the BOS behind the trade (charts / research)
+        t.setdefault("bos_level", st.get("level"))
+        t.setdefault("bos_origin", st.get("origin"))
     t["side"] = "short" if short else "long"
     if short and t.get("signal_pattern") in SHORT_NAME:   # mirrored back: a real dragonfly doji / hammer at the top
         t["signal_pattern"] = SHORT_NAME[t["signal_pattern"]]
     if short:
         for f in ("level", "extreme", "entry", "stop", "target", "trigger_px", "zone_top", "zone_bottom", "exit",
-                  "signal_close"):
+                  "signal_close", "bos_level", "bos_origin"):
             if t.get(f) is not None:
                 t[f] = -t[f]
         if t.get("zone_top") is not None:
