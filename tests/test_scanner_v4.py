@@ -120,9 +120,11 @@ if __name__ == "__main__":
     check("   but a later doji / inverted hammer gives a new chance (same sweep): BUY above its high",
           len(s4) == 1 and s4[0]["trigger_px"] == 100.25, s4)
     deep = build([(100.6, 100.7, 99.0, 99.1), (99.12, 99.5, 99.05, 99.18), (99.2, 99.7, 99.15, 99.6), UP1, TP])
-    s5 = longs(deep)
+    s5 = longs(deep, sweep_max_atr=0)         # (the sweep candle closes 0.7 under the level: rule B below)
     check("5. the trigger close may stay below the swept low (99.6 < 99.8): still a BUY",
           len(s5) == 1 and s5[0]["signal_close"] == 99.6, s5)
+    check("5b. (owner, 19 Nov) that sweep candle closed too far under the level (more than 0.5 ATR): a breakout, "
+          "no trade", not longs(deep), longs(deep))
     s6 = longs(build([(100.6, 100.7, 99.7, 99.75), (99.5, 99.85, 99.4, 99.55), (99.55, 100.0, 99.5, 99.95), UP1, TP]))
     check("6. the signal's low (99.4) under the sweep candle's low (99.7): stop below the signal low",
           len(s6) == 1 and 99.2 < s6[0]["stop"] < 99.4, s6)
@@ -176,6 +178,12 @@ if __name__ == "__main__":
     utc3 = late + q4 + [(t5 + timedelta(minutes=5 * k), *bar, 100) for k, bar in enumerate([SWEEP, INV, TRIG, UP1, TP])]
     check("    crypto's day starts 00:00 UTC, not IST midnight (an IST day would still trade it here)",
           late[0][0].hour == 19 and not first(longs(utc3)), longs(utc3))
+    gap = (99.4, 99.75, 99.35, 99.7)                    # the day OPENS below the 99.8 BOS start (closes back near it)
+    dg = next_days(build([]), [[gap, INV, TRIG, UP1, TP]])
+    check("    (owner, 19 Nov, GILLETTE / AZAD) the day opens beyond yesterday's BOS start: a gap, not a sweep; "
+          "the setup is cancelled", not first(longs(dg, intraday=True)), longs(dg, intraday=True))
+    check("    with gap_cancel off it would have traded", [t["kind"] for t in first(longs(dg, intraday=True,
+          gap_cancel=False))] == ["primary"], longs(dg, intraday=True, gap_cancel=False))
     swept = next_days(build([SWEEP]), [[INV, TRIG, UP1, TP]])
     check("    swept yesterday but not traded: gone today (intraday)", not first(longs(swept, intraday=True)),
           longs(swept, intraday=True))

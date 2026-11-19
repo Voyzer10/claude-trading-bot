@@ -117,6 +117,12 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             #   BOS-start sweep, a later close below an older swing low that is beyond it (lower) moves the sweep there,
             #   so the stop sits under the sweep nearest the entry; a swing inside the move (above the origin) never sweeps
             "sweep_shift": True,
+            # gap_cancel (owner, 19 Nov 2026, GILLETTE / AZAD): a previous day's setup is cancelled when the session
+            #   opens beyond its BOS start (a gap through the level is not a sweep)
+            "gap_cancel": True,
+            # sweep_max_atr (owner, 19 Nov 2026): a sweep's close may be at most this many ATRs beyond the level; a
+            #   close further beyond is a breakout and cancels the setup (also for the sweep shift). 0 = no limit
+            "sweep_max_atr": 0.5,
             # the latest-BOS rule (owner, 14 Nov 2026): see _latest(); max_open = trades open at once on one chart
             "latest_bos": True, "max_open": 2}
 
@@ -309,9 +315,12 @@ class _Side:
             # has not happened stay active, for this day only; swept-but-untraded and older setups end
             prev = self.day[j - 1]
             keep = [st for st in self.setups if not st["used"] and st["sweep"] is None and st["day"] == prev]
+            if p.get("gap_cancel"):
+                keep = [st for st in keep if b[j][1] >= st["origin"]]   # opened beyond the BOS start: a gap, cancelled
             self.setups, self.waiting = keep, [st for st in keep]
         # sweeps first: a close below the setup's BOS-start low or a swing low confirmed after its BOS
-        still = []
+        still, gone = [], []
+        lim = (p.get("sweep_max_atr") or 0) * (ctx.atr[j] or 0)
         for st in self.waiting:
             if j <= st["bos"]:
                 still.append(st)
@@ -320,7 +329,11 @@ class _Side:
                                                    if idx > st["bos"]] if p.get("sweep_post_bos", True) else [])
             broken = [(nm, px) for nm, px in lv if c < px]
             if broken:
-                st["lvl_name"], st["lvl"] = max(broken, key=lambda x: x[1])
+                nm, px = max(broken, key=lambda x: x[1])
+                if lim and c < px - lim:
+                    gone.append(st)               # closed too far beyond the level: a breakout, not a sweep
+                    continue
+                st["lvl_name"], st["lvl"] = nm, px
                 st["sweep"] = j
             else:
                 still.append(st)
@@ -332,7 +345,12 @@ class _Side:
                     continue
                 deeper = [px for idx, px in ctx.sl_known[j - 1] if px < st["lvl"] and c < px]
                 if deeper:
+                    if lim and c < max(deeper) - lim:
+                        gone.append(st)           # broke through the deeper swing too: a breakout
+                        continue
                     st["lvl_name"], st["lvl"], st["sweep"] = "near_swing", max(deeper), j
+        if gone:
+            self.setups = [st for st in self.setups if all(st is not g for g in gone)]
         open_candle = bool(p.get("skip_open_bos") and p.get("_intraday") and self.day is not None
                            and (j == 0 or self.day[j] != self.day[j - 1]))
         if ctx.bull[j] and ctx.sh_known[j - 1] and not open_candle:
