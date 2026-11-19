@@ -420,6 +420,10 @@ class _Side:
                     if cap is not None:
                         ot = min(ot, cap)
                 tgt = ot
+        if rule == "fixed_r" and stop < c:
+            tgt = c + float(p.get("target_r") or 2.0) * (c - stop)      # research: a fixed multiple of the risk
+        elif rule == "min_r" and stop < c and tgt is not None:
+            tgt = max(tgt, c + float(p.get("target_r") or 2.0) * (c - stop))   # the structure target, at least N R
         if tgt is None or stop >= c or (tgt - c) < p["min_rr"] * (c - stop):
             return None
         return {"i": j, "kind": "primary", "setup": st, "bos": st["bos"], "sweep": st["sweep"], "reclaim": st["sweep"],
