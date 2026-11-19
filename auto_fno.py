@@ -264,6 +264,7 @@ def v4_process(cfg, now, ms, log):
             log("AUTO FNO %s v4 scan failed: %s" % (idx, e))
             continue
         for s in setups:
+            s.setdefault("bar_end", (rows[-1][0] + timedelta(minutes=5)).isoformat())   # (the no-late-entry check)
             rec = P.setup_decision("NSE", idx, s)
             record(rec)
             log("AUTO FNO %s v4 %s: %s (%s)" % (idx, s.get("name") or s["setup"], rec["result"], rec.get("why")))
