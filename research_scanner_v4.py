@@ -141,6 +141,30 @@ def events_v4(data, day_of, cost_fn, intraday=False, max_hold=48, entry_ok=None,
     return evs
 
 
+PASS_R = 0.15        # the owner's bar (19 Nov 2026): out-of-sample, before costs, primaries only
+
+
+def rules_table(events, split, min_rr=0.0):
+    """The owner's view of a rule (19 Nov 2026): out-of-sample primaries, BEFORE costs: how often the target, the
+    stop or something else ended the trade, and the average R. A rule passes at >= PASS_R a trade."""
+    out = ["RULES TABLE (out-of-sample, primary trades, BEFORE costs; pass = avg >= %+.2fR):" % PASS_R,
+           "  %-22s %6s %7s %7s %7s %8s %8s" % ("setting", "trades", "TP hit", "SL hit", "other", "avg R", "after c.")]
+    for fname in FILTERS:
+        es = [e for e in events if e["filters"] == fname and e["kind"] == "primary" and e["min_rr"] == min_rr
+              and e["day"] >= split]
+        if not es:
+            continue
+        n = len(es)
+        tp = sum(1 for e in es if e["exit_reason"] == "target")
+        sl = sum(1 for e in es if e["exit_reason"] in ("stop", "stop (gapped past it)"))
+        g = sum(e["r_gross"] for e in es) / n
+        net = sum(e["r"] for e in es) / n
+        out.append("  %-22s %6d %6.0f%% %6.0f%% %6.0f%% %+7.2fR %+7.2fR%s" % (
+            fname, n, 100.0 * tp / n, 100.0 * sl / n, 100.0 * (n - tp - sl) / n, g, net,
+            "  PASS" if g >= PASS_R and n >= 300 else ""))
+    return "\n".join(out)
+
+
 def keep(ev, f):
     if f["side"] != "both" and ev["side"] != f["side"]:
         return False
@@ -281,6 +305,7 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
     for fname in FILTERS:
         if fname != "all":
             lines.append(row(score(events, dict(live, filters=fname), split, stats), "  skip_rules=%s -> " % fname))
+    lines += ["", rules_table(events, split)]
     lines += ["",
              "TOP 10 BY IN-SAMPLE (the OUT-sample line is the honest one):"]
     for n, r in enumerate(ok[:10], 1):
