@@ -1012,6 +1012,7 @@ def close_position(led, cfg, pos, price, reason, utc, mode=None):
                        "fill_price": round(price, 6), "fees": round(fee, 4),
                        "slippage": round(abs(price - quote) * pos["qty"], 4), "status": "PAPER_FILLED",
                        "reason": reason, "client_order_id": "exit:%s:%s" % (pos["key"], pos.get("entry_time")),
+                       "trade_id": pos.get("trade_id") or pos.get("order_id"), "setup_id": pos.get("setup_id"),
                        "ts": utc.isoformat()})
     except OSError as e:
         raise PaperModeError("paper simulator unavailable: the order journal could not be written (%s); "
@@ -1092,15 +1093,42 @@ def client_order_id(a, m, t):
     return None
 
 
+PASS_FIELDS = ("setup", "setup_name", "scanner", "liquidity", "entry_reason", "v4_chart", "v4_signal_at")
+
+
+def order_request(a, cid=None):
+    """The order request an agent sends (Risk validates it, the Broker executes it): the caller's args as a dict."""
+    req = {"symbol": getattr(a, "symbol", None), "side": getattr(a, "side", "long") or "long",
+           "order_type": str(getattr(a, "order_type", None) or "market").upper(),
+           "limit_price": getattr(a, "limit_price", None), "stop": getattr(a, "stop", None),
+           "target": getattr(a, "target", None), "qty": getattr(a, "qty", None), "lots": getattr(a, "lots", None),
+           "price": getattr(a, "price", None), "force": bool(getattr(a, "force", False)),
+           "allow_second": bool(getattr(a, "allow_second", False)), "setup_id": getattr(a, "setup_id", None),
+           "client_order_id": cid, "note": getattr(a, "note", None) or "",
+           "mode": getattr(a, "mode", None) or getattr(a, "execution_mode", None)}
+    for f in PASS_FIELDS:
+        req[f] = getattr(a, f, None)
+    return req
+
+
+def setup_id_of(market, symbol, s):
+    """The setup's id, the same through every agent (owner, 20 Nov 2026): chart : side : BOS time : signal time."""
+    det = s.get("details") or {}
+    return "%s:%s:%s:%s" % (key(market, symbol), s.get("side"), det.get("BOS_at") or det.get("primary_at") or "",
+                            s.get("v4_signal_at") or s.get("bar_end") or "")
+
+
 def cmd_buy(a, cfg, led):
-    """An ENTRY order to the paper broker. Returns the simulated position (PAPER_FILLED); raises PaperError when the
-    order is rejected (risk / sizing / mode / simulator: PAPER_REJECTED) or not filled (limit: PAPER_CANCELLED).
-    Every outcome is journalled; nothing outside this ledger is ever touched."""
+    """An ENTRY: the Risk agent validates and sizes it (risk.risk_check), then the paper Broker executes exactly what
+    Risk approved (execute_order). Returns the simulated position (PAPER_FILLED); raises PaperError when Risk does not
+    approve (risk.RiskRejected, with .decision), the order is refused (mode / simulator / duplicate: PAPER_REJECTED)
+    or not filled (limit: PAPER_CANCELLED). Every outcome is journalled; nothing outside this ledger is touched."""
+    import risk as RISK
     now = datetime.now(timezone.utc)
     side = "SELL" if getattr(a, "side", "long") == "short" else "BUY"
     sym = str(getattr(a, "symbol", ""))
     otype = str(getattr(a, "order_type", None) or "market").upper()
-    cid = None
+    cid, setup_id = None, getattr(a, "setup_id", None)
     try:
         assert_paper(getattr(a, "mode", None) or getattr(a, "execution_mode", None), cfg)
         simulator_ready(led)
@@ -1111,155 +1139,81 @@ def cmd_buy(a, cfg, led):
         cid = client_order_id(a, m, t)
         if cid and any(p.get("client_order_id") == cid for p in led["open"] + led["closed"]):
             raise PaperError("duplicate order %s: already filled once, not executed again" % cid)
-        return _paper_entry(a, cfg, led, now, otype, cid)
+        req = order_request(a, cid)
+        decision = RISK.risk_check(req, cfg, led, now)
+        if decision["decision"] != "APPROVED":
+            raise RISK.RiskRejected(decision)
+        return execute_order(req, decision, cfg, led, now)
     except PaperError as e:
         status = "PAPER_CANCELLED" if isinstance(e, PaperCancelled) else "PAPER_REJECTED"
+        dec = getattr(e, "decision", None) or {}
         try:
             journal_order({"intent": "ENTRY", "order_type": otype, "symbol": sym, "side": side, "qty": None,
                            "fill_price": None, "fees": 0.0, "slippage": 0.0, "status": status, "reason": str(e),
-                           "client_order_id": cid, "ts": now.isoformat()})
+                           "client_order_id": cid, "setup_id": setup_id, "risk_decision": dec.get("decision"),
+                           "ts": now.isoformat()})
         except Exception:
             pass                            # the journal itself is down: still nothing executed
         raise
 
 
-def _paper_entry(a, cfg, led, now, otype, cid):
-    m, t = parse_symbol(a.symbol, cfg)
+def execute_order(req, approval, cfg, led, now, fill_quote=None):
+    """The paper Broker: executes ONE entry exactly as the Risk agent approved it. Refuses (PaperError) without a
+    matching, unused Risk approval (risk.consume), for changed order parameters, or when a different fill price no
+    longer passes Risk at the approved size (fill-price revalidation). Execution only: no strategy, no sizing."""
+    import risk as RISK
+    assert_paper(req.get("mode"), cfg)
+    simulator_ready(led)
+    RISK.consume(approval, req, cfg)                       # issued by Risk, these parameters, not used before
+    m, t = parse_symbol(req["symbol"], cfg)
     k = key(m, t)
     acc = acct_cfg(cfg, m)
     book = book_of(led, m)
-    force = getattr(a, "force", False)
-    short = getattr(a, "side", "long") == "short"
-    if short and not acc.get("allow_short"):
-        raise PaperError("short selling is not enabled for the %s account (allow_short in config)" % account_of(m))
-    kind = kind_of(m, t)
-    lot = lot_of(m, t)
-    fno_trade = kind != "equity"
-    if any(p["key"] == k for p in led["open"]):
-        if not getattr(a, "allow_second", False):
-            raise PaperError("%s is already open; sell it first" % k)
-        n = 2                       # the v4 latest-BOS rule: a second trade on the chart gets its own key
-        while any(p["key"] == "%s#%d" % (k, n) for p in led["open"]):
-            n += 1
-        k = "%s#%d" % (k, n)
-    sess = session(m, now)
-    if sess == "closed" and not force:
-        raise PaperError("%s is closed right now (a paper fill at a stale price teaches nothing). "
-                         "--force to do it anyway." % m)
-    if acc.get("flat_by") and sess == "open" and past_flat_by(m, acc, now) and not force:
-        raise PaperError("past your flat-by time (%s): no new intraday entries" % acc["flat_by"])
-    if acc.get("risk_limits", False):   # off while paper testing (owner's decision); on before real money
-        lost_today = -sum(c["pnl"] for c in today_closed(led, m, now) if c["pnl"] < 0)
-        if lost_today >= acc["daily_loss_limit"]:
-            raise PaperError("daily loss limit hit for %s (%s lost today of %s): done for the day"
-                             % (account_of(m), money(m, lost_today), money(m, acc["daily_loss_limit"])))
-        if len(trades_today(led, m, now)) >= acc["max_trades_per_day"]:
-            raise PaperError("max %d trades per day reached for %s" % (acc["max_trades_per_day"], account_of(m)))
-        rulebook_guards(led, m, acc, now, short)
-
-    if getattr(a, "price", None) is not None:
-        entry = float(a.price)
-    else:
-        entry, qt = fetch_price(m, t)
-        if sess == "open" and (now - qt).total_seconds() > 20 * 60:
-            print("Note: the quote is %.0f minutes old (holiday, halt, or lagging data)."
-                  % ((now - qt).total_seconds() / 60))
-    quote = entry
-    if otype == "LIMIT":
-        lim = getattr(a, "limit_price", None)
+    short = req.get("side", "long") == "short"
+    cid = req.get("client_order_id")
+    if cid and any(p.get("client_order_id") == cid for p in led["open"] + led["closed"]):
+        raise PaperError("duplicate order %s: already filled once, not executed again" % cid)
+    a = approval
+    quote = a["quote"] if fill_quote is None else float(fill_quote)
+    if quote != a["quote"]:
+        # the fill price is not the price Risk approved: Risk validates again at this price (not registered: it is
+        # used here, now); it must still approve, and allow at least the approved size
+        a2 = RISK.risk_check(req, cfg, led, now, quote=quote, register=False)
+        if a2["decision"] != "APPROVED":
+            raise RISK.RiskRejected(dict(a2, reason="fill price %s: %s" % (money(m, quote), a2.get("reason"))))
+        if a2["qty"] + 1e-12 < a["qty"]:
+            raise RISK.RiskRejected(dict(a2, decision="NEEDS_REVISION", reason=(
+                "fill price %s: Risk allows %s, under the approved %s; not executed (needs a new approval)"
+                % (money(m, quote), fmt_qty(m, a2["qty"]), fmt_qty(m, a["qty"])))))
+        a = dict(a2, qty=a["qty"], approval_id=approval["approval_id"], fingerprint=approval["fingerprint"],
+                 entry_fee=charges(cfg, m, t, "sell" if short else "buy", a["qty"] * a2["entry"]),
+                 margin=round(a["qty"] * a2["unit_cost"], 2) if approval.get("margin") is not None else None,
+                 risk_at_stop=round((abs(a2["entry"] - a2["stop"]) + a2["fee_unit_stop"]) * a["qty"], 6))
+    if req.get("order_type") == "LIMIT":
+        lim = req.get("limit_price")
         if lim is None:
             raise PaperError("a LIMIT order needs limit_price")
         lim = float(lim)
         if (not short and quote > lim) or (short and quote < lim):
             raise PaperCancelled("limit %s not reachable at the quote %s (immediate-or-cancel): not filled"
                                  % (money(m, lim), money(m, quote)))
-    entry = slipped(quote, not short, float(acc.get("slippage_pct") or 0))   # the simulated fill
-    if a.stop is None:
-        raise PaperError("a stop is required (price, a percent like 2%, orb-mid or orb-low)")
-    stop = round_px(m, resolve_stop(a.stop, entry, t, short), down=not short)
-    if not short and stop >= entry:
-        raise PaperError("stop %s is not below the entry %s (long position; buy a PE or use --side short for a "
-                         "bearish view)" % (money(m, stop), money(m, entry)))
-    if short and stop <= entry:
-        raise PaperError("stop %s is not above the entry %s (short position)" % (money(m, stop), money(m, entry)))
-    target = round_px(m, resolve_target(a.target, entry, stop, short), down=short)
-    if (not short and target <= entry) or (short and target >= entry):
-        raise PaperError("target %s is on the wrong side of the entry %s" % (money(m, target), money(m, entry)))
-    risk_ps = abs(entry - stop)
-    rr = abs(target - entry) / risk_ps
-    if rr + 1e-9 < acc["min_reward_risk"] and not force:
-        raise PaperError("reward:risk %.2f is under your minimum %.2f" % (rr, acc["min_reward_risk"]))
-
-    max_loss = acc.get("max_loss_per_trade_fno", acc["max_loss_per_trade"]) if fno_trade else acc["max_loss_per_trade"]
-    pos_pct = acc.get("max_position_pct_fno", acc["max_position_pct"]) if fno_trade else acc["max_position_pct"]
-    equity = book["cash"] + sum(held_value(p) for p in led["open"] if account_of(p["market"]) == account_of(m))
-    # margin: India / US stocks (14 Nov 2026) and crypto (owner, 17 Nov 2026: 5x, like Indian crypto futures)
-    lev = margin_x(acc, m, kind)
-    if kind == "futures":
-        unit_cost = entry * acc.get("futures_margin_pct", 12) / 100
-    else:
-        unit_cost = entry / lev           # intraday margin: the cash one unit ties up
-    # charges for one unit, round trip at the stop (the loss case), used in sizing
-    open_side, close_side = ("sell", "buy") if short else ("buy", "sell")  # a short sells first (STT), buys back
-    fee_unit_stop = (charges(cfg, m, t, open_side, entry * lot) + charges(cfg, m, t, close_side, stop * lot)) / lot
-    fee_unit_tgt = (charges(cfg, m, t, open_side, entry * lot) + charges(cfg, m, t, close_side, target * lot)) / lot
-    if fee_unit_tgt >= 0.5 * risk_ps and not force:
-        raise PaperError("stop too tight: charges (%s a unit round trip) are %.0f%% of the risk (%s a unit). "
-                         "Widen the stop or skip the trade." % (money(m, fee_unit_tgt), 100 * fee_unit_tgt / risk_ps,
-                                                                money(m, risk_ps)))
-    caps = {
-        "max loss per trade (%s)" % money(m, max_loss): max_loss / (risk_ps + fee_unit_stop),
-        "position cap (%g%% of account%s)" % (pos_pct, " in margin" if kind == "futures" or lev > 1 else ""):
-            equity * pos_pct / 100 / unit_cost,
-        "cash" + (" (futures margin %g%%)" % acc.get("futures_margin_pct", 12) if kind == "futures" else
-                  " (intraday margin, %gx)" % lev if lev > 1 else ""):
-            book["cash"] / (unit_cost + fee_unit_stop),
-    }
-    limiter = min(caps, key=caps.get)
-    q = caps[limiter]
-    want = None
-    if getattr(a, "lots", None):
-        want = float(a.lots) * lot
-    elif getattr(a, "qty", None) is not None:
-        want = float(a.qty)
-    if want is not None:
-        if want > q + 1e-9:
-            raise PaperError("%s %s breaks a limit: %s allows %s" % (
-                "--lots" if getattr(a, "lots", None) else "--qty", a.lots if getattr(a, "lots", None) else a.qty,
-                limiter, ("%d lot(s)" % int(q // lot)) if lot > 1 else fmt_qty(m, q)))
-        q, limiter = want, "your --lots/--qty"
-    if MARKETS[m]["fractional"]:
-        q = math.floor(q * 1e6) / 1e6
-    else:
-        q = math.floor(q / lot) * lot
-    if q <= 0:
-        one = (risk_ps + fee_unit_stop) * lot
-        need = unit_cost * lot
-        if lot > 1:
-            raise PaperError("0 lots fit: one lot (%d) risks %s at the stop (max loss %s) and ties up %s "
-                             "(cash %s). Skip it, or change max_loss_per_trade_fno." % (
-                                 lot, money(m, one), money(m, max_loss), money(m, need), money(m, book["cash"])))
-        if limiter.startswith("cash"):
-            raise PaperError("not enough free cash: %s free in the %s account (open positions tie up the rest)"
-                             % (money(m, book["cash"]), account_of(m)))
-        raise PaperError("0 units fit: the stop is %s away and your max loss is %s. "
-                         "Tighten the stop or skip the trade." % (money(m, risk_ps), money(m, max_loss)))
-    full = min(v for k, v in caps.items() if not k.startswith("cash"))
-    if want is None and limiter.startswith("cash") and q < 0.25 * full:
-        # e.g. four open crypto shorts use the whole account: the fifth would be a dust position that only
-        # uses up a "trade of the day" (2 Nov: ADA $0.15, HBAR $0.0001 shorts)
-        raise PaperError("not enough free cash: %s free in the %s account buys %s, under a quarter of a normal "
-                         "position (%s); skipped until a position closes" % (
-                             money(m, book["cash"]), account_of(m), fmt_qty(m, q), fmt_qty(m, full)))
-    fee = charges(cfg, m, t, open_side, q * entry)
-    margin = round(q * unit_cost, 2) if (kind == "futures" or lev > 1) else None
+    if any(p["key"] == k for p in led["open"]):
+        if not req.get("allow_second"):
+            raise PaperError("%s is already open; sell it first" % k)
+        n = 2                       # the v4 latest-BOS rule: a second trade on the chart gets its own key
+        while any(p["key"] == "%s#%d" % (k, n) for p in led["open"]):
+            n += 1
+        k = "%s#%d" % (k, n)
+    q, entry, stop, target = a["qty"], a["entry"], a["stop"], a["target"]
+    lot, kind, lev, margin, fee = a["lot"], a["kind"], a["lev"], a["margin"], a["entry_fee"]
     # the journal line first: if it cannot be written, the ledger is not touched (nothing executed)
     try:
-        order = journal_order({"intent": "ENTRY", "order_type": otype, "market": m, "symbol": k,
-                               "side": "SELL" if short else "BUY", "qty": q, "quote": round(quote, 6),
+        order = journal_order({"intent": "ENTRY", "order_type": req.get("order_type", "MARKET"), "market": m,
+                               "symbol": k, "side": "SELL" if short else "BUY", "qty": q, "quote": round(quote, 6),
                                "fill_price": round(entry, 6), "fees": round(fee, 4),
                                "slippage": round(abs(entry - quote) * q, 4), "status": "PAPER_FILLED",
-                               "reason": getattr(a, "note", None) or "", "client_order_id": cid,
+                               "reason": req.get("note") or "", "client_order_id": cid,
+                               "setup_id": req.get("setup_id"), "risk_approval_id": approval["approval_id"],
                                "ts": now.isoformat()})
     except OSError as e:
         raise PaperModeError("paper simulator unavailable: the order journal could not be written (%s); "
@@ -1267,9 +1221,13 @@ def _paper_entry(a, cfg, led, now, otype, cid):
     book["cash"] -= (margin if margin is not None else q * entry) + fee
     pos = {"key": k, "market": m, "symbol": t, "qty": q, "entry": round(entry, 6), "stop": stop, "risk_stop": stop,
            "target": target, "entry_fee": round(fee, 4), "entry_time": now.isoformat(),
-           "entry_date": local_now(m, now).date().isoformat(), "note": getattr(a, "note", None) or "",
+           "entry_date": local_now(m, now).date().isoformat(), "note": req.get("note") or "",
            "last_seen": now.isoformat(), "kind": kind, "side": "short" if short else "long",
-           "execution_mode": EXECUTION_MODE, "order_id": order["order_id"]}
+           "execution_mode": EXECUTION_MODE, "order_id": order["order_id"], "trade_id": order["order_id"],
+           "risk": {"approval_id": approval["approval_id"], "gross_rr": a.get("gross_rr"), "net_rr": a.get("net_rr"),
+                    "max_risk": a.get("max_risk"), "risk_at_stop": a.get("risk_at_stop"), "limiter": a.get("limiter")}}
+    if req.get("setup_id"):
+        pos["setup_id"] = req["setup_id"]
     if cid:
         pos["client_order_id"] = cid
     if lot > 1:
@@ -1280,16 +1238,17 @@ def _paper_entry(a, cfg, led, now, otype, cid):
             pos["leverage"] = lev
     # why this trade was taken (dashboard, downloads): the setup, the scanner that found it, the liquidity it
     # swept / the zone it retested, and the entry reason in words. Optional: callers that know them pass them.
-    for f in ("setup", "setup_name", "scanner", "liquidity", "entry_reason", "v4_chart", "v4_signal_at"):
-        v = getattr(a, f, None)
+    for f in PASS_FIELDS:
+        v = req.get(f)
         if v not in (None, ""):
             pos[f] = v
     led["open"].append(pos)
+    risk_ps = abs(entry - stop)
     print("PAPER %s %s  %s%s @ %s   stop %s   target %s (%.1fR)" % (
         "SHORT" if short else "BUY", k, fmt_qty(m, q), (" (%d lot)" % (q // lot)) if lot > 1 else "", money(m, entry),
-        money(m, stop), money(m, target), rr))
+        money(m, stop), money(m, target), abs(target - entry) / risk_ps))
     print("  size set by: %s.  Max loss at the stop incl. charges: %s.  %s: %s.  Cash left: %s."
-          % (limiter, money(m, (risk_ps + fee_unit_stop) * q), "Margin" if margin is not None else "Position",
+          % (a["limiter"], money(m, (risk_ps + a["fee_unit_stop"]) * q), "Margin" if margin is not None else "Position",
              money(m, margin if margin is not None else q * entry), money(m, book["cash"])))
     if acc.get("breakeven_at_r"):
         print("  Breakeven: the stop moves to the entry once price is %gR in profit." % acc["breakeven_at_r"])
@@ -1841,7 +1800,7 @@ def v4_timemachine(market, symbol, s, acc, entry, stop, target):
         return "not run: %s" % str(e)[:160]
 
 
-def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields, mk="NFO"):
+def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields, mk="NFO", setup_id=None):
     """setup_decision for an option trade: an Indian index / F&O stock (NFO) or QQQ / SPY (USOPT): the ATM option is
     paper bought."""
     word = {"CE": "call", "PE": "put"}[op["kind"]] if mk == "USOPT" else op["kind"]
@@ -1874,7 +1833,7 @@ def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields, mk
                           "entry_reason": "Scanner %s %s on %s at %s: bought the ATM %s (IV %.0f%%, delta %.2f); "
                                           "premium stop / target = the option's value at the underlying's stop %s / target %s"
                                           % (version, s["side"], symbol, entry, word, op["iv"] * 100,
-                                             op["delta"], stop, target), **v4_fields})()
+                                             op["delta"], stop, target), "setup_id": setup_id, **v4_fields})()
     buf = io.StringIO()
     try:
         with contextlib.redirect_stdout(buf):
@@ -1882,6 +1841,8 @@ def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields, mk
         save_json(LEDGER, led)
     except PaperError as e:
         st["6-8_budget_risk_broker"] = "BLOCK: %s" % e
+        if getattr(e, "decision", None):
+            st["7_risk"] = e.decision
         return done("blocked", str(e))
     if version == "v4" and stop is not None:
         # the v4 plan on the underlying's own chart (owner, 17 Nov 2026): the option also exits when QQQ / Nifty
@@ -1889,6 +1850,7 @@ def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields, mk
         pos["underlying_plan"] = {"market": "US" if mk == "USOPT" else "NSE", "symbol": symbol, "side": s["side"],
                                   "stop": float(stop), "target": float(target) if target is not None else None}
         save_json(LEDGER, led)
+    st["7_risk"] = dict(pos.get("risk") or {}, decision="APPROVED", trade_id=pos.get("trade_id"))
     st["6-8_budget_risk_broker"] = {"verdict": "PASS, paper option bought", "qty": pos["qty"], "entry": pos["entry"],
                                     "stop": pos["stop"], "target": pos["target"],
                                     "max_loss": round(abs(pos["entry"] - pos["stop"]) * pos["qty"]
@@ -1934,7 +1896,8 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
     owner's decision for paper testing, 4 Nov 2026), or LOG ONLY when the account's trade_setups is off.
     Returns the decision record for decisions.jsonl."""
     rec = {"time": now_iso or datetime.now(IST).isoformat(), "symbol": "%s:%s" % (market, symbol),
-           "setup": s["setup"], "scanner_v2": True, "steps": {}, "result": None}
+           "setup": s["setup"], "scanner_v2": True, "steps": {}, "result": None,
+           "setup_id": setup_id_of(market, symbol, s)}       # the same id through every agent (owner, 20 Nov 2026)
     st = rec["steps"]
     st["1_scanner"] = {"scanner": s.get("scanner", "v3"), "setup": s["setup"], "setup_name": s.get("name"),
                        "side": s["side"], "liquidity": s.get("liquidity"), "bar_end": s.get("bar_end"),
@@ -2065,7 +2028,7 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
                     st["4_exit"] = {"underlying_entry": entry, "underlying_stop": stop, "underlying_target": target}
                     return done("skipped", "option: %s" % e)
         if op:
-            return _option_setup(st, done, cfg, fno_acc, symbol, s, op, version, led, v4_fields)
+            return _option_setup(st, done, cfg, fno_acc, symbol, s, op, version, led, v4_fields, setup_id=rec["setup_id"])
     if us_opt:
         # US F&O (owner, 13 Nov 2026): a QQQ / SPY setup buys its ATM weekly option, never the ETF's shares
         import us_options as _UO
@@ -2074,28 +2037,18 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
         except _UO.NoOption as e:
             st["4_exit"] = {"underlying_entry": entry, "underlying_stop": stop, "underlying_target": target}
             return done("skipped", "option: %s" % e)
-        return _option_setup(st, done, cfg, usf_acc, symbol, s, op, version, led, v4_fields, mk="USOPT")
-    # the position cap counts the intraday margin, like the paper buy (cmd_buy): with $1,000 and 4x, a $300 stock
-    # fits; without it every US stock above ~$250 was "0 units fit" (owner's audit, 18 Nov 2026)
-    units = min(acc["max_loss_per_trade"] / risk,
-                acc["capital"] * acc["max_position_pct"] / 100 / (entry / margin_x(acc, market)))
-    qty = units if market == "CRYPTO" else int(units)
-    cost = None
-    if market in ("NSE", "BSE"):
-        if qty >= 1:
-            o, c = ("sell", "buy") if short else ("buy", "sell")
-            cost = (charges(cfg, "NSE", symbol, o, qty * entry) + charges(cfg, "NSE", symbol, c, qty * target)) / (qty * risk)
-    else:
-        cost = (entry + target) * float(acc.get("fee_pct") or 0) / 100 / risk
+        return _option_setup(st, done, cfg, usf_acc, symbol, s, op, version, led, v4_fields, mk="USOPT",
+                             setup_id=rec["setup_id"])
+    # the Risk agent's pre-check (risk.py, owner 20 Nov 2026): a quick size and the charges in R before an order exists
+    import risk as RISK
+    qty, cost = RISK.setup_size(cfg, acc, market, symbol, entry, stop, target, short)
     st["4_exit"] = {"entry": entry, "stop": stop, "target": target, "r_multiple": round(abs(target - entry) / risk, 2),
                     "stop_pct": round(risk / entry * 100, 3), "fee_r": round(cost, 3) if cost is not None else None}
     st["5_timemachine"] = v4_timemachine(market, symbol, s, acc, entry, stop, target) or \
         "n/a (these setups are backtested instead: research_v3 / research_smcp / research_abcd)"
-    if qty <= 0 or (market != "CRYPTO" and qty < 1):
-        return done("skipped", "0 units fit: the stop is %s away and the max loss is %s" % (round(risk, 6),
-                                                                                      acc["max_loss_per_trade"]))
-    if cost is not None and cost > 0.25:
-        return done("skipped", "fees eat %.2fR of the trade (max 0.25R)" % cost)
+    gate = RISK.setup_gate(acc, market, qty, risk, cost)
+    if gate:
+        return done("skipped", gate)
     name = s.get("name") or s["setup"]
     if not acc.get("trade_setups", True):
         st["6-8_budget_risk_broker"] = {"verdict": "pass, NOT sent to the broker (trade_setups off)",
@@ -2113,7 +2066,8 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
                           "side": "short" if short else "long", "setup": s["setup"], "setup_name": name,
                           "scanner": version, "liquidity": s.get("liquidity"),
                           "entry_reason": "found by Scanner %s; entry on the close of the %s candle, planned R:R %.1f" % (
-                              version, (s.get("bar_end") or "")[11:16] or "last", abs(target - entry) / risk), **v4_fields})()
+                              version, (s.get("bar_end") or "")[11:16] or "last", abs(target - entry) / risk),
+                          "setup_id": rec["setup_id"], **v4_fields})()
     buf = io.StringIO()
     try:
         with contextlib.redirect_stdout(buf):
@@ -2121,7 +2075,11 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
         save_json(LEDGER, led)
     except PaperError as e:
         st["6-8_budget_risk_broker"] = "BLOCK: %s" % e
+        if getattr(e, "decision", None):
+            st["7_risk"] = e.decision
         return done("blocked", str(e))
+    st["7_risk"] = dict(pos.get("risk") or {}, decision="APPROVED")
+    rec["trade_id"] = pos.get("trade_id")
     st["6-8_budget_risk_broker"] = {"verdict": "PASS, paper %s filled" % ("short" if short else "buy"), "qty": pos["qty"],
                                     "entry": pos["entry"], "stop": pos["stop"], "target": pos["target"],
                                     "max_loss": round(abs(pos["entry"] - pos["stop"]) * pos["qty"] + pos.get("entry_fee", 0), 2),
