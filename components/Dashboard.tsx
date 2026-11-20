@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Coin, CoinProfile, Decision, Position, Snapshot, SnapshotResponse } from "@/lib/types";
+import type { Coin, CoinProfile, Decision, PaperOrder, Position, Snapshot, SnapshotResponse } from "@/lib/types";
 import { ago, currencyOf, duration, money, pct, price, timeIST } from "@/lib/format";
 import ControlPanel from "@/components/ControlPanel";
 import Performance from "@/components/Performance";
@@ -74,6 +74,9 @@ export default function Dashboard() {
           <h1>Trader Bot</h1>
           <div className="muted small">Paper trading · times in IST</div>
         </div>
+        <span className="chip plain c-warn" title="Execution mode: PAPER. Every order, position, balance and P&L is simulated; no real order is ever sent to a broker.">
+          PAPER · SIMULATED
+        </span>
         <span className={`runpill ${runState.cls}`} role="status"><span className="dot" aria-hidden="true" />{runState.label}</span>
         <ThemeToggle />
       </header>
@@ -930,7 +933,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
     try { await send(key ? "close" : "close_all", key); } catch (e) { setErr(errText(e)); }
   }
   const acctOf = (m: string) => (m === "NSE" || m === "BSE" ? "INDIA" : m === "NFO" ? "FNO" : m === "USOPT" ? "USFNO" : m);
-  const title = part === "open" ? "Open trades" : part === "closed" ? "Closed trades" : part === "accounts" ? "Paper accounts" : "Paper ledger";
+  const title = part === "open" ? "Open paper trades (simulated)" : part === "closed" ? "Closed paper trades (simulated)" : part === "accounts" ? "Paper accounts (simulated)" : "Paper ledger (simulated)";
   return (
     <>
       {chartOf && <ChartView src={chartOf} onClose={() => setChartOf(null)} />}
@@ -940,7 +943,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
         <div>
           <h2 id={`led-h-${part}`}>{title}</h2>
           <p>
-            {open.length} open · {closed.length} closed. Judge the strategy after 30+ trades, not one day.
+            Execution mode: PAPER. {open.length} open · {closed.length} closed, all simulated. Judge the strategy after 30+ trades, not one day.
           </p>
         </div>
       </div>
@@ -953,10 +956,10 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
           const cur = currencyOf(name);
           return (
             <div key={name} className="stat">
-              <span className="label">{ACCOUNT_LABEL[name] ?? name}</span>
+              <span className="label">{ACCOUNT_LABEL[name] ?? name} · paper balance</span>
               <span className="value" style={{ fontSize: 19 }}>{money(a.cash, cur)}</span>
               <span className={`sub ${d > 0 ? "pos" : d < 0 ? "neg" : ""}`}>
-                {d === 0 ? "untouched" : `${d > 0 ? "+" : ""}${money(d, cur)} on ${money(a.start_capital, cur)}`}
+                {d === 0 ? "untouched (simulated)" : `paper P&L ${d > 0 ? "+" : ""}${money(d, cur)} on ${money(a.start_capital, cur)}`}
               </span>
             </div>
           );
@@ -967,7 +970,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
       {show("open") && open.length > 0 && (
         <>
           <div className="list-head">
-            <h3 className="subtitle">Open positions ({open.length})</h3>
+            <h3 className="subtitle">Open paper positions, simulated ({open.length})</h3>
             {available && (
               <button className="btn danger" onClick={() => close()} disabled={waiting(null)}>
                 {cmds.pending.some((c) => c.action === "close_all") ? "Closing all…" : "Close all"}
@@ -978,7 +981,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
           <div className="tablewrap" style={{ marginBottom: 14 }}>
             <table className="rtable">
               <thead>
-                <tr><th>Instrument</th><th>Setup · liquidity</th><th>Side</th><th>Qty</th><th>Invested</th><th>Entry</th><th>Now</th><th>Stop</th><th>Target</th><th>Opened</th>{available && <th><span className="sr-only">Action</span></th>}</tr>
+                <tr><th>Instrument</th><th>Setup · liquidity</th><th>Side</th><th>Qty</th><th>Invested</th><th>Paper entry</th><th>Now</th><th>Stop</th><th>Target</th><th>Opened</th>{available && <th><span className="sr-only">Action</span></th>}</tr>
               </thead>
               <tbody>
                 {open.map((p) => (
@@ -1032,7 +1035,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
       )}
       {show("closed") && (<>
       <div className="list-head">
-        <h3 className="subtitle">Closed trades ({mkt === "all" ? closed.length : `${shown.length} of ${closed.length}`})</h3>
+        <h3 className="subtitle">Closed paper trades, simulated ({mkt === "all" ? closed.length : `${shown.length} of ${closed.length}`})</h3>
         <div className="seg-ctl" role="group" aria-label="Filter closed trades by market">
           {MKTS.map(([k, name]) => {
             const n = k === "all" ? closed.length : closed.filter((c) => (k === "NSE" ? c.market === "NSE" || c.market === "BSE" : c.market === k)).length;
@@ -1056,7 +1059,7 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
       <div className="scroll wide-only">
         <table className="rtable">
           <thead>
-            <tr><th>Closed</th><th>Instrument</th><th>Setup · liquidity</th><th>Invested</th><th>Entry → exit</th><th>P&amp;L</th><th>R</th><th>Exit</th></tr>
+            <tr><th>Closed</th><th>Instrument</th><th>Setup · liquidity</th><th>Invested</th><th>Entry → exit</th><th>Paper P&amp;L</th><th>R</th><th>Exit</th></tr>
           </thead>
           <tbody>
             {shown.length === 0 && (
@@ -1087,8 +1090,51 @@ function LedgerSection({ snap, onChange, live, part = "all" }: { snap: Snapshot;
           </tbody>
         </table>
       </div>
+      <PaperOrders orders={snap.ledger.orders ?? []} />
       </>)}
     </section>
+    </>
+  );
+}
+
+/** The paper broker's order journal: every simulated order (filled, rejected, cancelled), newest first. */
+function PaperOrders({ orders }: { orders: PaperOrder[] }) {
+  const rows = orders.slice().reverse().slice(0, 60);
+  const chip = (st: PaperOrder["status"]) =>
+    <span className={`chip plain ${st === "PAPER_FILLED" ? "c-good" : st === "PAPER_REJECTED" ? "c-bad" : "c-off"}`}>{st}</span>;
+  const num = (x: number | null | undefined, d = 4) => (x === null || x === undefined ? "—" : String(+x.toFixed(d)));
+  return (
+    <>
+      <div className="list-head" style={{ marginTop: 18 }}>
+        <h3 className="subtitle">Paper orders, simulated ({orders.length} latest)</h3>
+      </div>
+      <p className="small muted" style={{ margin: "0 0 8px" }}>
+        Execution mode: PAPER. Fills are simulated from the quote; no order is ever sent to a broker.
+      </p>
+      <div className="scroll">
+        <table className="rtable">
+          <thead>
+            <tr><th>Time</th><th>Mode</th><th>Order type</th><th>Symbol</th><th>Side</th><th>Simulated qty</th><th>Simulated fill</th><th>Fees</th><th>Slippage</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && <tr><td colSpan={10} className="muted">No paper orders yet.</td></tr>}
+            {rows.map((o, i) => (
+              <tr key={o.order_id ?? i} title={o.reason || undefined}>
+                <td data-label="Time" className="num">{timeIST(o.ts, true)}</td>
+                <td data-label="Mode"><span className="chip plain c-warn">{o.mode}</span></td>
+                <td data-label="Order type">{o.order_type ?? "MARKET"}{o.intent ? ` · ${o.intent.toLowerCase()}` : ""}</td>
+                <td data-label="Symbol" className="num">{o.symbol ?? "—"}</td>
+                <td data-label="Side">{o.side ?? "—"}</td>
+                <td data-label="Simulated qty" className="num">{num(o.qty, 6)}</td>
+                <td data-label="Simulated fill" className="num">{o.fill_price === null || o.fill_price === undefined ? "—" : price(o.fill_price)}</td>
+                <td data-label="Fees" className="num">{num(o.fees)}</td>
+                <td data-label="Slippage" className="num">{num(o.slippage)}</td>
+                <td data-label="Status">{chip(o.status)}{o.status !== "PAPER_FILLED" && o.reason ? <span className="small muted"> {o.reason}</span> : null}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }

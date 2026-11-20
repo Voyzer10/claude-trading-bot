@@ -56,6 +56,7 @@ FILES = {
     "trader/live/auto_config.json": None,
     "trader/paper/config.json": None,
     "trader/paper/ledger.json": None,
+    "trader/paper/orders.jsonl": 2000,   # the paper broker's order journal (append only)
     "trader/universe_crypto.txt": None,
     "trader/watchlist.json": None,
 }

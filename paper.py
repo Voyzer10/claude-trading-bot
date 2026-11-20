@@ -207,6 +207,104 @@ def save_json(path, doc):
     os.replace(tmp, path)
 
 
+# ------------------------------------------------------------------ the paper broker (owner, 20 Nov 2026)
+# PAPER ONLY, enforced here, at the one place every order passes through (cmd_buy for entries, close_position for
+# exits; every agent, the runner, the dashboard's Close and the CLI call these two). There is no live mode in this
+# code: no order endpoint of any broker is reachable (kite.py, alpaca.py and coinbase.py only allow read-only data
+# requests), EXECUTION_MODE is a constant, and anything asking for another mode is refused before a fill:
+#   - an order carrying a mode / execution_mode other than PAPER          -> PAPER_REJECTED, nothing executed
+#   - TRADER_EXECUTION_MODE (environment) or execution_mode (config) set to anything but PAPER -> every order is
+#     refused (fail closed): a misconfigured box never trades, it never "falls back" to anything
+#   - the simulator unusable (ledger malformed, the paper folder not writable, the order journal not writable)
+#     -> refused, nothing executed (fail closed)
+# Every order (filled, rejected, cancelled) is written to the append-only journal trader/paper/orders.jsonl with
+# mode PAPER, type, symbol, side, quantity, simulated fill price, fees, slippage, status and time; the journal line
+# is written BEFORE the ledger changes, so a fill can never exist without its record. A client_order_id (given, or
+# for scanner trades: chart + side + signal candle) is never filled twice. Fills: market orders fill in full at the
+# quote (plus slippage_pct, a per-account setting, 0 by default); limit orders are immediate-or-cancel: filled in full
+# if the quote is at or better than the limit, else PAPER_CANCELLED. Partial fills are not simulated (no order-book
+# depth): an order fills in full or not at all.
+EXECUTION_MODE = "PAPER"
+ORDER_STATUSES = ("PAPER_FILLED", "PAPER_REJECTED", "PAPER_CANCELLED")
+ORDERS = os.path.join(BASE, "orders.jsonl")
+
+
+class PaperModeError(PaperError):
+    """A request for anything but paper execution, or the paper simulator is unavailable: nothing was executed."""
+
+
+class PaperCancelled(PaperError):
+    """A paper limit order that could not fill at its limit (immediate-or-cancel): nothing was executed."""
+
+
+def assert_paper(requested=None, cfg=None):
+    """Raise PaperModeError unless everything says PAPER. requested: the order's own mode (None = not given)."""
+    env = os.environ.get("TRADER_EXECUTION_MODE")
+    if env is not None and env.strip().upper() != EXECUTION_MODE:
+        raise PaperModeError("TRADER_EXECUTION_MODE=%r: only PAPER execution exists; refusing every order (fail closed)"
+                             % env)
+    if cfg is not None and str(cfg.get("execution_mode", EXECUTION_MODE)).strip().upper() != EXECUTION_MODE:
+        raise PaperModeError("config execution_mode=%r: only PAPER execution exists; refusing every order (fail closed)"
+                             % cfg.get("execution_mode"))
+    if requested is not None and str(requested).strip().upper() != EXECUTION_MODE:
+        raise PaperModeError("order asks for %r execution: rejected, this broker executes PAPER orders only" % requested)
+
+
+def simulator_ready(led):
+    """Raise PaperModeError if the paper simulator cannot record an order safely (fail closed)."""
+    if not isinstance(led, dict) or not isinstance(led.get("open"), list) or not isinstance(led.get("closed"), list) \
+            or not isinstance(led.get("accounts"), dict):
+        raise PaperModeError("paper simulator unavailable: the ledger is missing or malformed; nothing executed")
+    folder = os.path.dirname(ORDERS) or "."
+    try:
+        os.makedirs(folder, exist_ok=True)
+    except OSError as e:
+        raise PaperModeError("paper simulator unavailable: %s; nothing executed" % e)
+    if not os.access(folder, os.W_OK) or (os.path.exists(ORDERS) and not os.access(ORDERS, os.W_OK)):
+        raise PaperModeError("paper simulator unavailable: %s is not writable; nothing executed" % ORDERS)
+
+
+def journal_order(rec):
+    """Append one paper order to the journal (raises on failure: the caller must not execute without it)."""
+    rec = dict(rec, mode=EXECUTION_MODE)
+    if rec.get("status") not in ORDER_STATUSES:
+        raise PaperModeError("unknown paper order status %r" % rec.get("status"))
+    rec.setdefault("ts", datetime.now(timezone.utc).isoformat())
+    rec.setdefault("order_id", "PAPER-%s-%06d" % (datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f"),
+                                                 os.getpid() % 1000000))
+    os.makedirs(os.path.dirname(ORDERS) or ".", exist_ok=True)
+    if os.path.exists(ORDERS) and os.path.getsize(ORDERS) > 5 * 1024 * 1024:
+        os.replace(ORDERS, ORDERS + ".1")               # keep the journal bounded: one older file kept
+    with open(ORDERS, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(rec) + "\n")
+    print("%s %s %s %s %s qty %s @ %s (fees %s, slippage %s)%s" % (
+        rec["mode"], rec["status"], rec.get("order_type", "MARKET"), rec.get("side"), rec.get("symbol"),
+        rec.get("qty"), rec.get("fill_price"), rec.get("fees"), rec.get("slippage"),
+        (": " + rec["reason"]) if rec.get("reason") else ""))
+    return rec
+
+
+def read_orders(n=200, path=None):
+    """The last n paper orders from the journal, oldest first ([] if none)."""
+    path = path or ORDERS
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.readlines()[-n:]
+    out = []
+    for ln in lines:
+        try:
+            out.append(json.loads(ln))
+        except ValueError:
+            continue
+    return out
+
+
+def slipped(price, side_buy, pct):
+    """The simulated fill: pct % worse than the quote (buys higher, sells lower)."""
+    return price * (1 + pct / 100.0) if side_buy else price * (1 - pct / 100.0)
+
+
 # The owner's budget of 17 Nov 2026: Rs 1 lakh per Indian account, $1,000 per US / crypto account ($1,200 for US
 # options); max loss per trade 3% of it, the daily loss limit 3 trades (9%). Applied once to the live config, and
 # once to the ledger: every book restarts at its budget (cash = budget - what open positions tie up), the old trades
@@ -896,10 +994,28 @@ def round_px(m, x, down=True):
     return f(x * 100) / 100
 
 
-def close_position(led, cfg, pos, price, reason, utc):
+def close_position(led, cfg, pos, price, reason, utc, mode=None):
+    """Exit = a paper order that closes one SIMULATED position of this ledger (never anything else)."""
+    assert_paper(mode, cfg)
+    simulator_ready(led)
+    if not any(p is pos for p in led["open"]):
+        raise PaperError("%s is not an open paper position in this ledger: nothing closed" % pos.get("key"))
     m = pos["market"]
     book = book_of(led, m)
+    slip_pct = float(acct_cfg(cfg, m).get("slippage_pct") or 0)
+    quote = price
+    price = slipped(price, is_short(pos), slip_pct)                      # a long sells, a short buys back
     fee = charges(cfg, m, pos["symbol"], "buy" if is_short(pos) else "sell", pos["qty"] * price)  # a short buys back
+    try:
+        journal_order({"intent": "EXIT", "order_type": "MARKET", "market": m, "symbol": pos["key"],
+                       "side": "BUY" if is_short(pos) else "SELL", "qty": pos["qty"], "quote": round(quote, 6),
+                       "fill_price": round(price, 6), "fees": round(fee, 4),
+                       "slippage": round(abs(price - quote) * pos["qty"], 4), "status": "PAPER_FILLED",
+                       "reason": reason, "client_order_id": "exit:%s:%s" % (pos["key"], pos.get("entry_time")),
+                       "ts": utc.isoformat()})
+    except OSError as e:
+        raise PaperModeError("paper simulator unavailable: the order journal could not be written (%s); "
+                             "nothing closed" % e)
     gross = pnl_of(pos, price)
     if pos.get("margin") is not None:
         book["cash"] += pos["margin"] + gross - fee
@@ -965,8 +1081,49 @@ def rulebook_guards(led, m, acc, now, short):
                              % (cap, "short" if short else "long", name, ", ".join(p["key"] for p in same)))
 
 
+def client_order_id(a, m, t):
+    """The order's idempotency key: given (client_order_id), or for a scanner trade its chart + side + signal candle."""
+    cid = getattr(a, "client_order_id", None)
+    if cid:
+        return str(cid)
+    sig = getattr(a, "v4_signal_at", None)
+    if sig:
+        return "%s:%s:%s:%s" % (key(m, t), getattr(a, "v4_chart", None) or "", getattr(a, "side", "long") or "long", sig)
+    return None
+
+
 def cmd_buy(a, cfg, led):
+    """An ENTRY order to the paper broker. Returns the simulated position (PAPER_FILLED); raises PaperError when the
+    order is rejected (risk / sizing / mode / simulator: PAPER_REJECTED) or not filled (limit: PAPER_CANCELLED).
+    Every outcome is journalled; nothing outside this ledger is ever touched."""
     now = datetime.now(timezone.utc)
+    side = "SELL" if getattr(a, "side", "long") == "short" else "BUY"
+    sym = str(getattr(a, "symbol", ""))
+    otype = str(getattr(a, "order_type", None) or "market").upper()
+    cid = None
+    try:
+        assert_paper(getattr(a, "mode", None) or getattr(a, "execution_mode", None), cfg)
+        simulator_ready(led)
+        if otype not in ("MARKET", "LIMIT"):
+            raise PaperError("order type %r is not supported by the paper broker (MARKET or LIMIT)" % otype)
+        m, t = parse_symbol(a.symbol, cfg)
+        sym = key(m, t)
+        cid = client_order_id(a, m, t)
+        if cid and any(p.get("client_order_id") == cid for p in led["open"] + led["closed"]):
+            raise PaperError("duplicate order %s: already filled once, not executed again" % cid)
+        return _paper_entry(a, cfg, led, now, otype, cid)
+    except PaperError as e:
+        status = "PAPER_CANCELLED" if isinstance(e, PaperCancelled) else "PAPER_REJECTED"
+        try:
+            journal_order({"intent": "ENTRY", "order_type": otype, "symbol": sym, "side": side, "qty": None,
+                           "fill_price": None, "fees": 0.0, "slippage": 0.0, "status": status, "reason": str(e),
+                           "client_order_id": cid, "ts": now.isoformat()})
+        except Exception:
+            pass                            # the journal itself is down: still nothing executed
+        raise
+
+
+def _paper_entry(a, cfg, led, now, otype, cid):
     m, t = parse_symbol(a.symbol, cfg)
     k = key(m, t)
     acc = acct_cfg(cfg, m)
@@ -1007,6 +1164,16 @@ def cmd_buy(a, cfg, led):
         if sess == "open" and (now - qt).total_seconds() > 20 * 60:
             print("Note: the quote is %.0f minutes old (holiday, halt, or lagging data)."
                   % ((now - qt).total_seconds() / 60))
+    quote = entry
+    if otype == "LIMIT":
+        lim = getattr(a, "limit_price", None)
+        if lim is None:
+            raise PaperError("a LIMIT order needs limit_price")
+        lim = float(lim)
+        if (not short and quote > lim) or (short and quote < lim):
+            raise PaperCancelled("limit %s not reachable at the quote %s (immediate-or-cancel): not filled"
+                                 % (money(m, lim), money(m, quote)))
+    entry = slipped(quote, not short, float(acc.get("slippage_pct") or 0))   # the simulated fill
     if a.stop is None:
         raise PaperError("a stop is required (price, a percent like 2%, orb-mid or orb-low)")
     stop = round_px(m, resolve_stop(a.stop, entry, t, short), down=not short)
@@ -1086,11 +1253,25 @@ def cmd_buy(a, cfg, led):
                              money(m, book["cash"]), account_of(m), fmt_qty(m, q), fmt_qty(m, full)))
     fee = charges(cfg, m, t, open_side, q * entry)
     margin = round(q * unit_cost, 2) if (kind == "futures" or lev > 1) else None
+    # the journal line first: if it cannot be written, the ledger is not touched (nothing executed)
+    try:
+        order = journal_order({"intent": "ENTRY", "order_type": otype, "market": m, "symbol": k,
+                               "side": "SELL" if short else "BUY", "qty": q, "quote": round(quote, 6),
+                               "fill_price": round(entry, 6), "fees": round(fee, 4),
+                               "slippage": round(abs(entry - quote) * q, 4), "status": "PAPER_FILLED",
+                               "reason": getattr(a, "note", None) or "", "client_order_id": cid,
+                               "ts": now.isoformat()})
+    except OSError as e:
+        raise PaperModeError("paper simulator unavailable: the order journal could not be written (%s); "
+                             "nothing executed" % e)
     book["cash"] -= (margin if margin is not None else q * entry) + fee
     pos = {"key": k, "market": m, "symbol": t, "qty": q, "entry": round(entry, 6), "stop": stop, "risk_stop": stop,
            "target": target, "entry_fee": round(fee, 4), "entry_time": now.isoformat(),
            "entry_date": local_now(m, now).date().isoformat(), "note": getattr(a, "note", None) or "",
-           "last_seen": now.isoformat(), "kind": kind, "side": "short" if short else "long"}
+           "last_seen": now.isoformat(), "kind": kind, "side": "short" if short else "long",
+           "execution_mode": EXECUTION_MODE, "order_id": order["order_id"]}
+    if cid:
+        pos["client_order_id"] = cid
     if lot > 1:
         pos["lots"], pos["lot_size"] = int(q // lot), lot
     if margin is not None:

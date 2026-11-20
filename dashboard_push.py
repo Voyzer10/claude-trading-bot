@@ -271,7 +271,9 @@ def build(state=None):
                    "skipped": counts.get("skipped", 0), "blocked": counts.get("blocked", 0),
                    "log_only": counts.get("LOG ONLY", 0)},
         "ledger": {"accounts": led.get("accounts") or {}, "open": _with_quotes(led.get("open") or [], state),
-                   "closed": (led.get("closed") or [])[-100:]},
+                   "closed": (led.get("closed") or [])[-100:],
+                   # paper broker (owner, 20 Nov 2026): every order is simulated; the dashboard labels it so
+                   "execution_mode": "PAPER", "orders": _paper_orders()},
         "logs": logs,
     }
     return snap
@@ -279,6 +281,15 @@ def build(state=None):
 
 HIT_KEYS = ("symbol", "side", "price", "last", "time", "at", "holding", "pct_now", "pct_over", "vol_x", "gap_pct",
             "range_high", "range_low", "or_high", "or_low")
+
+
+def _paper_orders(n=150):
+    """The paper broker's last n orders (trader/paper/orders.jsonl), newest last; [] if there are none."""
+    try:
+        import paper as P
+        return P.read_orders(n)
+    except Exception:
+        return []
 
 
 def _nse_watch(nse):

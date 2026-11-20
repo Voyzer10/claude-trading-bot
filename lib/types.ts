@@ -134,8 +134,31 @@ export type Snapshot = {
     accounts: Record<string, { cash: number; start_capital: number }>;
     open: Position[];
     closed: Position[];
+    /** The paper broker: always "PAPER" (there is no live mode). Older snapshots may not have it. */
+    execution_mode?: "PAPER";
+    orders?: PaperOrder[];
   };
   logs: { t: string; text: string; kind: string }[];
+};
+
+/** One simulated order from the paper broker's journal (trader/paper/orders.jsonl). */
+export type PaperOrder = {
+  order_id?: string;
+  mode: "PAPER";
+  intent?: "ENTRY" | "EXIT";
+  order_type?: string;
+  market?: string;
+  symbol?: string;
+  side?: string;
+  qty?: number | null;
+  quote?: number | null;
+  fill_price?: number | null;
+  fees?: number | null;
+  slippage?: number | null;
+  status: "PAPER_FILLED" | "PAPER_REJECTED" | "PAPER_CANCELLED";
+  reason?: string;
+  client_order_id?: string | null;
+  ts: string;
 };
 
 export type SnapshotResponse = { received: number | null; now: number; snapshot: Snapshot | null };

@@ -352,8 +352,7 @@ def kind_of(order, rv):
 def render(order, idx, total, cfg, risk, state, today):
     ready, label, rv = status_of(order, risk, state, today)
     broker = str(cfg.get("broker", "alpaca")).lower()
-    paper = cfg.get("paper", True)
-    acct = "PAPER account" if paper else "LIVE ACCOUNT, REAL MONEY"
+    acct = "PAPER account"   # paper_config() refuses anything else
     lines = ["ORDER %d of %d, %s, %s" % (idx, total, acct, "Interactive Brokers" if broker == "ibkr" else "Alpaca")]
     for part in plain_parts(order):
         lines.append("  " + part)
@@ -459,12 +458,25 @@ def _clock(a):
     return now, today
 
 
+def paper_config(path):
+    """The config, PAPER only (owner, 20 Nov 2026): "paper": false, or TRADER_EXECUTION_MODE set to anything but
+    PAPER, is refused before any ticket, approval, fill or flatten is made (fail closed). No live ticket exists."""
+    cfg = read_json(path, "config", required=False) or {}
+    env = os.environ.get("TRADER_EXECUTION_MODE")
+    if env is not None and env.strip().upper() != "PAPER":
+        raise TicketError("TRADER_EXECUTION_MODE=%r: paper trading only; refusing (fail closed)" % env)
+    if cfg.get("paper", True) is not True:
+        raise TicketError("config has \"paper\": %r: live trading is not allowed in this workflow; refusing. "
+                          "Set \"paper\": true (paper account only)" % cfg.get("paper"))
+    return cfg
+
+
 def _load(a):
     doc = read_json(a.orders, "orders file (run trader-budget, or ticket.py flatten, first)")
     orders = doc.get("orders", doc) if isinstance(doc, dict) else doc
     if not isinstance(orders, list) or not orders:
         raise TicketError("no orders in %s" % a.orders)
-    cfg = read_json(a.config, "config", required=False) or {}
+    cfg = paper_config(a.config)
     risk = read_json(a.risk, "risk check", required=False)
     state = load_state(a.state)
     now, today = _clock(a)
@@ -570,7 +582,7 @@ def cmd_result(a):
 
 
 def cmd_fill(a):
-    cfg = read_json(a.config, "config", required=False) or {}
+    cfg = paper_config(a.config)
     now = parse_now(a.now)
     date = a.date or to_eastern(now).date().isoformat()
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
@@ -584,7 +596,7 @@ def cmd_fill(a):
 
 
 def cmd_flatten(a):
-    cfg = read_json(a.config, "config", required=False) or {}
+    cfg = paper_config(a.config)
     sym = a.symbol.strip().upper()
     now, today = _clock(a)
     source = "the broker, get_open_position"
