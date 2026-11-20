@@ -147,6 +147,8 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             # sweep_rule "v1" (owner, 20 Nov 2026, experimental): a wick through the protected swing, <= sweep_pen_atr x
             #   ATR(14), closing back inside, within sweep_max_bars of the BOS; a close beyond it ends the BOS; the entry
             #   within entry_max_bars of the sweep; NSE / US setups never cross the night. "close" = the older rule.
+            #   "v2": the same, but the wick must take the nearest resting confirmed swing low of the BOS leg (the
+            #   liquidity reference) and close back above it; the protected swing stays the invalidation level.
             "sweep_rule": "close", "sweep_max_bars": 12, "sweep_pen_atr": 0.25, "entry_max_bars": 12,
             # the latest-BOS rule (owner, 14 Nov 2026): see _latest(); max_open = trades open at once on one chart
             "latest_bos": True, "max_open": 2}
@@ -338,7 +340,7 @@ class _Side:
         c = b[j][4]
         self.last_today = None    # the trigger of candle j from a setup whose BOS formed today (flip rule)
         self.trig = []            # every setup that triggers on candle j, oldest BOS first (latest-BOS rule)
-        v1 = p.get("sweep_rule") == "v1"
+        v1 = p.get("sweep_rule") in ("v1", "v2")      # the wick-sweep validation stage (v2: local liquidity ref)
         if v1 and self.day is not None and j > 0 and self.day[j] != self.day[j - 1]:
             # sweep v1 (owner, 20 Nov 2026): NSE / US setups never cross the night; crypto runs on (candle expiry only)
             if p.get("_intraday"):
@@ -369,22 +371,28 @@ class _Side:
             # closing back inside (the reclaim), within sweep_max_bars of the BOS. A close beyond the protected swing
             # ends the BOS (structure broken); so does the expiry. After the sweep, the entry confirmation (signal
             # candle break and close) must come within entry_max_bars or the setup ends.
+            # v2 (owner, 20 Nov 2026): the same stage, but the liquidity reference is the nearest resting confirmed
+            # swing low of the BOS leg (_liq_ref); the protected swing stays the invalidation level. The sweep candle
+            # must close back above the liquidity reference (else: no reclaim, the setup ends).
             lo_j, a = b[j][3], ctx.atr[j] or 0
             pen_max = (p.get("sweep_pen_atr") or 0.25) * a
             for st in self.waiting:
                 if j <= st["bos"]:
                     still.append(st)
                     continue
-                ref = st["origin"]
-                if c < ref:
+                ref, ref_name = (st["origin"], "bos_origin") if p.get("sweep_rule") == "v1" else self._liq_ref(st, j)
+                if c < st["origin"]:
                     gone.append(st)
                     self.ended.append((st, j, "closed beyond the protected swing"))
                 elif lo_j < ref:
                     if a and ref - lo_j > pen_max:
                         gone.append(st)
                         self.ended.append((st, j, "wick too deep (%.2f ATR)" % ((ref - lo_j) / a)))
+                    elif c < ref:
+                        gone.append(st)
+                        self.ended.append((st, j, "no reclaim (closed beyond the liquidity reference)"))
                     else:
-                        st.update(lvl_name="bos_origin", lvl=ref, sweep=j, reclaim=j, liq_ref=ref,
+                        st.update(lvl_name=ref_name, lvl=ref, sweep=j, reclaim=j, liq_ref=ref,
                                   sweep_atr=a, sweep_pen=ref - lo_j)
                         self.stats["sweeps"] = self.stats.get("sweeps", 0) + 1
                 elif j - st["bos"] >= int(p.get("sweep_max_bars") or 12):
@@ -437,7 +445,7 @@ class _Side:
             ev = getattr(ctx, "legs", {}).get(j)
             if ev and not open_candle and not (p.get("bos_gap_skip") and b[j][1] > ev[0]):
                 st = {"bos": j, "level": ev[0], "origin": ev[1], "sweep": None, "used": False,
-                      "day": self.day[j] if self.day is not None else None}
+                      "day": self.day[j] if self.day is not None else None, "leg_i": ev[2]}
                 self.stats["bos"] = self.stats.get("bos", 0) + 1
                 self.setups.append(st)
                 self.waiting.append(st)
@@ -461,7 +469,7 @@ class _Side:
                       and self.lows.q(shs[-1][0] + 1, j - 1) > before[-1][1])
             if ok:
                 st = {"bos": j, "level": sh_px, "origin": self.lows.q(sh_i, j), "sweep": None, "used": False,
-                      "day": self.day[j] if self.day is not None else None}
+                      "day": self.day[j] if self.day is not None else None, "leg_i": sh_i}
                 self.stats["bos"] = self.stats.get("bos", 0) + 1
                 self.setups.append(st)
                 self.waiting.append(st)
@@ -494,6 +502,19 @@ class _Side:
                 return None
             return max(self.trig, key=lambda t: t["bos"]) if p.get("bos_pick") == "newest" else self.trig[0]
         return None
+
+    def _liq_ref(self, st, j):
+        """Sweep v2's liquidity reference for candle j: the nearest (highest) confirmed swing low of the BOS leg
+        (formed at or after the leg's start, above the protected swing) that no candle has traded below since it
+        formed, from the scanner's own confirmed swings as known at candle j-1 (no look-ahead). None left: the
+        protected swing itself. Returns (price, name)."""
+        best = None
+        for idx, px in self.ctx.sl_known[j - 1]:
+            if idx < st.get("leg_i", st["bos"]) or px <= st["origin"] or (best is not None and px <= best):
+                continue
+            if idx + 1 > j - 1 or self.lows.q(idx + 1, j - 1) > px:
+                best = px
+        return (best, "local_swing") if best is not None else (st["origin"], "bos_origin")
 
     def _trade(self, st, s, j, a, liq):
         b, p = self.b, self.p

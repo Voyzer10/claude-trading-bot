@@ -89,6 +89,29 @@ if __name__ == "__main__":
     check("   crypto: the day changes nothing, only the candle count (the sweep 5 candles after the BOS day's end)",
           len(t) == 1, (t, e))
 
+    # sweep v2: the liquidity reference is the nearest resting confirmed swing low of the BOS leg (here candle 45's
+    # 100.2, confirmed by 46-47 with k=2, so usable from candle 48); the protected 99.8 stays the invalidation level
+    L45, U46, U47 = (100.6, 100.8, 100.2, 100.7), (100.7, 101.0, 100.5, 100.9), (100.9, 101.1, 100.6, 101.0)
+    SW2, DJ2, TG2 = (101.0, 101.05, 100.1, 100.4), (100.4, 100.6, 100.2, 100.41), (100.41, 100.9, 100.35, 100.8)
+    t, e = run(build([L45, U46, U47, SW2, DJ2, TG2, TP]), sweep_rule="v2")
+    check("7. v2: a wick 0.1 under the local swing low 100.2, close back above: sweep, doji, break: a BUY; the "
+          "liquidity reference and the protected swing kept apart",
+          len(t) == 1 and t[0]["sweep"] == 48 and t[0]["level_name"] == "local_swing"
+          and abs(t[0]["liq_ref"] - 100.2) < 1e-9 and abs(t[0]["bos_origin"] - 99.8) < 1e-9, (t, e))
+    t, e = run(build([L45, U46, U47, SW2, DJ2, TG2, TP]), sweep_rule="v1")
+    check("   v1 on the same chart: 99.8 is never touched, no trade", not t, (t, e))
+    t, e = run(build([L45, U46, U47, (101.0, 101.05, 100.1, 100.15), DJ2, TG2, TP]), sweep_rule="v2")
+    check("   v2: closing below the liquidity reference (above the protected swing): no reclaim, the setup ends",
+          not t and e and e[0][2].startswith("no reclaim"), (t, e))
+    t, e = run(build([L45, U46, U47, (101.0, 101.05, 99.9, 100.4), DJ2, TG2, TP]), sweep_rule="v2")
+    check("   v2: a wick 0.30 under it (> 0.25 ATR): too deep", not t and e and e[0][2].startswith("wick too deep"),
+          (t, e))
+    t, e = run(build([L45, U46, U47, (101.0, 101.05, 99.7, 99.75), DJ2, TG2, TP]), sweep_rule="v2")
+    check("   v2: a close below the protected 99.8: invalidated", not t and e and "protected swing" in e[0][2], (t, e))
+    t, e = run(build([L45, (100.7, 101.0, 100.15, 100.4), DJ2, TG2, TP]), sweep_rule="v2")
+    check("   v2: no look-ahead: a wick under candle 45's low before it is a confirmed swing is not a sweep",
+          not t and not e, (t, e))
+
     old = [x for x in V4.sequence(build([SWEEP, (99.62, 100.0, 99.58, 99.70), TRIG, UP1, TP]), DAY)
            if x["side"] == "long" and x["kind"] == "primary"]
     check("6. the old \"close\" rule (the default) is unchanged: the close below 99.8 is its sweep, a BUY",
