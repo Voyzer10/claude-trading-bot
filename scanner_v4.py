@@ -144,6 +144,10 @@ DEFAULTS = {"buffer_atr": 0.1, "min_rr": 0.0, "doji_pct": 0.15,
             # bos_rule "legs" (owner, 20 Nov 2026): the swings are the trend's legs (see legs()); "swings" = the k-candle
             #   swings above
             "bos_rule": "legs",
+            # sweep_rule "v1" (owner, 20 Nov 2026, experimental): a wick through the protected swing, <= sweep_pen_atr x
+            #   ATR(14), closing back inside, within sweep_max_bars of the BOS; a close beyond it ends the BOS; the entry
+            #   within entry_max_bars of the sweep; NSE / US setups never cross the night. "close" = the older rule.
+            "sweep_rule": "close", "sweep_max_bars": 12, "sweep_pen_atr": 0.25, "entry_max_bars": 12,
             # the latest-BOS rule (owner, 14 Nov 2026): see _latest(); max_open = trades open at once on one chart
             "latest_bos": True, "max_open": 2}
 
@@ -312,6 +316,8 @@ class _Side:
         self.day = day            # session days (intraday charts): setups carry over one day only if unswept
         self.setups = []          # every BOS setup, oldest first: {"bos", "level", "origin", "sweep", "lvl", "used"}
         self.waiting = []         # not swept yet
+        # setups that ended without a trade, with why (sweep v1); research passes its own list as _ended
+        self.ended = p["_ended"] if isinstance(p.get("_ended"), list) else []
         self.pats = {}
         self.lows = _Range([r[3] for r in src], min)
         self.highs = _Range([r[2] for r in src], max)
@@ -331,7 +337,15 @@ class _Side:
         c = b[j][4]
         self.last_today = None    # the trigger of candle j from a setup whose BOS formed today (flip rule)
         self.trig = []            # every setup that triggers on candle j, oldest BOS first (latest-BOS rule)
-        if self.day is not None and j > 0 and self.day[j] != self.day[j - 1]:
+        v1 = p.get("sweep_rule") == "v1"
+        if v1 and self.day is not None and j > 0 and self.day[j] != self.day[j - 1]:
+            # sweep v1 (owner, 20 Nov 2026): NSE / US setups never cross the night; crypto runs on (candle expiry only)
+            if p.get("_intraday"):
+                for st in self.setups:
+                    if not st["used"]:
+                        self.ended.append((st, j, "overnight"))
+                self.setups, self.waiting = [], []
+        elif self.day is not None and j > 0 and self.day[j] != self.day[j - 1]:
             # a new session (owner, 12 Nov 2026, 5-minute intraday): only the previous day's BOS setups whose sweep
             # has not happened stay active, for this day only; swept-but-untraded and older setups end
             prev = self.day[j - 1]
@@ -348,7 +362,43 @@ class _Side:
         # sweeps first: a close below the setup's BOS-start low or a swing low confirmed after its BOS
         still, gone = [], []
         lim = (p.get("sweep_max_atr") or 0) * (ctx.atr[j] or 0)
-        for st in self.waiting:
+        if v1:
+            # sweep v1 (owner, 20 Nov 2026, from the 8 reviewed trades): the liquidity reference is the BOS's protected
+            # swing (its origin). A sweep is a WICK through it, at most sweep_pen_atr x ATR(14) deep, with the candle
+            # closing back inside (the reclaim), within sweep_max_bars of the BOS. A close beyond the protected swing
+            # ends the BOS (structure broken); so does the expiry. After the sweep, the entry confirmation (signal
+            # candle break and close) must come within entry_max_bars or the setup ends.
+            lo_j, a = b[j][3], ctx.atr[j] or 0
+            pen_max = (p.get("sweep_pen_atr") or 0.25) * a
+            for st in self.waiting:
+                if j <= st["bos"]:
+                    still.append(st)
+                    continue
+                ref = st["origin"]
+                if c < ref:
+                    gone.append(st)
+                    self.ended.append((st, j, "closed beyond the protected swing"))
+                elif lo_j < ref:
+                    if a and ref - lo_j > pen_max:
+                        gone.append(st)
+                        self.ended.append((st, j, "wick too deep (%.2f ATR)" % ((ref - lo_j) / a)))
+                    else:
+                        st.update(lvl_name="bos_origin", lvl=ref, sweep=j, reclaim=j, liq_ref=ref)
+                elif j - st["bos"] >= int(p.get("sweep_max_bars") or 12):
+                    gone.append(st)
+                    self.ended.append((st, j, "no sweep within %d candles" % int(p.get("sweep_max_bars") or 12)))
+                else:
+                    still.append(st)
+            for st in self.setups:                    # swept, waiting for the entry confirmation
+                if st["used"] or st["sweep"] is None or st["sweep"] >= j or any(st is g for g in gone):
+                    continue
+                if c < st["origin"]:
+                    gone.append(st)
+                    self.ended.append((st, j, "closed beyond the protected swing after the sweep"))
+                elif j - st["sweep"] > int(p.get("entry_max_bars") or 12):
+                    gone.append(st)
+                    self.ended.append((st, j, "no entry within %d candles of the sweep" % int(p.get("entry_max_bars") or 12)))
+        for st in ([] if v1 else self.waiting):
             if j <= st["bos"]:
                 still.append(st)
                 continue
@@ -365,7 +415,7 @@ class _Side:
             else:
                 still.append(st)
         self.waiting = still
-        if p.get("sweep_shift"):
+        if p.get("sweep_shift") and not v1:
             # a swept, untraded setup: a close below a confirmed swing low beyond its sweep level moves the sweep there
             for st in self.setups:
                 if st["used"] or st["sweep"] is None or st["sweep"] >= j:
@@ -929,13 +979,15 @@ def _real(t, short):
     t = {k: v for k, v in t.items() if k not in ("setup", "_zones", "cur_stop", "stop_kind", "_side")}
     if st:                                                # the BOS behind the trade (charts / research)
         t.setdefault("bos_level", st.get("level"))
-        t.setdefault("bos_origin", st.get("origin"))
+        t.setdefault("bos_origin", st.get("origin"))      # = the protected swing
+        t.setdefault("liq_ref", st.get("liq_ref"))        # sweep v1: the liquidity reference
+        t.setdefault("reclaim", st.get("reclaim"))        # sweep v1: the candle that closed back inside
     t["side"] = "short" if short else "long"
     if short and t.get("signal_pattern") in SHORT_NAME:   # mirrored back: a real dragonfly doji / hammer at the top
         t["signal_pattern"] = SHORT_NAME[t["signal_pattern"]]
     if short:
         for f in ("level", "extreme", "entry", "stop", "target", "trigger_px", "zone_top", "zone_bottom", "exit",
-                  "signal_close", "bos_level", "bos_origin"):
+                  "signal_close", "bos_level", "bos_origin", "liq_ref"):
             if t.get(f) is not None:
                 t[f] = -t[f]
         if t.get("zone_top") is not None:
