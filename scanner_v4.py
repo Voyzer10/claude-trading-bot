@@ -62,6 +62,7 @@ switch it on (variant with_weak_bos), as it can the 1-hour trend skip (htf). Cho
 """
 from datetime import datetime, timezone
 
+import bisect
 import smc_playbook as PB
 
 
@@ -362,6 +363,22 @@ class _Side:
                 swept = [st for st in self.setups if not st["used"] and st["sweep"] is not None and st["day"] == prev
                          and self.day[st["sweep"]] == prev]
             self.setups, self.waiting = keep + swept, [st for st in keep]
+        if p.get("choch_invalidate") and j in getattr(ctx, "choch_set", ()):
+            # research (21 Nov 2026, BOS spec v2.1 §6, T9): a CHoCH against this side on candle j ends every unused
+            # setup of this side whose BOS came before it, unswept, swept or waiting for its signal, BEFORE the
+            # sweeps and triggers of candle j (so the CHoCH candle is never its sweep). Terminal: the setup leaves
+            # setups / waiting and is never re-added. Open trades are not setups: untouched.
+            dead = [st for st in self.setups if not st["used"] and st["bos"] < j]
+            dead += [st for st in self.waiting if not st["used"] and st["bos"] < j and all(st is not d for d in dead)]
+            for st in dead:
+                st["invalidated"] = j
+                self.ended.append((st, j, "invalidated by CHoCH"))
+            if dead:
+                self.stats["choch_invalidated"] = self.stats.get("choch_invalidated", 0) + len(dead)
+                self.setups = [st for st in self.setups if all(st is not d for d in dead)]
+                self.waiting = [st for st in self.waiting if all(st is not d for d in dead)]
+        if p.get("entry_rule") == "c1_continuation":
+            return self._c1_step(j)
         # sweeps first: a close below the setup's BOS-start low or a swing low confirmed after its BOS
         still, gone = [], []
         lim = (p.get("sweep_max_atr") or 0) * (ctx.atr[j] or 0)
@@ -502,6 +519,86 @@ class _Side:
                 return None
             return max(self.trig, key=lambda t: t["bos"]) if p.get("bos_pick") == "newest" else self.trig[0]
         return None
+
+    def _c1_step(self, j):
+        """Candidate 1 (research id "c1_continuation", 21 Nov 2026): fresh BOS -> pullback -> continuation BOS.
+        The entry signal is BOS2 itself (ctx.c1, from legs()); BOS1 and the CHoCH candle never trigger. Entry = BOS2's
+        close (filled at the next open by sequence()); stop = BOS2's protected level (its origin, the pullback
+        extreme) - buffer_atr x ATR(14) of candle j; target = the existing target_rule (see _c1_target). Rejections
+        are recorded in self.ended with their reason. Returns the trigger or None."""
+        b, ctx, p = self.b, self.ctx, self.p
+        ev = getattr(ctx, "legs", {}).get(j)
+        if not ev:
+            return None
+        open_candle = bool(p.get("skip_open_bos") and p.get("_intraday") and self.day is not None
+                           and (j == 0 or self.day[j] != self.day[j - 1]))
+        gap = bool(p.get("bos_gap_skip") and b[j][1] > ev[0])
+        if not open_candle and not gap:              # the same BOS history the baseline keeps (opposite targets)
+            self.stats["bos"] = self.stats.get("bos", 0) + 1
+            self.bos_hist.append((j, ev[1]))
+        run = getattr(ctx, "c1", {}).get(j)
+        if run is None:
+            return None
+        st = {"bos": j, "level": ev[0], "origin": ev[1], "sweep": None, "used": False, "leg_i": ev[2],
+              "day": self.day[j] if self.day is not None else None, "bos1": run["bos1"], "choch": run["choch"],
+              "pull": run["pull"], "lvl_name": "c1_bos2", "lvl": ev[0], "c1_side": run["side"]}
+        self.stats["c1_bos2"] = self.stats.get("c1_bos2", 0) + 1
+        why = None
+        a = ctx.atr[j]
+        c = b[j][4]
+        if open_candle:
+            why = "BOS2 on the session's first candle (skip_open_bos)"
+        elif gap:
+            why = "BOS2 candle opened beyond the level (bos_gap_skip)"
+        elif not a:
+            why = "no ATR(14) yet"
+        elif p.get("htf") and self.htf is not None and self.htf[j] == "down":
+            why = "higher timeframe against (htf)"
+        stop = tgt = None
+        if why is None:
+            stop = ev[1] - p["buffer_atr"] * a
+            if stop >= c:
+                why = "stop at or beyond the entry"
+            else:
+                tgt, st["tgt_src"] = self._c1_target(j, c)
+                if tgt is None or tgt <= c:
+                    why = "no target beyond the entry"
+                elif (tgt - c) < p["min_rr"] * (c - stop):
+                    why = "reward:risk below min_rr"
+        if why:
+            self.ended.append((st, j, why))
+            self.stats["c1_rejected"] = self.stats.get("c1_rejected", 0) + 1
+            return None
+        t = {"i": j, "kind": "primary", "setup": st, "bos": j, "sweep": None, "reclaim": None, "signal": j,
+             "level_name": "c1_bos2", "level": ev[0], "entry": c, "stop": stop, "target": tgt, "atr": a,
+             "trigger_px": ev[0], "signal_pattern": None, "entry_rule": "c1_continuation", "c1_bos1": run["bos1"],
+             "c1_choch": run["choch"], "c1_pull": run["pull"], "c1_tgt_src": st["tgt_src"]}
+        self.setups = [x for x in self.setups if not x["used"]] + [st]
+        self.trig = [t]
+        if self.day is not None and st["day"] == self.day[j]:
+            self.last_today = t
+        return t
+
+    def _c1_target(self, j, c):
+        """Candidate 1's target, the existing target_rule unchanged in meaning: "opp_bos_cap" (the default) = where
+        the latest opposite-side BOS move started, above the entry and untaken, capped at the nearest big swing; when
+        there is none (or target_rule "near"): the nearest untaken confirmed swing high, or the BOS move's extreme
+        (here: from BOS2's candle, which has no sweep) when above the entry. (target, "opp_bos" | "near")."""
+        b, p = self.b, self.p
+        liq = _targets(self.ctx, b, j, c)
+        move_hi = self.highs.q(j, j)
+        tgt = min([x for x in (liq, move_hi if move_hi > c else None) if x is not None], default=None)
+        src = "near"
+        rule = p.get("target_rule", "near")
+        if rule != "near":
+            ot = self._opp_target(j, c)
+            if ot is not None:
+                if rule == "opp_bos_cap":
+                    cap = self._big_swing(j, c, int(p.get("big_k") or 6))
+                    if cap is not None:
+                        ot = min(ot, cap)
+                tgt, src = ot, "opp_bos"
+        return tgt, src
 
     def _liq_ref(self, st, j):
         """Sweep v2's liquidity reference for candle j: the nearest (highest) confirmed swing low of the BOS leg
@@ -694,7 +791,7 @@ def _fill(bars, day, t, intraday):
     return o, None
 
 
-def legs(rows):
+def legs(rows, info=None):
     """The owner's market structure (20 Nov 2026): swings come from the trend's own legs, not from a candle count.
 
     Uptrend: the swing high is the top of the current leg (it rises with the price until a pullback starts: a
@@ -704,8 +801,16 @@ def legs(rows):
     the downtrend's first BOS is a close below its first leg's low. The downtrend mirrors all of it. Before the
     first break the range's high / low are the swings.
 
-    Returns {candle j: ("long" | "short", broken level, origin, origin candle)} for every BOS (not the CHoCH)."""
+    Returns {candle j: ("long" | "short", broken level, origin, origin candle)} for every BOS (not the CHoCH).
+
+    info (research, 21 Nov 2026; optional, changes nothing): a dict that receives the structure's other events from
+    this same pass: "init" (candle, "up" | "down") = where the range break set the first trend (not a BOS), "choch"
+    {candle: the new trend "up" | "down"}, "pull" {candle: "long" | "short"} = where a pullback started (the side
+    whose leg is pulling back)."""
     out, n = {}, len(rows)
+    rec = info is not None
+    if rec:
+        info.update(init=None, choch={}, pull={})
     if n < 3:
         return out
     trend = None
@@ -718,9 +823,13 @@ def legs(rows):
             if c > hi:
                 trend, prot, pulling = "up", lo, False
                 hi, hi_i = h, j
+                if rec:
+                    info["init"] = (j, "up")
             elif c < lo:
                 trend, prot, pulling = "down", hi, False
                 lo, lo_i = l, j
+                if rec:
+                    info["init"] = (j, "down")
             else:
                 if h > hi:
                     hi, hi_i = h, j
@@ -731,6 +840,8 @@ def legs(rows):
             if c < prot:                                   # CHoCH: the trend turns down, no setup; the leg's top
                 trend, prot, pulling = "down", hi, False   # is the high that protects the downtrend
                 lo, lo_i = l, j
+                if rec:
+                    info["choch"][j] = "down"
                 continue
             if pulling and c > hi:                         # BOS: the close is above the leg's top after a pullback
                 out[j] = ("long", hi, pb, pb_i)
@@ -742,12 +853,16 @@ def legs(rows):
                     hi, hi_i = h, j
                 if l < rows[j - 1][3] and j > hi_i:          # a lower low after the top: the pullback starts
                     pulling, pb, pb_i = True, l, j
+                    if rec:
+                        info["pull"][j] = "long"
             elif l < pb:                                   # (a wick above the top without a close keeps the level)
                 pb, pb_i = l, j
         else:
             if c > prot:                                   # CHoCH up
                 trend, prot, pulling = "up", lo, False
                 hi, hi_i = h, j
+                if rec:
+                    info["choch"][j] = "up"
                 continue
             if pulling and c < lo:                         # bearish BOS
                 out[j] = ("short", lo, pb, pb_i)
@@ -759,9 +874,57 @@ def legs(rows):
                     lo, lo_i = l, j
                 if h > rows[j - 1][2] and j > lo_i:          # a higher high after the bottom: the pullback starts
                     pulling, pb, pb_i = True, h, j
+                    if rec:
+                        info["pull"][j] = "short"
             elif h > pb:
                 pb, pb_i = h, j
     return out
+
+
+def c1_runs(lg, info):
+    """Candidate 1 (research, 21 Nov 2026: fresh BOS -> pullback -> continuation BOS), from one legs() pass, no
+    second structure: every trend that a CHoCH started (the range-break start has no CHoCH and is not a run), with
+    its first BOS (BOS1, never an entry), the first pullback after BOS1, and the next same-side BOS (BOS2, the entry
+    signal). legs() only makes BOS2 after a pullback whose closes held BOS1's protected level (a close beyond it is
+    the CHoCH that ends the run). Each run: {"side", "choch", "bos1", "pull", "bos2", "end"}; "end" says how the run
+    stopped before a BOS2: "choch" (the pullback / leg closed beyond the protected level), "data" (series ended), or
+    None when BOS2 came."""
+    ev = sorted([(j, "choch", d) for j, d in info["choch"].items()] + [(j, "bos", sd) for j, (sd, *_r) in lg.items()])
+    pulls = sorted(info["pull"].items())
+    pj = [j for j, _ in pulls]
+    runs, cur = [], None
+    for j, kind, d in ev:
+        if kind == "choch":
+            if cur is not None and cur["bos2"] is None:
+                cur["end"] = "choch"
+            cur = {"side": "long" if d == "up" else "short", "choch": j, "bos1": None, "pull": None, "bos2": None,
+                   "end": None}
+            runs.append(cur)
+            continue
+        if cur is None or d != cur["side"]:
+            continue                                     # the range-break trend's BOS: not a CHoCH-born run
+        if cur["bos1"] is None:
+            cur["bos1"] = j
+        elif cur["bos2"] is None:
+            cur["bos2"] = j
+            k = bisect.bisect_right(pj, cur["bos1"])
+            while k < len(pulls) and pulls[k][0] < j:
+                if pulls[k][1] == cur["side"]:
+                    cur["pull"] = pulls[k][0]
+                    break
+                k += 1
+    if cur is not None and cur["bos2"] is None:
+        cur["end"] = "data"
+    for r in runs:
+        if r["bos1"] is not None and r["bos2"] is None and r["pull"] is None:
+            nxt = next((x for x, _k, _d in ev if x > r["bos1"] and _k == "choch"), None)
+            k = bisect.bisect_right(pj, r["bos1"])
+            while k < len(pulls) and (nxt is None or pulls[k][0] < nxt):
+                if pulls[k][1] == r["side"]:
+                    r["pull"] = pulls[k][0]
+                    break
+                k += 1
+    return runs
 
 
 def contexts(rows, day_of, htf=True, k=2):
@@ -769,9 +932,19 @@ def contexts(rows, day_of, htf=True, k=2):
     chart, pass as ctxs=."""
     m = mirror(rows)
     cl, cs = PB.Context(rows, day_of, k=k), PB.Context(m, day_of, k=k)
-    lg = legs(rows)                                       # the owner's leg structure, in src terms per side
+    info = {}
+    lg = legs(rows, info)                                 # the owner's leg structure, in src terms per side
     cl.legs = {j: (lv, og, oi) for j, (sd, lv, og, oi) in lg.items() if sd == "long"}
     cs.legs = {j: (-lv, -og, oi) for j, (sd, lv, og, oi) in lg.items() if sd == "short"}
+    # research (21 Nov 2026), from the same legs() pass: the CHoCH candles against each side (a bearish CHoCH ends the
+    # long side's structure) and Candidate 1's runs (see c1_runs)
+    cl.choch_against = sorted(j for j, d in info["choch"].items() if d == "down")
+    cs.choch_against = sorted(j for j, d in info["choch"].items() if d == "up")
+    cl.choch_set, cs.choch_set = set(cl.choch_against), set(cs.choch_against)
+    runs = c1_runs(lg, info)
+    cl.c1 = {r["bos2"]: r for r in runs if r["side"] == "long" and r["bos2"] is not None}
+    cs.c1 = {r["bos2"]: r for r in runs if r["side"] == "short" and r["bos2"] is not None}
+    cl.c1_runs, cs.c1_runs = [r for r in runs if r["side"] == "long"], [r for r in runs if r["side"] == "short"]
     return {"rows": rows, "mirror": m, "ctx": (cl, cs), "day": [day_of(r[0]) for r in rows], "k": k,
             "htf": (htf_dirs(rows, day_of), htf_dirs(m, day_of)) if htf else (None, None)}
 
@@ -800,7 +973,9 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
             if got:
                 tr.update(exit_i=k, exit=got[0], exit_reason=got[1])
                 out.append(_real(tr, tr["_side"] == 1))
-                sec = (tr["_side"], tr, k) if tr["kind"] == "primary" else None
+                # Candidate 1 (research) is a primary-only entry model: no OB / FVG secondaries after its trades
+                sec = (tr["_side"], tr, k) if tr["kind"] == "primary" and p.get("entry_rule") != "c1_continuation" \
+                    else None
             else:
                 still.append(tr)
         opens = still
@@ -838,6 +1013,18 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
                                  else {"latest_bos": True})))
             continue
         pick = None
+        if sec is not None and k > sec[2] and p.get("choch_invalidate"):
+            # research (21 Nov 2026, spec v2.1 §6, T9): the OB / FVG search belongs to ONE parent primary trade (sec
+            # holds it). A CHoCH against that side after the parent's BOS, up to this candle, breaks the parent's
+            # structure: the linked search ends (terminal). Other sides' / other parents' searches are not touched.
+            s_, prim_, kx_ = sec
+            ag = cx["ctx"][s_].choch_against
+            q = bisect.bisect_right(ag, prim_["bos"])
+            if q < len(ag) and ag[q] <= k:
+                sides[s_].ended.append(({"kind": "secondary", "parent_bos": prim_["bos"], "parent_i": prim_["i"]}, k,
+                                        "secondary invalidated by CHoCH (parent primary's structure)"))
+                sides[s_].stats["sec_choch_invalidated"] = sides[s_].stats.get("sec_choch_invalidated", 0) + 1
+                sec = None
         if sec is not None and k > sec[2]:
             s, prim, kx = sec
             got = sides[s].secondary_at(prim, kx, k)
