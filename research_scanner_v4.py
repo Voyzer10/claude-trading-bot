@@ -500,8 +500,199 @@ def sweep_report(argv=None):
             json.dump({k: {"stats": v["stats"], "why": v["why"]} for k, v in agg.items()}, fh)
 
 
+
+# --- BOS quality analysis (owner, 20 Nov 2026): research and reporting only, no trading change ---------------------
+# The baseline ("close" sweep, live defaults, the account's Trade Manager) primary trades of the same long broker
+# history and splits as the sweep comparison, each tagged with BOS-quality / freshness / entry measurements taken from
+# the scanner's own context (its ATR(14), its legs() BOS events) and the trade's own setup. Bins are fixed in advance
+# (round numbers, below) and never tuned on the data. Every trade lands in exactly one bin per metric ("missing" when
+# a measurement cannot be made); the metrics are different views of the SAME trades, never added together.
+#     python research_scanner_v4.py bos nse|us|crypto
+BOS_BINS = [
+    # name, what, edges (bin k = [edge k-1, edge k)), unit
+    ("body_atr", "BOS candle body / ATR(14) at the BOS candle", [0.5, 1.0, 1.5]),
+    ("range_atr", "BOS candle high-low / ATR", [1.0, 1.5, 2.0]),
+    ("beyond_atr", "BOS close beyond the broken swing / ATR", [0.1, 0.25, 0.5]),
+    ("leg_atr", "broken swing - BOS origin (= protected swing) / ATR", [1.0, 2.0, 4.0]),
+    ("prot_broken", "a close beyond the protected swing between BOS and entry (1 = yes)", [0.5]),
+    ("bars", "candles from the BOS to the entry", [4, 13, 37, 79]),
+    ("minutes", "minutes from the BOS to the entry", [30, 60, 180, 1440]),
+    ("overnight", "BOS and entry on different session days (1 = yes)", [0.5]),
+    ("entry_origin_atr", "entry - BOS origin (= protected swing) / ATR at entry", [0.0, 0.5, 1.0, 2.0]),
+    ("entry_level_atr", "entry - broken swing / ATR at entry", [-2.0, -1.0, 0.0]),
+]
+
+
+def _bos_chart(args):
+    import research_features as F
+    import research_tf as TF
+    market, sym, rows, tm = args
+    m = F.MARKETS[market]
+    day_of = (lambda t: m["local"](t).date())
+    p = dict(V4.DEFAULTS, **tm)
+    k = int(p.get("swing_k") or 2)
+    cx = V4.contexts(rows, day_of, bool(p.get("htf")), k=k)
+    atr = cx["ctx"][0].atr                     # the mirror chart has the same candle ranges, so the same ATR
+    lg = V4.legs(rows)
+    day = cx["day"]
+    out, bad, dup, seen = [], {"open": 0, "risk": 0, "ref_mismatch": 0}, 0, set()
+    for t in V4.sequence(rows, day_of, intraday=m["intraday"], max_hold=None, ctxs=cx, **tm):
+        if t["kind"] != "primary":
+            continue
+        if t.get("exit") is None or t.get("exit_reason") == "open":
+            bad["open"] += 1
+            continue
+        sg = 1 if t["side"] == "long" else -1
+        risk = (t["entry"] - t["stop"]) * sg
+        if risk <= 0:
+            bad["risk"] += 1
+            continue
+        key = (t["side"], t["bos"], t["i"])
+        if key in seen:
+            dup += 1
+            continue
+        seen.add(key)
+        j, i = t["bos"], t["i"]
+        ev = lg.get(j)
+        lvl, org = t.get("bos_level"), t.get("bos_origin")
+        if p.get("bos_rule") == "legs" and (not ev or ev[0] != t["side"] or abs(ev[1] - lvl) > 1e-9
+                                            or abs(ev[2] - org) > 1e-9):
+            bad["ref_mismatch"] += 1               # the trade's BOS / protected swing are not the scanner's event
+        o, h, l, c = rows[j][1:5]
+        aj, ai = atr[j], t.get("atr") or atr[i]
+        closes = [rows[x][4] for x in range(j + 1, i)]
+        f = {"r": (t["exit"] - t["entry"]) * sg / risk, "cost": TF.COST_PCT[market] / 100 * t["entry"] / risk,
+             "t": rows[i][0].timestamp(), "day": day_of(rows[i][0]).isoformat(), "sym": sym, "side": t["side"],
+             "exit": t["exit_reason"],
+             "body_atr": abs(c - o) / aj if aj else None,
+             "range_atr": (h - l) / aj if aj else None,
+             "beyond_atr": (c - lvl) * sg / aj if aj else None,
+             "leg_atr": (lvl - org) * sg / aj if aj else None,
+             "prot_broken": float(any((x - org) * sg < 0 for x in closes)),
+             "bars": i - j,
+             "minutes": (rows[i][0] - rows[j][0]).total_seconds() / 60,
+             "overnight": float(day[i] != day[j]),
+             "entry_origin_atr": (t["entry"] - org) * sg / ai if ai else None,
+             "entry_level_atr": (t["entry"] - lvl) * sg / ai if ai else None}
+        out.append(f)
+    return sym, out, bad, dup
+
+
+def _bin_label(edges, k):
+    if len(edges) == 1 and edges[0] == 0.5:
+        return ("no", "yes")[k]
+    lo = "-inf" if k == 0 else "%g" % edges[k - 1]
+    hi = "inf" if k == len(edges) else "%g" % edges[k]
+    return "[%s, %s)" % (lo, hi)
+
+
+def _bin_stats(tr):
+    import math
+    n = len(tr)
+    if not n:
+        return None
+    rs = [t["r"] for t in tr]
+    avg = sum(rs) / n
+    sd = math.sqrt(sum((x - avg) ** 2 for x in rs) / (n - 1)) if n > 1 else 0.0
+    gp = sum(x for x in rs if x > 0)
+    gl = -sum(x for x in rs if x < 0)
+    eq = pk = dd = 0.0
+    for t in sorted(tr, key=lambda x: x["t"]):
+        eq += t["r"]
+        pk = max(pk, eq)
+        dd = max(dd, pk - eq)
+    return {"n": n, "avg": avg, "se": sd / math.sqrt(n) if n > 1 else float("nan"), "pf": gp / gl if gl else float("inf"),
+            "wr": 100.0 * sum(1 for x in rs if x >= SWEEP_BE) / n, "dd": dd,
+            "avg_c": sum(t["r"] - t["cost"] for t in tr) / n}
+
+
+def _spearman(xs, ys):
+    import math
+    n = len(xs)
+    if n < 10:
+        return float("nan")
+
+    def rank(v):
+        order = sorted(range(n), key=lambda q: v[q])
+        r = [0.0] * n
+        a = 0
+        while a < n:
+            b = a
+            while b + 1 < n and v[order[b + 1]] == v[order[a]]:
+                b += 1
+            for q in range(a, b + 1):
+                r[order[q]] = (a + b) / 2.0
+            a = b + 1
+        return r
+    rx, ry = rank(xs), rank(ys)
+    mx, my = sum(rx) / n, sum(ry) / n
+    cov = sum((a - mx) * (b - my) for a, b in zip(rx, ry))
+    vx = math.sqrt(sum((a - mx) ** 2 for a in rx))
+    vy = math.sqrt(sum((b - my) ** 2 for b in ry))
+    return cov / (vx * vy) if vx and vy else float("nan")
+
+
+def bos_report(argv=None):
+    import argparse
+    import bisect
+    import math
+    from multiprocessing import Pool
+    import research_features as F
+    import research_tf as TF
+    ap = argparse.ArgumentParser(prog="research_scanner_v4.py bos")
+    ap.add_argument("market", choices=list(F.MARKETS))
+    ap.add_argument("--workers", type=int, default=2)
+    a = ap.parse_args(argv)
+    tm = {}
+    try:
+        import paper as P
+        tm = V4.tm_settings(P.load_config()["accounts"].get({"nse": "INDIA", "us": "US", "crypto": "CRYPTO"}[a.market], {}))
+    except Exception:
+        pass
+    data = F.load(a.market)
+    with Pool(a.workers) as pool:
+        res = list(pool.imap_unordered(_bos_chart, [(a.market, s, r, tm) for s, r in data.items()]))
+    trades = [t for _, tr, _, _ in res for t in tr]
+    bad = {k: sum(b[k] for _, _, b, _ in res) for k in ("open", "risk", "ref_mismatch")}
+    dup = sum(d for _, _, _, d in res)
+    split = TF.SPLIT[a.market]
+    ins = [t for t in trades if t["day"] < split]
+    oos = [t for t in trades if t["day"] >= split]
+    print("%s: %d symbols, baseline close-rule primary trades: %d (in-sample %d, out-of-sample %d from %s)" % (
+        a.market, len(res), len(trades), len(ins), len(oos), split))
+    print("excluded: still open %d, zero/negative risk %d; duplicates %d; BOS / protected swing not matching the "
+          "scanner's legs() event: %d" % (bad["open"], bad["risk"], dup, bad["ref_mismatch"]))
+    print("R before costs; 'aft.c' = avg R after ~%.3f%% round-trip costs; +-95%% = 1.96 x standard error of the avg"
+          % TF.COST_PCT[a.market])
+    for nm, label in (("ALL", "all trades"),):
+        for part, tr in (("IS", ins), ("OOS", oos)):
+            s = _bin_stats(tr)
+            print("  %-4s %-3s n=%5d avg %+.3fR +-%.3f PF %.2f win %.1f%% maxDD %.1fR aft.c %+.3fR" % (
+                nm, part, s["n"], s["avg"], 1.96 * s["se"], s["pf"], s["wr"], s["dd"], s["avg_c"]))
+    for key, what, edges in BOS_BINS:
+        print("\n%s: %s" % (key, what))
+        miss = sum(1 for t in trades if t[key] is None)
+        xs = {part: [(t[key], t["r"]) for t in tr if t[key] is not None] for part, tr in (("IS", ins), ("OOS", oos))}
+        print("  Spearman(metric, R): IS %+.3f (n %d)   OOS %+.3f (n %d)   missing %d" % (
+            _spearman(*zip(*xs["IS"])) if len(xs["IS"]) > 9 else float("nan"), len(xs["IS"]),
+            _spearman(*zip(*xs["OOS"])) if len(xs["OOS"]) > 9 else float("nan"), len(xs["OOS"]), miss))
+        print("  %-14s | %-50s | %-50s" % ("bin", "IN-SAMPLE  n  avgR  +-95%  PF  win%  maxDD  aft.c",
+                                          "OUT-OF-SAMPLE  n  avgR  +-95%  PF  win%  maxDD  aft.c"))
+        for kb in range(len(edges) + 1):
+            cells = []
+            for tr in (ins, oos):
+                sub = [t for t in tr if t[key] is not None and bisect.bisect_right(edges, t[key]) == kb]
+                s = _bin_stats(sub)
+                cells.append("%5d  --" % 0 if not s else "%5d %+.3f %.3f %5.2f %5.1f %6.1f %+.3f" % (
+                    s["n"], s["avg"], 1.96 * s["se"] if not math.isnan(s["se"]) else 0, min(s["pf"], 99), s["wr"],
+                    s["dd"], s["avg_c"]))
+            print("  %-14s | %-50s | %-50s" % (_bin_label(edges, kb), cells[0], cells[1]))
+    return 0
+
 if __name__ == "__main__":
     import sys
     if sys.argv[1:2] == ["sweep"]:
         sys.exit(sweep_report(sys.argv[2:]))
+    if sys.argv[1:2] == ["bos"]:
+        sys.exit(bos_report(sys.argv[2:]))
     print("usage: python research_scanner_v4.py sweep nse|us|crypto [--workers 2]  (the grid runs via research.py)")
