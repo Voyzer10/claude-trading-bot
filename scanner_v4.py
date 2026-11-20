@@ -318,6 +318,7 @@ class _Side:
         self.waiting = []         # not swept yet
         # setups that ended without a trade, with why (sweep v1); research passes its own list as _ended
         self.ended = p["_ended"] if isinstance(p.get("_ended"), list) else []
+        self.stats = p["_stats"] if isinstance(p.get("_stats"), dict) else {}    # research counters (sweep v1 report)
         self.pats = {}
         self.lows = _Range([r[3] for r in src], min)
         self.highs = _Range([r[2] for r in src], max)
@@ -383,7 +384,9 @@ class _Side:
                         gone.append(st)
                         self.ended.append((st, j, "wick too deep (%.2f ATR)" % ((ref - lo_j) / a)))
                     else:
-                        st.update(lvl_name="bos_origin", lvl=ref, sweep=j, reclaim=j, liq_ref=ref)
+                        st.update(lvl_name="bos_origin", lvl=ref, sweep=j, reclaim=j, liq_ref=ref,
+                                  sweep_atr=a, sweep_pen=ref - lo_j)
+                        self.stats["sweeps"] = self.stats.get("sweeps", 0) + 1
                 elif j - st["bos"] >= int(p.get("sweep_max_bars") or 12):
                     gone.append(st)
                     self.ended.append((st, j, "no sweep within %d candles" % int(p.get("sweep_max_bars") or 12)))
@@ -435,6 +438,7 @@ class _Side:
             if ev and not open_candle and not (p.get("bos_gap_skip") and b[j][1] > ev[0]):
                 st = {"bos": j, "level": ev[0], "origin": ev[1], "sweep": None, "used": False,
                       "day": self.day[j] if self.day is not None else None}
+                self.stats["bos"] = self.stats.get("bos", 0) + 1
                 self.setups.append(st)
                 self.waiting.append(st)
                 self.bos_hist.append((j, st["origin"]))
@@ -458,6 +462,7 @@ class _Side:
             if ok:
                 st = {"bos": j, "level": sh_px, "origin": self.lows.q(sh_i, j), "sweep": None, "used": False,
                       "day": self.day[j] if self.day is not None else None}
+                self.stats["bos"] = self.stats.get("bos", 0) + 1
                 self.setups.append(st)
                 self.waiting.append(st)
                 self.bos_hist.append((j, st["origin"]))
@@ -481,6 +486,7 @@ class _Side:
                 t = self._trade(st, s, j, a, liq)
                 if not t:
                     continue
+                self.stats["confirmations"] = self.stats.get("confirmations", 0) + 1
                 self.trig.append(t)
                 if self.last_today is None and self.day is not None and st["day"] == self.day[j]:
                     self.last_today = t
@@ -982,6 +988,8 @@ def _real(t, short):
         t.setdefault("bos_origin", st.get("origin"))      # = the protected swing
         t.setdefault("liq_ref", st.get("liq_ref"))        # sweep v1: the liquidity reference
         t.setdefault("reclaim", st.get("reclaim"))        # sweep v1: the candle that closed back inside
+        t.setdefault("sweep_atr", st.get("sweep_atr"))
+        t.setdefault("sweep_pen", st.get("sweep_pen"))
     t["side"] = "short" if short else "long"
     if short and t.get("signal_pattern") in SHORT_NAME:   # mirrored back: a real dragonfly doji / hammer at the top
         t["signal_pattern"] = SHORT_NAME[t["signal_pattern"]]
