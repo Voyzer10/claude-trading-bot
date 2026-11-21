@@ -717,4 +717,7 @@ if __name__ == "__main__":
         sys.exit(sweep_report(sys.argv[2:]))
     if sys.argv[1:2] == ["bos"]:
         sys.exit(bos_report(sys.argv[2:]))
+    if sys.argv[1:2] == ["entry"]:
+        import research_entry_v4                 # entry-quality research on the internal-sweep setups
+        sys.exit(research_entry_v4.main(sys.argv[2:]))
     print("usage: python research_scanner_v4.py sweep nse|us|crypto [--workers 2]  (the grid runs via research.py)")

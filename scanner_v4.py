@@ -656,6 +656,8 @@ class _Side:
             else:
                 st.update(lvl_name=nm, lvl=px, sweep=j, reclaim=j, liq_ref=px, sweep_atr=a, sweep_pen=px - lo_j)
                 self.stats["sweeps"] = self.stats.get("sweeps", 0) + 1
+                if isinstance(p.get("_sweeps"), list):   # research: the published swept setups (record only)
+                    p["_sweeps"].append((self, st, j))
                 return True                          # swept: leaves the waiting list, waits for its entry
         if j - st["bos"] >= nb:
             gone.append(st)
