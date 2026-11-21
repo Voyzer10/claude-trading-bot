@@ -606,20 +606,33 @@ class _Side:
         its planned NET reward at the target is at least min_net_rr x its NET risk at the stop:
             (reward_R - cost_R) >= min_net_rr x (1 + cost_R)
         (min_net_rr 1.0 = a 50% hit rate breaks even after costs). The cost is the round trip to the target (entry +
-        exit at the planned prices, the market's own sizing). No cost function or no cost (not sizeable): no check."""
+        exit at the planned prices, the market's own sizing). No cost function (or min_net_rr off): no check.
+        A cost of None means the market's sizing cannot size the trade (NSE: under one share in the INDIA account):
+        the trade is REJECTED ("cost: not sizeable"); a missing cost is never treated as zero.
+
+        PRICES: this side's prices are in src terms. The short side runs on the mirrored chart (every price
+        negated, see mirror()), so c / tgt / stop are NEGATIVE there; sg x price gives the REAL positive market
+        price for both sides (verified in tests/test_v4_fixes.py). Do not pass c / tgt / stop unsigned."""
         p = self.p
         k = p.get("min_net_rr")
         fn = p.get("_cost_fn")
         if not k or fn is None:
             return True
-        sg = -1 if getattr(self, "side_name", "long") == "short" else 1
-        cost = fn(getattr(self, "side_name", "long"), sg * c, sg * tgt, sg * stop)
+        side = getattr(self, "side_name", "long")
+        sg = -1 if side == "short" else 1                 # src -> real prices (shorts are mirrored)
+        cost = fn(side, sg * c, sg * tgt, sg * stop)
         if cost is None:
-            return True
+            self.stats["cost_rejected"] = self.stats.get("cost_rejected", 0) + 1
+            self.stats["cost_rejected_" + side] = self.stats.get("cost_rejected_" + side, 0) + 1
+            self.stats["cost_unsizeable_" + side] = self.stats.get("cost_unsizeable_" + side, 0) + 1
+            if st is not None:
+                self.ended.append((st, j, "cost: not sizeable"))
+            return False
         rr = (tgt - c) / (c - stop)
         if rr - cost >= float(k) * (1 + cost):
             return True
         self.stats["cost_rejected"] = self.stats.get("cost_rejected", 0) + 1
+        self.stats["cost_rejected_" + side] = self.stats.get("cost_rejected_" + side, 0) + 1
         if st is not None:
             self.ended.append((st, j, "cost: net reward %.2fR below %.2f x net risk %.2fR" % (
                 rr - cost, float(k), 1 + cost)))

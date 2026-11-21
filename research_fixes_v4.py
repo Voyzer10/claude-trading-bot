@@ -6,7 +6,8 @@ from research_costs (NSE paper.charges on the INDIA sizing, US fee_pct + 0.02%/s
 
 Candidates (declared before any run; no grid, no OOS selection):
   baseline   the rules-pass defaults (close sweep, opp_bos_cap target, Trade Manager BE at +1R, trail 1R / 1R)
-  A          cost-aware eligibility: min_net_rr 1.0 with the market's cost function (scanner _cost_ok)
+  A          cost-aware eligibility: min_net_rr 1.0 with the market's cost function (scanner _cost_ok); a trade the
+             market's sizing cannot size is rejected (no cost is never read as zero cost)
   B          breakeven off (tm_be_r 0; the trailing stop unchanged)
   C          target at least 2R (target_rule "min_r", target_r 2.0: existing options)
   D          50% partial profit at +1R on the baseline trades (exit replay: the rest exits exactly as the baseline,
@@ -28,6 +29,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+ONLY = None                # research: run only these config names (plus the baseline), e.g. ("A ...",)
 CONFIGS = [("baseline", {}),
            ("A cost-aware min_net_rr 1.0", {"min_net_rr": 1.0}),
            ("B breakeven off", {"tm_be_r": 0.0}),
@@ -96,7 +98,10 @@ def replay_partial(rows, t):
 
 def chart(args):
     import research_features as F
-    market, sym, rows, tm = args
+    market, sym, rows, tm = args[:4]
+    global ONLY
+    if len(args) > 4:
+        ONLY = args[4]
     m = F.MARKETS[market]
     day_of = (lambda t: m["local"](t).date())
     cx = V4.contexts(rows, day_of, False, k=int(V4.DEFAULTS["swing_k"]))
@@ -106,6 +111,8 @@ def chart(args):
         return None if got is None else got["total_r"]
     out = {}
     for name, kw in CONFIGS:
+        if ONLY and name != "baseline" and name not in ONLY:
+            continue
         ended, stats = [], {}
         cfg = dict(tm, **kw)
         if "min_net_rr" in kw:
@@ -182,7 +189,8 @@ def _partial_view(trs):
 def report(market, res, split):
     L = []
     P_ = L.append
-    names = [n for n, _ in CONFIGS] + [PARTIAL]
+    present = next(iter(res.values())).keys()
+    names = [n for n, _ in CONFIGS if n in present] + [PARTIAL]
 
     def trades_of(name):
         if name == PARTIAL:
@@ -217,15 +225,18 @@ def report(market, res, split):
                           _med([t["planned"] for t in base[part][1]]),
                           sum(t["planned"] for t in base[part][1]) / len(base[part][1])))
     P_("\nREJECTIONS / FUNNEL (whole period): setups created, confirmations, ended reasons")
-    for name, _ in CONFIGS:
+    for name in [n for n in names if n != PARTIAL]:
         st, why = {}, {}
         for r in res.values():
             for k, v in r[name]["stats"].items():
                 st[k] = st.get(k, 0) + v
             for k, v in r[name]["why"].items():
                 why[k] = why.get(k, 0) + v
-        P_("  %-28s BOS setups %d, confirmations %d, cost-rejected %d | ended: %s" % (
+        P_("  %-28s BOS setups %d, confirmations %d, cost-rejected attempts %d (long %d, short %d; not sizeable "
+           "long %d, short %d) | ended: %s" % (
             name, st.get("bos", 0), st.get("confirmations", 0), st.get("cost_rejected", 0),
+            st.get("cost_rejected_long", 0), st.get("cost_rejected_short", 0), st.get("cost_unsizeable_long", 0),
+            st.get("cost_unsizeable_short", 0),
             ", ".join("%s %d" % kv for kv in sorted(why.items(), key=lambda x: -x[1])) or "-"))
     npart = sum(1 for r in res.values() for t in r["baseline"]["trades"] if t.get("partial") and
                 abs(t["partial"]["gross"] - t["gross"]) > 1e-12)
@@ -267,11 +278,15 @@ def main(argv=None):
     ap.add_argument("market", choices=["nse", "us"])
     ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--json")
+    ap.add_argument("--only", help="comma-separated config names to run besides the baseline (e.g. 'A')")
     a = ap.parse_args(argv)
+    global ONLY
+    if a.only:
+        ONLY = tuple(n for n, _ in CONFIGS if any(n.startswith(x.strip()) for x in a.only.split(",")))
     tm = V4.tm_settings(P.load_config()["accounts"].get({"nse": "INDIA", "us": "US"}[a.market], {}))
     data = F.load(a.market)
     with Pool(a.workers, maxtasksperchild=4) as pool:
-        res = dict(pool.imap_unordered(chart, [(a.market, s, r, tm) for s, r in data.items()]))
+        res = dict(pool.imap_unordered(chart, [(a.market, s, r, tm, ONLY) for s, r in data.items()]))
     print(report(a.market, res, TF.SPLIT[a.market]))
     if a.json:
         with open(a.json, "w") as fh:
