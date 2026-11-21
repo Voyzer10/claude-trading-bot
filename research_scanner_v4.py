@@ -721,6 +721,9 @@ if __name__ == "__main__":
         sys.exit(sweep_report(sys.argv[2:]))
     if sys.argv[1:2] == ["bos"]:
         sys.exit(bos_report(sys.argv[2:]))
+    if sys.argv[1:2] == ["lifecycle"]:
+        import research_trade_lifecycle_v4        # E1 trade lifecycle and execution economics
+        sys.exit(research_trade_lifecycle_v4.main(sys.argv[2:]))
     if sys.argv[1:2] == ["cohortb"]:
         import research_cohortb_v4                # cohort B: do sweep-time features predict E1 net R?
         sys.exit(research_cohortb_v4.main(sys.argv[2:]))
