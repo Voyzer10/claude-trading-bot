@@ -102,6 +102,10 @@ jobs:
         run: python tests/test_margin_tm.py
       - name: No late entry and margin-aware sizing
         run: python tests/test_no_late_entry.py
+      - name: Research cost model (NSE / US / crypto, long and short; offline)
+        run: python tests/test_research_costs.py
+      - name: Cost-aware eligibility min_net_rr, long and mirrored short, off by default (offline)
+        run: python tests/test_cost_ok_sides.py
 
   shell:
     name: Shellcheck (deploy scripts)

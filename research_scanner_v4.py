@@ -21,6 +21,7 @@ import os
 from datetime import datetime, timezone
 
 import research_abcd as RA
+import research_costs as RC
 import scanner_v4 as V4
 
 UTC = timezone.utc
@@ -175,10 +176,12 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
         iv = "%dm" % step
         print("Fetching 60 days of %s bars for %d coins (%s)..." % (iv, len(syms), src), flush=True)
         data, _ = fetch_all(syms, "-USD", iv, a.workers)
-        fee = float(P.load_config()["accounts"]["CRYPTO"]["fee_pct"]) / 100
+        cfg_c = P.load_config()
+        fee = float(cfg_c["accounts"]["CRYPTO"]["fee_pct"]) / 100
 
-        def cost_fn(sym, entry, stop, exit_px, side):
-            return (entry + exit_px) * fee / abs(entry - stop)
+        def cost_fn(sym, entry, stop, exit_px, side):         # research_costs.crypto_main (unchanged formula)
+            got = RC.crypto_main(sym, side, entry, exit_px, stop, cfg_c)
+            return None if got is None else got["total_r"]
         tm = trail_settings("CRYPTO")
         events = events_v4(data, lambda t: t.date(), cost_fn, max_hold=None, tm=tm)   # TP / SL / trailing only
         mode = "crypto-sv4" + ("" if step == 15 else "-%dm" % step)
@@ -191,13 +194,9 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
         cfg = P.DEFAULT_CONFIG
         acc = cfg["accounts"]["INDIA"]
 
-        def cost_fn(sym, entry, stop, exit_px, side):
-            risk = abs(entry - stop)
-            qty = int(min(acc["max_loss_per_trade"] / risk, acc["capital"] * acc["max_position_pct"] / 100 / entry))
-            if qty < 1:
-                return None
-            o, c = ("buy", "sell") if side == "long" else ("sell", "buy")
-            return (P.charges(cfg, "NSE", sym, o, qty * entry) + P.charges(cfg, "NSE", sym, c, qty * exit_px)) / (qty * risk)
+        def cost_fn(sym, entry, stop, exit_px, side):         # research_costs.nse (the same formula, moved)
+            got = RC.nse(sym, side, entry, exit_px, stop, cfg)
+            return None if got is None else got["total_r"]
 
         def entry_ok(t):
             lt = t.astimezone(tz_local)
@@ -212,10 +211,12 @@ def main(a, syms, src, fetch_all, fetch, stats, out_dir, tz_local, market="crypt
         et = ZoneInfo("America/New_York")
         print("Fetching 60 days of 5-minute bars for %d US symbols (%s)..." % (len(syms), src), flush=True)
         data, _ = fetch_all(syms, "", "5m", a.workers)
-        fee = float(P.load_config()["accounts"]["US"].get("fee_pct", 0)) / 100 + 0.0002
+        cfg_u = P.load_config()
+        fee = float(cfg_u["accounts"]["US"].get("fee_pct", 0)) / 100 + RC.US_SPREAD_SLIP_SIDE
 
-        def cost_fn(sym, entry, stop, exit_px, side):
-            return (entry + exit_px) * fee / abs(entry - stop)
+        def cost_fn(sym, entry, stop, exit_px, side):         # research_costs.us (the same formula, moved)
+            got = RC.us(sym, side, entry, exit_px, stop, cfg_u)
+            return None if got is None else got["total_r"]
 
         def entry_ok(t):
             lt = t.astimezone(et)
