@@ -717,6 +717,9 @@ if __name__ == "__main__":
         sys.exit(sweep_report(sys.argv[2:]))
     if sys.argv[1:2] == ["bos"]:
         sys.exit(bos_report(sys.argv[2:]))
+    if sys.argv[1:2] == ["sweepq"]:
+        import research_sweep_quality_v4          # sweep quality: cohorts A (invalidated first) / B (confirmed first)
+        sys.exit(research_sweep_quality_v4.main(sys.argv[2:]))
     if sys.argv[1:2] == ["entry"]:
         import research_entry_v4                 # entry-quality research on the internal-sweep setups
         sys.exit(research_entry_v4.main(sys.argv[2:]))
