@@ -308,6 +308,9 @@ class _Side:
         self.highs = _Range([r[2] for r in src], max)
         self.other = None         # the opposite side (sequence sets it): its BOS origins are this side's targets
         self.bos_hist = []        # every BOS of this side: (BOS candle, the level its move started from), never pruned
+        # research only (cost-aware eligibility, off by default): rejections with why, and counters
+        self.ended = p["_ended"] if isinstance(p.get("_ended"), list) else []
+        self.stats = p["_stats"] if isinstance(p.get("_stats"), dict) else {}
 
     def pat(self, k):
         """The signal-candle name of candle k (src terms), or None."""
@@ -422,9 +425,49 @@ class _Side:
                 tgt = ot
         if tgt is None or stop >= c or (tgt - c) < p["min_rr"] * (c - stop):
             return None
+        if not self._cost_ok(c, stop, tgt, j, st):
+            return None
         return {"i": j, "kind": "primary", "setup": st, "bos": st["bos"], "sweep": st["sweep"], "reclaim": st["sweep"],
                 "signal": s, "level_name": st["lvl_name"], "level": st["lvl"], "entry": c, "stop": stop,
                 "target": tgt, "atr": a, "trigger_px": b[s][2], "signal_pattern": self.pat(s)}
+
+    def _cost_ok(self, c, stop, tgt, j, st=None):
+        """Cost-aware eligibility (research switch min_net_rr, off by default; 21 Nov 2026). With a cost function in
+        p["_cost_fn"](side, entry, exit, stop) -> cost in R (real prices; e.g. research_costs), a trade is taken only if
+        its planned NET reward at the target is at least min_net_rr x its NET risk at the stop:
+            (reward_R - cost_R) >= min_net_rr x (1 + cost_R)
+        (min_net_rr 1.0 = a 50% hit rate breaks even after costs). The cost is the round trip to the target (entry +
+        exit at the planned prices, the market's own sizing). No cost function (or min_net_rr off): no check.
+        A cost of None means the market's sizing cannot size the trade (NSE: under one share in the INDIA account):
+        the trade is REJECTED ("cost: not sizeable"); a missing cost is never treated as zero.
+
+        PRICES: this side's prices are in src terms. The short side runs on the mirrored chart (every price
+        negated, see mirror()), so c / tgt / stop are NEGATIVE there; sg x price gives the REAL positive market
+        price for both sides (verified in tests/test_cost_ok_sides.py). Do not pass c / tgt / stop unsigned."""
+        p = self.p
+        k = p.get("min_net_rr")
+        fn = p.get("_cost_fn")
+        if not k or fn is None:
+            return True
+        side = getattr(self, "side_name", "long")
+        sg = -1 if side == "short" else 1                 # src -> real prices (shorts are mirrored)
+        cost = fn(side, sg * c, sg * tgt, sg * stop)
+        if cost is None:
+            self.stats["cost_rejected"] = self.stats.get("cost_rejected", 0) + 1
+            self.stats["cost_rejected_" + side] = self.stats.get("cost_rejected_" + side, 0) + 1
+            self.stats["cost_unsizeable_" + side] = self.stats.get("cost_unsizeable_" + side, 0) + 1
+            if st is not None:
+                self.ended.append((st, j, "cost: not sizeable"))
+            return False
+        rr = (tgt - c) / (c - stop)
+        if rr - cost >= float(k) * (1 + cost):
+            return True
+        self.stats["cost_rejected"] = self.stats.get("cost_rejected", 0) + 1
+        self.stats["cost_rejected_" + side] = self.stats.get("cost_rejected_" + side, 0) + 1
+        if st is not None:
+            self.ended.append((st, j, "cost: net reward %.2fR below %.2f x net risk %.2fR" % (
+                rr - cost, float(k), 1 + cost)))
+        return False
 
     def _opp_target(self, j, c):
         """Where the latest opposite-side BOS move started (in this side's terms), above the entry and not traded
@@ -479,6 +522,8 @@ class _Side:
         stop = min(z["bot"], l) - p["buffer_atr"] * a
         tgt = _targets(ctx, b, m, c, (self.highs.q(prim["i"], m),))
         if tgt is None or stop >= c or (tgt - c) < p["min_rr"] * (c - stop):
+            return None
+        if not self._cost_ok(c, stop, tgt, m):
             return None
         if p.get("htf") and self.htf is not None and self.htf[m] == "down":
             return None
@@ -603,6 +648,7 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
         carry_day = cx["day"] if intraday else [r[0].astimezone(timezone.utc).date() for r in rows]
     sides = [_Side(srcs[s], cx["ctx"][s], cx["htf"][s] if p.get("htf") else None, p, carry_day) for s in (0, 1)]
     sides[0].other, sides[1].other = sides[1], sides[0]
+    sides[0].side_name, sides[1].side_name = "long", "short"
     day, n = cx["day"], len(rows)
     out, opens, sec = [], [], None       # sec: (side, primary trade, exit candle) while a secondary is looked for
     for k in range(31, n):
