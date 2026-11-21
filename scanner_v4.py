@@ -341,7 +341,8 @@ class _Side:
         c = b[j][4]
         self.last_today = None    # the trigger of candle j from a setup whose BOS formed today (flip rule)
         self.trig = []            # every setup that triggers on candle j, oldest BOS first (latest-BOS rule)
-        v1 = p.get("sweep_rule") in ("v1", "v2")      # the wick-sweep validation stage (v2: local liquidity ref)
+        v1 = p.get("sweep_rule") in ("v1", "v2", "internal")   # the wick-sweep stage (v2 / internal: local liquidity)
+        internal = p.get("sweep_rule") == "internal"
         if v1 and self.day is not None and j > 0 and self.day[j] != self.day[j - 1]:
             # sweep v1 (owner, 20 Nov 2026): NSE / US setups never cross the night; crypto runs on (candle expiry only)
             if p.get("_intraday"):
@@ -363,7 +364,7 @@ class _Side:
                 swept = [st for st in self.setups if not st["used"] and st["sweep"] is not None and st["day"] == prev
                          and self.day[st["sweep"]] == prev]
             self.setups, self.waiting = keep + swept, [st for st in keep]
-        if p.get("choch_invalidate") and j in getattr(ctx, "choch_set", ()):
+        if (p.get("choch_invalidate") or internal) and j in getattr(ctx, "choch_set", ()):
             # research (21 Nov 2026, BOS spec v2.1 §6, T9): a CHoCH against this side on candle j ends every unused
             # setup of this side whose BOS came before it, unswept, swept or waiting for its signal, BEFORE the
             # sweeps and triggers of candle j (so the CHoCH candle is never its sweep). Terminal: the setup leaves
@@ -396,6 +397,10 @@ class _Side:
             for st in self.waiting:
                 if j <= st["bos"]:
                     still.append(st)
+                    continue
+                if internal:
+                    if self._internal_sweep(st, j, c, lo_j, a, pen_max, gone, still):
+                        continue
                     continue
                 ref, ref_name = (st["origin"], "bos_origin") if p.get("sweep_rule") == "v1" else self._liq_ref(st, j)
                 if c < st["origin"]:
@@ -460,6 +465,15 @@ class _Side:
                            and (j == 0 or self.day[j] != self.day[j - 1]))
         if p.get("bos_rule") == "legs":
             ev = getattr(ctx, "legs", {}).get(j)
+            if ev and internal:
+                # (21 Nov 2026) a newer BOS of this side moves the structure on: the older unused setups of this side
+                # are stale (their pullback / sweep context is over). Ended before the new setup is added.
+                old = [x for x in self.setups if not x["used"] and x["bos"] < j]
+                for x in old:
+                    self.ended.append((x, j, "superseded by a newer BOS"))
+                if old:
+                    self.setups = [x for x in self.setups if all(x is not o for o in old)]
+                    self.waiting = [x for x in self.waiting if all(x is not o for o in old)]
             if ev and not open_candle and not (p.get("bos_gap_skip") and b[j][1] > ev[0]):
                 st = {"bos": j, "level": ev[0], "origin": ev[1], "sweep": None, "used": False,
                       "day": self.day[j] if self.day is not None else None, "leg_i": ev[2]}
@@ -599,6 +613,62 @@ class _Side:
                         ot = min(ot, cap)
                 tgt, src = ot, "opp_bos"
         return tgt, src
+
+    def _liq_levels(self, st, j):
+        """The internal liquidity of setup st as known at candle j-1 (no look-ahead), highest first: the scanner's own
+        confirmed swing lows formed at or after the BOS leg's start (its origin candle), above the protected swing,
+        that no candle has traded below since they formed; then the protected swing itself (the deepest pool),
+        while no candle has traded below it since its candle. [(price, name)]"""
+        out = []
+        lo_i = st.get("leg_i", st["bos"])
+        for idx, px in self.ctx.sl_known[j - 1]:
+            if idx < lo_i or px <= st["origin"]:
+                continue
+            if idx + 1 > j - 1 or self.lows.q(idx + 1, j - 1) > px:
+                out.append((px, "local_swing"))
+        o_i = st.get("leg_i")
+        if o_i is None or o_i + 1 > j - 1 or self.lows.q(o_i + 1, j - 1) >= st["origin"]:
+            out.append((st["origin"], "bos_origin"))
+        return sorted(out, key=lambda x: -x[0])
+
+    def _internal_sweep(self, st, j, c, lo_j, a, pen_max, gone, still):
+        """sweep_rule "internal" (21 Nov 2026), one waiting setup on candle j. Structure first: a close beyond the
+        protected swing ends the setup (terminal; a CHoCH has already ended it before this). Then liquidity: the
+        candle's wick takes every internal level above its low; the DEEPEST level taken is the swept one; the sweep
+        is valid only if the wick is at most sweep_pen_atr x ATR(14) beyond it and the candle closes back above it
+        (the reclaim). A failed reclaim or a too-deep wick is NOT a sweep and NOT an invalidation: the levels it took
+        are spent (they no longer count as resting liquidity) and the setup keeps waiting while its protected swing
+        holds. No sweep within sweep_max_bars of the BOS: stale, ended. A sweep is never an entry by itself."""
+        p, nb = self.p, int(self.p.get("sweep_max_bars") or 12)
+        if c < st["origin"]:
+            gone.append(st)
+            self.ended.append((st, j, "closed beyond the protected swing"))
+            return True
+        taken = [(px, nm) for px, nm in self._liq_levels(st, j) if lo_j < px]
+        if taken:
+            px, nm = taken[-1]                       # the deepest level the wick took
+            if a and px - lo_j > pen_max:
+                self.stats["too_deep"] = self.stats.get("too_deep", 0) + 1
+                self.ended_attempts(st, j, "wick too deep (%.2f ATR) beyond %s" % ((px - lo_j) / a, nm))
+            elif c < px:
+                self.stats["failed_reclaim"] = self.stats.get("failed_reclaim", 0) + 1
+                self.ended_attempts(st, j, "failed reclaim: closed below the swept %s" % nm)
+            else:
+                st.update(lvl_name=nm, lvl=px, sweep=j, reclaim=j, liq_ref=px, sweep_atr=a, sweep_pen=px - lo_j)
+                self.stats["sweeps"] = self.stats.get("sweeps", 0) + 1
+                return True                          # swept: leaves the waiting list, waits for its entry
+        if j - st["bos"] >= nb:
+            gone.append(st)
+            self.ended.append((st, j, "no sweep within %d candles" % nb))
+            return True
+        still.append(st)
+        return True
+
+    def ended_attempts(self, st, j, why):
+        """A rejected sweep attempt of a setup that stays active (research counter; not an end)."""
+        st.setdefault("attempts", []).append((j, why))
+        if isinstance(self.p.get("_attempts"), list):
+            self.p["_attempts"].append((st, j, why))
 
     def _liq_ref(self, st, j):
         """Sweep v2's liquidity reference for candle j: the nearest (highest) confirmed swing low of the BOS leg

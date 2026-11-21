@@ -363,7 +363,11 @@ SWEEP_CONFIGS = [("close", {"sweep_rule": "close"}),
                  ("v1 12/0.25", {"sweep_rule": "v1", "sweep_max_bars": 12, "sweep_pen_atr": 0.25}),
                  ("v2 12/0.25", {"sweep_rule": "v2", "sweep_max_bars": 12, "sweep_pen_atr": 0.25}),
                  ("v2 12/0.10", {"sweep_rule": "v2", "sweep_max_bars": 12, "sweep_pen_atr": 0.10}),
-                 ("v2 6/0.25", {"sweep_rule": "v2", "sweep_max_bars": 6, "sweep_pen_atr": 0.25})]
+                 ("v2 6/0.25", {"sweep_rule": "v2", "sweep_max_bars": 6, "sweep_pen_atr": 0.25}),
+                 # (21 Nov 2026) the structural correction: internal liquidity (deepest level taken), failed reclaim /
+                 # too deep = not a sweep (setup stays while its protected swing holds), CHoCH + newer-BOS ends;
+                 # the same windows / penetration as v1 / v2 (no new threshold)
+                 ("internal", {"sweep_rule": "internal", "sweep_max_bars": 12, "sweep_pen_atr": 0.25})]
 SWEEP_BE = 0.05            # |R| under this = breakeven
 
 
@@ -397,6 +401,14 @@ def _sweep_chart(args):
                  else "no reclaim" if w.startswith("no reclaim") else "overnight" if w == "overnight" else w)
             why[k] = why.get(k, 0) + 1
         why["local ref"] = sum(1 for t in seq if t["kind"] == "primary" and t.get("level_name") == "local_swing")
+        exact = {}
+        for st, j, w in ended:
+            k = w.split(" (")[0]
+            exact[k] = exact.get(k, 0) + 1
+        for k in ("too_deep", "failed_reclaim"):
+            if stats.get(k):
+                exact["attempt (setup stays): " + k.replace("_", " ")] = stats[k]
+        why["_exact"] = exact
         out[name] = {"trades": trades, "stats": stats, "why": why}
     return sym, out
 
@@ -455,6 +467,11 @@ def sweep_report(argv=None):
             for k, v in r[name]["stats"].items():
                 stats[k] = stats.get(k, 0) + v
             for k, v in r[name]["why"].items():
+                if k == "_exact":
+                    ex = why.setdefault("_exact", {})
+                    for k2, v2 in v.items():
+                        ex[k2] = ex.get(k2, 0) + v2
+                    continue
                 why[k] = why.get(k, 0) + v
         agg[name] = {"trades": trades, "stats": stats, "why": why}
 
@@ -468,6 +485,11 @@ def sweep_report(argv=None):
             name, s.get("bos", 0), s.get("sweeps", "-") if name != "close" else "-", w.get("expired: no sweep", 0),
             w.get("expired: no entry", 0), w.get("invalidated", 0), w.get("too deep", 0), w.get("no reclaim", 0),
             w.get("overnight", 0), s.get("confirmations", 0), len(agg[name]["trades"]), w.get("local ref", 0)))
+    print("\nEXACT END REASONS (setups ended, whole period; attempts = rejected sweep candles, the setup stayed)")
+    for name, _ in SWEEP_CONFIGS:
+        ex = agg[name]["why"].get("_exact", {})
+        print("  %-10s %s" % (name, ", ".join("%s %d" % (k, v) for k, v in sorted(ex.items(), key=lambda x: -x[1]))
+                               or "-"))
     for part, f in (("OUT-OF-SAMPLE", lambda t: t["day"] >= split), ("IN-SAMPLE", lambda t: t["day"] < split)):
         print("\n%s results (R before costs)" % part)
         print("  %-10s %6s %5s %5s %5s %6s %6s %8s %8s %8s %6s %7s %8s %8s %8s" % (
