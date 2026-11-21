@@ -600,6 +600,31 @@ class _Side:
                 tgt, src = ot, "opp_bos"
         return tgt, src
 
+    def _cost_ok(self, c, stop, tgt, j, st=None):
+        """Cost-aware eligibility (research switch min_net_rr, off by default; 21 Nov 2026). With a cost function in
+        p["_cost_fn"](side, entry, exit, stop) -> cost in R (real prices; e.g. research_costs), a trade is taken only if
+        its planned NET reward at the target is at least min_net_rr x its NET risk at the stop:
+            (reward_R - cost_R) >= min_net_rr x (1 + cost_R)
+        (min_net_rr 1.0 = a 50% hit rate breaks even after costs). The cost is the round trip to the target (entry +
+        exit at the planned prices, the market's own sizing). No cost function or no cost (not sizeable): no check."""
+        p = self.p
+        k = p.get("min_net_rr")
+        fn = p.get("_cost_fn")
+        if not k or fn is None:
+            return True
+        sg = -1 if getattr(self, "side_name", "long") == "short" else 1
+        cost = fn(getattr(self, "side_name", "long"), sg * c, sg * tgt, sg * stop)
+        if cost is None:
+            return True
+        rr = (tgt - c) / (c - stop)
+        if rr - cost >= float(k) * (1 + cost):
+            return True
+        self.stats["cost_rejected"] = self.stats.get("cost_rejected", 0) + 1
+        if st is not None:
+            self.ended.append((st, j, "cost: net reward %.2fR below %.2f x net risk %.2fR" % (
+                rr - cost, float(k), 1 + cost)))
+        return False
+
     def _liq_ref(self, st, j):
         """Sweep v2's liquidity reference for candle j: the nearest (highest) confirmed swing low of the BOS leg
         (formed at or after the leg's start, above the protected swing) that no candle has traded below since it
@@ -633,6 +658,8 @@ class _Side:
         elif rule == "min_r" and stop < c and tgt is not None:
             tgt = max(tgt, c + float(p.get("target_r") or 2.0) * (c - stop))   # the structure target, at least N R
         if tgt is None or stop >= c or (tgt - c) < p["min_rr"] * (c - stop):
+            return None
+        if not self._cost_ok(c, stop, tgt, j, st):
             return None
         return {"i": j, "kind": "primary", "setup": st, "bos": st["bos"], "sweep": st["sweep"], "reclaim": st["sweep"],
                 "signal": s, "level_name": st["lvl_name"], "level": st["lvl"], "entry": c, "stop": stop,
@@ -691,6 +718,8 @@ class _Side:
         stop = min(z["bot"], l) - p["buffer_atr"] * a
         tgt = _targets(ctx, b, m, c, (self.highs.q(prim["i"], m),))
         if tgt is None or stop >= c or (tgt - c) < p["min_rr"] * (c - stop):
+            return None
+        if not self._cost_ok(c, stop, tgt, m):
             return None
         if p.get("htf") and self.htf is not None and self.htf[m] == "down":
             return None
@@ -964,6 +993,7 @@ def sequence(rows, day_of, intraday=False, ctxs=None, **kw):
         carry_day = cx["day"] if intraday else [r[0].astimezone(timezone.utc).date() for r in rows]
     sides = [_Side(srcs[s], cx["ctx"][s], cx["htf"][s] if p.get("htf") else None, p, carry_day) for s in (0, 1)]
     sides[0].other, sides[1].other = sides[1], sides[0]
+    sides[0].side_name, sides[1].side_name = "long", "short"
     day, n = cx["day"], len(rows)
     out, opens, sec = [], [], None       # sec: (side, primary trade, exit candle) while a secondary is looked for
     for k in range(31, n):
