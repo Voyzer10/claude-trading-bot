@@ -22,13 +22,16 @@ Common to all three (fair comparison):
   - exits: the scanner's _exit_step (stop first, target, the Trade Manager, the session's end); a retest fill
     candle is only checked against the stop (intrabar order unknown: conservative)
   - results in R: every trade risks the same money (size = risk budget / entry-to-stop distance)
-  - costs: research_tf.COST_PCT (round trip, % of the entry price), converted to R per trade
+  - costs: research_costs (21 Nov 2026): NSE paper.charges on the INDIA sizing, entry + exit; US the us-sv4 formula
+    (fee_pct + the 0.02%/side spread/slippage allowance, entry + exit); crypto unchanged (COST_PCT, unverified).
+    The earlier research_tf.COST_PCT cost is kept per trade as cost_r_old for the before / after comparison
 Each setup is simulated on its own (no one-trade-per-chart interaction), for all three models alike."""
 import bisect
 import math
 import os
 import sys
 
+import research_costs as RC
 import scanner_v4 as V4
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -234,15 +237,23 @@ def chart(args):
             x = r[name]
             t = x["trade"]
             if t:
-                t = dict(t, cost_r=cost_pct / 100 * abs(t["entry"]) / t["risk"],
+                full = RC.HARNESS[market](sym, side, abs(t["entry"]), abs(t["exit"]), abs(t["stop"]))
+                t = dict(t, cost_r=None if full is None else full["total_r"],
+                         cost_fees_r=None if full is None else full["fees_r"],
+                         cost_ss_r=None if full is None else full.get("spread_slippage_r"),
+                         qty=None if full is None else full.get("qty"),
+                         cost_r_old=cost_pct / 100 * abs(t["entry"]) / t["risk"],
                          day=day_of(rows[t["decide"]][0]).isoformat())
             row[name] = {"opp": x["opp"], "why": x["why"], "trade": t}
         res.append(row)
     return sym, res
 
 
-def stats(trs, net):
-    xs = [t["r"] - (t["cost_r"] if net else 0) for t in sorted(trs, key=lambda t: (t["day"], t["decide"]))]
+def stats(trs, net, key="cost_r"):
+    """net: R minus the cost in `key` ("cost_r" = research_costs, "cost_r_old" = the earlier COST_PCT); trades with
+    no cost (NSE: not sizeable by the INDIA account) are left out of net figures, as the main backtest does."""
+    trs = [t for t in trs if not net or t.get(key) is not None]
+    xs = [t["r"] - (t[key] if net else 0) for t in sorted(trs, key=lambda t: (t["day"], t["decide"]))]
     n = len(xs)
     if not n:
         return None
@@ -254,15 +265,18 @@ def stats(trs, net):
         eq += x
         pk = max(pk, eq)
         dd = max(dd, pk - eq)
+    srt = sorted(xs)
     return {"n": n, "mean": mean, "se": sd / math.sqrt(n) if n > 1 else float("nan"),
+            "median": srt[n // 2] if n % 2 else (srt[n // 2 - 1] + srt[n // 2]) / 2,
             "win": sum(1 for x in xs if x > 0) / n, "pf": pos / neg if neg else float("inf"), "dd": dd}
 
 
 def fmt(s):
     if not s:
         return "n 0"
-    return "n %5d  avg %+.3fR  95%% CI [%+.3f, %+.3f]  win %4.1f%%  PF %.2f  maxDD %6.1fR" % (
-        s["n"], s["mean"], s["mean"] - 1.96 * s["se"], s["mean"] + 1.96 * s["se"], 100 * s["win"], s["pf"], s["dd"])
+    return "n %5d  avg %+.3fR  95%% CI [%+.3f, %+.3f]  median %+.3fR  win %4.1f%%  PF %.2f  maxDD %6.1fR" % (
+        s["n"], s["mean"], s["mean"] - 1.96 * s["se"], s["mean"] + 1.96 * s["se"], s["median"], 100 * s["win"], s["pf"],
+        s["dd"])
 
 
 BINS = {"body_atr": [0.5, 1.0, 1.5], "range_atr": [1.0, 1.5, 2.0], "ext_atr": [0.25, 0.5, 1.0]}   # fixed in advance
@@ -272,8 +286,11 @@ def report(market, rows, split, cost_pct):
     L = []
     P = L.append
     n_set = len(rows)
-    P("%s: %d published internal-sweep setups (sweeps); costs %.3f%% round trip of the entry price; out-of-sample "
-      "from %s" % (market, n_set, cost_pct, split))
+    P("%s: %d published internal-sweep setups (sweeps); out-of-sample from %s. Costs: research_costs (%s); BEFORE = "
+      "the earlier research_tf.COST_PCT %.3f%% of the entry, round trip" % (
+          market, n_set, split, {"nse": "paper.charges, INDIA sizing, entry + exit", "us": "fee_pct + 0.02%/side "
+                                 "spread/slippage allowance, entry + exit", "crypto": "UNCHANGED, unverified"}[market],
+          cost_pct))
     eng = [r for r in rows if r["engine_i"] is not None]
     agree = sum(1 for r in eng if r["E1 control"]["trade"] and r["E1 control"]["trade"]["decide"] == r["engine_i"])
     P("E1 vs the scanner's own trades on these setups: the engine traded %d of them; E1 decides on the same candle "
@@ -290,18 +307,31 @@ def report(market, rows, split, cost_pct):
             name, n_set, opp, len(tr)))
         P("   not executed: %s" % ", ".join("%s %d" % kv for kv in sorted(why.items(), key=lambda x: -x[1])))
         if tr:
-            P("   avg initial stop %.2f ATR | avg cost %.3fR | exits %s" % (
-                sum(t["stop_atr"] for t in tr) / len(tr), sum(t["cost_r"] for t in tr) / len(tr),
+            sz = [t for t in tr if t["cost_r"] is not None]
+            P("   avg initial stop %.2f ATR | trades with a cost (sizeable) %d of %d | exits %s" % (
+                sum(t["stop_atr"] for t in tr) / len(tr), len(sz), len(tr),
                 ", ".join("%s %d" % kv for kv in sorted(_count(t["reason"] for t in tr).items(), key=lambda x: -x[1]))))
+            if sz:
+                ss = [t["cost_ss_r"] for t in sz if t.get("cost_ss_r") is not None]
+                fees = [t["cost_fees_r"] for t in sz if t.get("cost_fees_r") is not None]
+                P("   cost per trade AFTER: total %.3fR = fees %s + spread/slippage %s | BEFORE (COST_PCT): %.3fR" % (
+                    sum(t["cost_r"] for t in sz) / len(sz),
+                    "%.3fR" % (sum(fees) / len(fees)) if fees else "n/a",
+                    ("%.3fR (one combined allowance)" % (sum(ss) / len(ss))) if ss else "MISSING (no value in the code)",
+                    sum(t["cost_r_old"] for t in sz) / len(sz)))
         for part, f in (("IS ", lambda t: t["day"] < split), ("OOS", lambda t: t["day"] >= split)):
             sub = [t for t in tr if f(t)]
-            g, nt = stats(sub, False), stats(sub, True)
-            P("   %s gross %s" % (part, fmt(g)))
-            P("   %s net   %s" % (part, fmt(nt)))
-            if g and nt:
-                P("   %s costs consumed %.3fR per trade (%s of the gross mean)" % (
-                    part, g["mean"] - nt["mean"], ("%.0f%%" % (100 * (g["mean"] - nt["mean"]) / g["mean"]))
-                    if g["mean"] > 0 else "gross mean <= 0"))
+            sz = [t for t in sub if t["cost_r"] is not None]
+            g, gs, nt, nb = stats(sub, False), stats(sz, False), stats(sub, True), stats(sub, True, "cost_r_old")
+            P("   %s gross        %s" % (part, fmt(g)))
+            if len(sz) != len(sub):
+                P("   %s gross sized  %s" % (part, fmt(gs)))
+            P("   %s net AFTER    %s" % (part, fmt(nt)))
+            P("   %s net BEFORE   %s" % (part, fmt(nb)))
+            if gs and nt:
+                P("   %s cost consumed: AFTER %.3fR, BEFORE %.3fR per trade; total AFTER %.1fR on %d trades" % (
+                    part, gs["mean"] - nt["mean"], sum(t["cost_r_old"] for t in sz) / len(sz),
+                    sum(t["cost_r"] for t in sz), len(sz)))
         for side in ("long", "short"):
             sub = [r[name]["trade"] for r in rows if r[name]["trade"] and r["side"] == side]
             P("   %-5s all-period net %s" % (side, fmt(stats(sub, True))))

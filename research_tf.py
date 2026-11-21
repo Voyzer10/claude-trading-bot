@@ -13,6 +13,7 @@ Costs (approximate, a round trip, % of the price): NSE intraday 0.06, US 0.02 (s
 import argparse
 from datetime import datetime, timedelta, timezone
 
+import research_costs as RC
 import research_features as F
 import scanner_v4 as V4
 
@@ -68,8 +69,9 @@ def run(market, minutes):
             if risk <= 0:
                 continue
             g = (t["exit"] - t["entry"]) * sg / risk
-            cost = COST_PCT[market] / 100 * t["entry"] / risk
-            evs.append({"day": day_of(bars[t["i"]][0]).isoformat(), "r": g, "net": g - cost, "exit": t["exit_reason"],
+            cost = RC.cost_r(market, sym, t["side"], t["entry"], t["exit"], t["stop"])   # research_costs (21 Nov)
+            evs.append({"day": day_of(bars[t["i"]][0]).isoformat(), "r": g, "net": None if cost is None else g - cost,
+                        "exit": t["exit_reason"],
                         "risk_pct": 100 * risk / t["entry"]})
     return evs
 
@@ -84,7 +86,8 @@ def row(name, evs, split):
     sl = sum(1 for e in out if e["exit"] in ("stop", "stop (gapped past it)"))
     g = sum(e["r"] for e in out) / n
     gi = sum(e["r"] for e in ins) / len(ins) if ins else 0
-    net = sum(e["net"] for e in out) / n
+    nn = [e["net"] for e in out if e["net"] is not None]          # NSE: trades the INDIA sizing cannot size: no net
+    net = sum(nn) / len(nn) if nn else float("nan")
     stop = sorted(e["risk_pct"] for e in out)[n // 2]
     return "  %-10s %6d %6.0f%% %6.0f%% %+7.2fR %+8.2fR %+8.2fR %7.2f%%%s" % (
         name, n, 100.0 * tp / n, 100.0 * sl / n, g, gi, net, stop,
@@ -97,8 +100,9 @@ def main(argv=None):
     p.add_argument("--tf", default="5,15,60")
     a = p.parse_args(argv)
     split = SPLIT[a.market]
-    print("%s: Scanner v4 (live defaults) on bigger candles; out-of-sample from %s; costs ~%.3f%% a round trip" % (
-        a.market, split, COST_PCT[a.market]))
+    print("%s: Scanner v4 (live defaults) on bigger candles; out-of-sample from %s; costs: research_costs (%s)" % (
+        a.market, split, {"nse": "paper.charges, INDIA sizing", "us": "fee_pct + 0.02%/side", "crypto": "%.3f%% round "
+                          "trip, unverified" % COST_PCT["crypto"]}[a.market]))
     print("  %-10s %6s %7s %7s %8s %9s %9s %8s" % ("candles", "trades", "TP hit", "SL hit", "avg R", "in-sample",
                                                   "after c.", "med stop"))
     for tf in [int(x) for x in a.tf.split(",")]:
