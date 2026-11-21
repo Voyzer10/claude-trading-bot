@@ -67,7 +67,7 @@ DEFAULT_CONFIG = {
         # equity, FINRA 4x intraday in the US). The risk per trade stays max_loss_per_trade; 1 = no leverage.
         "INDIA":  {"capital": 100000, "max_loss_per_trade": 3000, "max_loss_per_trade_fno": 3000, "intraday_leverage": 5,
                    "max_position_pct": 25, "max_position_pct_fno": 40, "daily_loss_limit": 9000,
-                   "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
+                   "min_reward_risk": 1.0, "flat_by": "15:15",
                    "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
                    "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
@@ -81,7 +81,7 @@ DEFAULT_CONFIG = {
         # once when the account is made, then set on their own (Settings > F&O).
         "FNO":    {"capital": 100000, "max_loss_per_trade": 3000, "max_loss_per_trade_fno": 3000,
                    "max_position_pct": 40, "max_position_pct_fno": 40, "daily_loss_limit": 9000,
-                   "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:15",
+                   "min_reward_risk": 1.0, "flat_by": "15:15",
                    "futures_margin_pct": 12.0, "breakeven_at_r": 1.0, "allow_short": False,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
                    "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
@@ -96,7 +96,7 @@ DEFAULT_CONFIG = {
         # contract fees and the bid / ask spread (the paper fill is the quote midpoint)
         "USFNO":  {"capital": 1200, "max_loss_per_trade": 36, "max_loss_per_trade_fno": 36,
                    "max_position_pct": 40, "max_position_pct_fno": 40, "daily_loss_limit": 108,
-                   "max_trades_per_day": 5, "min_reward_risk": 1.0, "flat_by": "15:50", "fee_pct": 0.5,
+                   "min_reward_risk": 1.0, "flat_by": "15:50", "fee_pct": 0.5,
                    "breakeven_at_r": 1.0, "allow_short": False,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
                    "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
@@ -107,7 +107,7 @@ DEFAULT_CONFIG = {
                    "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0,
                    "usopt_underlyings": ["QQQ", "SPY", "DIA"]},
         "US":     {"capital": 1000, "max_loss_per_trade": 30, "max_position_pct": 25, "intraday_leverage": 4,
-                   "daily_loss_limit": 90, "max_trades_per_day": 5, "min_reward_risk": 1.0,
+                   "daily_loss_limit": 90, "min_reward_risk": 1.0,
                    "flat_by": "15:55", "fee_pct": 0.0, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "risk_limits": False, "trade_setups": True,
                    "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
@@ -117,7 +117,7 @@ DEFAULT_CONFIG = {
                    "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
                    "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
         "CRYPTO": {"capital": 1000, "max_loss_per_trade": 30, "max_position_pct": 25, "intraday_leverage": 5,
-                   "daily_loss_limit": 90, "max_trades_per_day": 10, "min_reward_risk": 1.0,
+                   "daily_loss_limit": 90, "min_reward_risk": 1.0,
                    "flat_by": None, "fee_pct": 0.059, "breakeven_at_r": None, "allow_short": True,
                    "cooldown_losses": 3, "cooldown_minutes": 120, "weekly_loss_x": 3.0, "max_same_side": 3, "risk_limits": False, "trade_setups": True,
                    "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
@@ -134,8 +134,10 @@ DEFAULT_CONFIG = {
         # reversal candle near the high (bearish engulfing / long upper-wick rejection on tm_candle_min candles)
         # takes the profit; a trade that has gone nowhere after tm_stale_min minutes (best < 0.5R, now within
         # 0.3R of the entry) is closed. Every trade records how far it went for and against (mfe_r / mae_r).
-        # risk_limits (False while paper testing, the owner's decision of 4 Nov 2026): when True, the daily loss limit,
-        # max trades per day and the rulebook guards below block new entries. Turn it on before real money.
+        # risk_limits (False while paper testing, the owner's decision of 4 Nov 2026): when True, the daily loss limit
+        # and the rulebook guards below block new entries. Turn it on before real money.
+        # No daily trade-COUNT limit (owner, 21 Nov 2026: high-volume paper testing): max_trades_per_day is gone from
+        # every account; trades_today() still counts the day's entries for the reports.
         # trade_setups: the Scanner's setups (v4, v3 or v2, per scanner_version) are paper traded (True) or
         # only recorded (False).
         # scanner_version: "v4" (the owner's revised v4 PDF, 11 Nov: primary, then a sequential OB/FVG secondary), "v3"
@@ -247,6 +249,11 @@ def load_config():
             if name in accs:
                 accs[name].update(budget_limits(cap))
         cfg["_budget_1117"] = changed = True
+    if not cfg.get("_no_trade_cap_1121"):   # one-time (owner, 21 Nov 2026): no daily trade-count limit anywhere
+        for acc in accs.values():
+            if isinstance(acc, dict):
+                acc.pop("max_trades_per_day", None)
+        cfg["_no_trade_cap_1121"] = changed = True
     if not cfg.get("_tm_global"):   # one-time (owner, 13 Nov 2026): one Trade Manager per account, every scanner
         for acc in accs.values():
             tm_one_set(acc)
@@ -996,8 +1003,6 @@ def cmd_buy(a, cfg, led):
         if lost_today >= acc["daily_loss_limit"]:
             raise PaperError("daily loss limit hit for %s (%s lost today of %s): done for the day"
                              % (account_of(m), money(m, lost_today), money(m, acc["daily_loss_limit"])))
-        if len(trades_today(led, m, now)) >= acc["max_trades_per_day"]:
-            raise PaperError("max %d trades per day reached for %s" % (acc["max_trades_per_day"], account_of(m)))
         rulebook_guards(led, m, acc, now, short)
 
     if getattr(a, "price", None) is not None:

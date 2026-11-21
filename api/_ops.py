@@ -153,7 +153,6 @@ RISK_FIELDS = {
     # intraday margin on stock trades (owner, 14 Nov 2026); SEBI allows at most 5x on Indian cash equity
     "intraday_leverage": {"type": "float", "min": 1, "max": 5, "accounts": ["INDIA", "US", "CRYPTO"]},
     "daily_loss_limit": {"type": "float", "min": 0.01},
-    "max_trades_per_day": {"type": "int", "min": 1, "max": 50},
     "max_position_pct": {"type": "float", "min": 1, "max": 100},
     "fee_pct": {"type": "float", "min": 0.0, "max": 1.0, "accounts": ["CRYPTO", "USFNO"]},
 }
@@ -1367,7 +1366,7 @@ def agents():
         5: "Replays the trade %s times on the coin's last %s days and counts past fires of the rule. Recorded only: "
            "it is not a gate." % (cfg.get("sim_paths"), cfg.get("history_days")),
         6: "Sizes the position so the loss at the stop fits your max loss per trade.",
-        7: "Checks the daily loss limit, trades per day and the position cap before anything is bought.",
+        7: "Checks the daily loss limit and the position cap before anything is bought (no daily trade-count limit).",
         8: "Fills the order on paper at the live price. No real broker is connected yet.",
         9: "Thinks about every open trade each check and reacts: stop to the entry at +1R, half the move locked once "
            "80%% of the way to the target is covered, out on a reversal candle near the high, out when a trade goes "

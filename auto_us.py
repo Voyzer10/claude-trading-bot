@@ -229,7 +229,9 @@ def sync_pack_config():
     acc = pcfg["accounts"]["US"]
     led = P.load_ledger(pcfg)
     want = {"budget": round(float(led["accounts"]["US"]["cash"]), 2), "max_loss_per_trade_usd": acc["max_loss_per_trade"],
-            "max_daily_loss_usd": acc["daily_loss_limit"], "max_trades_per_day": acc["max_trades_per_day"],
+            "max_daily_loss_usd": acc["daily_loss_limit"],
+            # no daily trade / order COUNT limit (owner, 21 Nov 2026): 0 = off in trader-risk/check.py
+            "max_trades_per_day": 0, "max_orders_per_day": 0,
             "max_position_pct": acc["max_position_pct"]}
     if any(c.get(k) != v for k, v in want.items()):
         c.update(want)
