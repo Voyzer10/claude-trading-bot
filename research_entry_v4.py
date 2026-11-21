@@ -317,7 +317,9 @@ def report(market, rows, split, cost_pct):
                 P("   cost per trade AFTER: total %.3fR = fees %s + spread/slippage %s | BEFORE (COST_PCT): %.3fR" % (
                     sum(t["cost_r"] for t in sz) / len(sz),
                     "%.3fR" % (sum(fees) / len(fees)) if fees else "n/a",
-                    ("%.3fR (one combined allowance)" % (sum(ss) / len(ss))) if ss else "MISSING (no value in the code)",
+                    ("%.3fR (one combined allowance)" % (sum(ss) / len(ss))) if ss else
+                    ("n/a (crypto: one unverified round-trip %, not separable)" if market == "crypto"
+                     else "MISSING (no value in the code)"),
                     sum(t["cost_r_old"] for t in sz) / len(sz)))
         for part, f in (("IS ", lambda t: t["day"] < split), ("OOS", lambda t: t["day"] >= split)):
             sub = [t for t in tr if f(t)]
