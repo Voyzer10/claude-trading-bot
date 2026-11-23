@@ -23,7 +23,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "tests", "scanner_v6"))
 CHARTS = os.path.join(ROOT, "research", "v6", "retest", "medium")
 KEYS = os.path.join(ROOT, "research", "v6", "retest", "answer_keys", "medium_answer_key.json")
-FIXTURE = os.path.join(ROOT, "tests", "scanner_v6", "fixtures", "regression", "medium_bos.json")
+FIXTURE = os.path.join(ROOT, "tests", "scanner_v6", "fixtures", "regression", "easy_bos.json")
 GREEN, RED = "#169C77", "#D94F4F"
 
 

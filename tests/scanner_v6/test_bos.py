@@ -21,7 +21,7 @@ from test_regression_medium_bos import approved_bos, expected_bos  # noqa: E402
 
 VOL1 = json.load(open(os.path.join(ROOT, "research", "v6", "specs", "volume1", "synthetic_volume1.draft.json")))
 CHOCH = json.load(open(os.path.join(ROOT, "research", "v6", "specs", "choch_v0_9", "choch_fixtures.draft.json")))
-MED = json.load(open(os.path.join(FIXTURES, "regression", "medium_bos.json")))
+MED = json.load(open(os.path.join(FIXTURES, "regression", "easy_bos.json")))
 # the approved-profile expectation key of each Volume-1 BOS draft case (close strictly beyond, RL, one per level)
 APPROVED_KEY = {"BOS01": "SP-A + BOS-P1/P2/P3/P4 (RL)", "BOS02": "SP-A + BOS-P1 (RL)", "BOS03": "BOS-P1/P2/P4 (close)",
                 "BOS04": "BOS-P1/P2/P4", "BOS05": "BOS-P1 (close >)", "BOS06": "BOS-P1/P2/P3",

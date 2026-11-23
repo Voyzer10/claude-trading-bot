@@ -1,0 +1,13 @@
+sample,timeframe,series,candles,eligible_legs,late_evaluations,legs_touched_O3A,legs_touched_O3A_pct,legs_touched_O3B,legs_touched_O3B_pct,legs_touched_O3_both_paths,choch_O1,unprot_pct_all_structured_O1,choch_O3A,unprot_pct_all_structured_O3A,choch_changed_O3A,prot_candles_changed_O3A,choch_O3B,unprot_pct_all_structured_O3B,choch_changed_O3B,prot_candles_changed_O3B,choch_O3,unprot_pct_all_structured_O3,choch_changed_O3,prot_candles_changed_O3,candles_changed_by_both_A_and_B,candles_O3_not_explained_by_single_switch,choch_changed_O3_not_in_A_or_B,reliability
+PRIMARY,5m,6,26282,1611,26,12,0.74,29,1.8,0,283,41.76,281,41.61,6,109,293,40.29,28,973,291,40.15,34,1082,0,0,0,OK
+PRIMARY,15m,6,8952,619,22,8,1.29,10,1.62,0,107,43.91,105,43.47,4,182,107,42.52,8,316,105,42.09,12,498,0,0,0,OK
+PRIMARY,1h,6,2472,161,5,2,1.24,6,3.73,0,22,34.77,22,34.77,2,79,23,35.18,1,108,23,35.18,3,142,45,0,0,INSUFFICIENT DATA per series; pooled indicative
+PRIMARY,1D,6,360,26,0,0,0.0,0,0.0,0,3,33.95,3,33.95,0,0,3,33.95,0,0,3,33.95,0,0,0,0,0,INSUFFICIENT DATA (1D: 60 bars per series)
+EXTENDED,5m,44,192635,11736,316,108,0.92,255,2.17,7,2028,45.62,2024,45.5,64,1532,2089,43.85,171,6454,2081,43.85,221,7671,262,87,1,OK
+EXTENDED,15m,44,65538,4425,141,44,0.99,104,2.35,5,728,44.03,732,43.77,26,805,748,43.16,60,2829,748,42.9,80,3393,241,0,0,OK
+EXTENDED,1h,44,18018,1308,25,11,0.84,21,1.61,0,211,42.51,211,42.3,6,81,216,41.4,7,168,215,41.1,12,249,0,41,0,INSUFFICIENT DATA per series; pooled indicative
+EXTENDED,1D,44,2640,183,4,2,1.09,1,0.55,0,28,30.98,28,30.98,0,17,28,30.59,0,6,28,30.59,0,23,0,0,0,INSUFFICIENT DATA (1D: 60 bars per series)
+ALL,5m,50,218917,13347,342,120,0.9,284,2.13,7,2311,45.17,2305,45.05,70,1641,2382,43.43,199,7427,2372,43.42,255,8753,262,87,1,OK
+ALL,15m,50,74490,5044,163,52,1.03,114,2.26,5,835,44.02,837,43.73,30,987,855,43.09,68,3145,853,42.81,92,3891,241,0,0,OK
+ALL,1h,50,20490,1469,30,13,0.88,27,1.84,0,233,41.56,233,41.38,8,160,239,40.64,8,276,238,40.38,15,391,45,41,0,INSUFFICIENT DATA per series; pooled indicative
+ALL,1D,50,3000,209,4,2,0.96,1,0.48,0,31,31.27,31,31.27,0,17,31,30.91,0,6,31,30.91,0,23,0,0,0,INSUFFICIENT DATA (1D: 60 bars per series)

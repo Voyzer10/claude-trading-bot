@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""PERMANENT REGRESSION: the two Medium-level BOS marking mistakes of 21 Nov 2026 (Medium Chart 1 and Chart 2).
+"""PERMANENT REGRESSION: the two BOS marking mistakes of 21 Nov 2026 on Easy Chart 1 and Easy Chart 2 (cases EASY01 /
+EASY02 in fixtures/regression/easy_bos.json; formerly mislabelled "Medium", MED01 / MED02, renamed under audit D-4).
 
 Mistakes being guarded against:
-  A  Medium Chart 1: equal highs 105 (candles 3 and 4) were used as a swing high, giving a BOS at candle 11. WRONG.
-  B  Medium Chart 2: equal lows 120 (candles 5 and 6) were used as a swing low, giving a BOS at candle 9. WRONG.
+  A  Easy Chart 1: equal highs 105 (candles 3 and 4) were used as a swing high, giving a BOS at candle 11. WRONG.
+  B  Easy Chart 2: equal lows 120 (candles 5 and 6) were used as a swing low, giving a BOS at candle 9. WRONG.
      The valid BOS (candle 13 close 116 below swing low 117, candle 10, confirmed at candle 12) must stay.
 
 Approved profile (unchanged): L2/R2, strict comparison, equal highs / lows are not swings, BOS = candle CLOSE beyond
@@ -31,7 +32,7 @@ from scanner_v6.models import EventStamp, SwingKind, SwingPoint  # noqa: E402
 from scanner_v6.structure.swings import (SwingConfig, SwingStream, detect_swings, swing_id,  # noqa: E402
                                          unresolved_equal_levels)
 
-DATA = json.load(open(os.path.join(FIXTURES, "regression", "medium_bos.json")))
+DATA = json.load(open(os.path.join(FIXTURES, "regression", "easy_bos.json")))
 CASES = {c["case_id"]: c for c in DATA["cases"]}
 CFG = SwingConfig()
 
@@ -108,30 +109,30 @@ def check_swings(cid):
 
 
 def test_A_med01_equal_highs_105_are_not_swings():
-    check_swings("MED01")
-    s = series(CASES["MED01"])
+    check_swings("EASY01")
+    s = series(CASES["EASY01"])
     assert all(e.price != 105 for e in detect_swings(s))
     assert {(x.kind.value, x.index + 1) for x in unresolved_equal_levels(s)} >= {("high", 3), ("high", 4)}
 
 
 def test_B_med02_equal_lows_120_are_not_swings():
-    check_swings("MED02")
-    s = series(CASES["MED02"])
+    check_swings("EASY02")
+    s = series(CASES["EASY02"])
     assert all(not (e.kind is SwingKind.LOW and e.price == 120) for e in detect_swings(s))
     assert {(x.kind.value, x.index + 1) for x in unresolved_equal_levels(s)} >= {("low", 5), ("low", 6)}
 
 
 # ---- BOS ------------------------------------------------------------------------------------------------------------
 def test_A_med01_no_bos_at_all_and_not_at_candle_11():
-    s = series(CASES["MED01"])
+    s = series(CASES["EASY01"])
     for got in (bos_batch(s), bos_stream(s)):
-        assert got == expected_bos(CASES["MED01"]) == [], got
+        assert got == expected_bos(CASES["EASY01"]) == [], got
         assert not any(b["break_index"] == 10 or b["reference_price"] == 105 for b in got)
 
 
 def test_B_med02_valid_bos_candle_13_below_117_preserved_and_candle_9_rejected():
-    s = series(CASES["MED02"])
-    want = expected_bos(CASES["MED02"])
+    s = series(CASES["EASY02"])
+    want = expected_bos(CASES["EASY02"])
     assert want == [{"direction": "bearish", "reference_id": "swing:low:9:fixed-window-strict:L2R2",
                      "reference_price": 117.0, "reference_index": 9, "reference_confirmed_index": 11,
                      "break_index": 12, "emitted_at": 12, "break_close": 116.0}]
@@ -143,7 +144,7 @@ def test_B_med02_valid_bos_candle_13_below_117_preserved_and_candle_9_rejected()
 
 def test_bos_reference_reading_does_not_matter_here():
     """BOS-001 open reading C3 (latest vs latest-unbroken) gives the same result on both fixtures."""
-    for cid in ("MED01", "MED02"):
+    for cid in ("EASY01", "EASY02"):
         s = series(CASES[cid])
         full = detect_swings(s)
         used, out = set(), []
@@ -176,12 +177,12 @@ def tie_promoting_detector(s):
 def test_mistake_reproduced_and_rejected():
     """With equal levels promoted, the evaluator reproduces the two wrong answers; the regression expectations reject
     them."""
-    s1, s2 = series(CASES["MED01"]), series(CASES["MED02"])
+    s1, s2 = series(CASES["EASY01"]), series(CASES["EASY02"])
     wrong1 = approved_bos(s1, lambda k, f=tie_promoting_detector(s1): [e for e in f if e.confirmed_index <= k])
     wrong2 = approved_bos(s2, lambda k, f=tie_promoting_detector(s2): [e for e in f if e.confirmed_index <= k])
     assert [(b["break_index"] + 1, b["reference_price"]) for b in wrong1] == [(11, 105.0)], wrong1
     assert (9, 120.0) in [(b["break_index"] + 1, b["reference_price"]) for b in wrong2], wrong2
-    assert wrong1 != expected_bos(CASES["MED01"]) and wrong2 != expected_bos(CASES["MED02"])
+    assert wrong1 != expected_bos(CASES["EASY01"]) and wrong2 != expected_bos(CASES["EASY02"])
 
 
 if __name__ == "__main__":

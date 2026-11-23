@@ -49,7 +49,7 @@ def mirror_swings(sw):
 
 
 EASY = {c["case_id"]: c for c in json.load(open(os.path.join(ROOT, "tests", "scanner_v6", "fixtures", "regression",
-                                                             "medium_bos.json")))["cases"]}
+                                                             "easy_bos.json")))["cases"]}
 
 
 def easy_rows(cid):
@@ -111,11 +111,11 @@ D.append(dict(case_id="CHD07", title="UNKNOWN (2 highs, 1 low): close below the 
               "protected swing may be invented (spec 5/8). The close below 101 is still a bearish BOS under the "
               "approved BOS rules (Option A).")))
 D.append(dict(case_id="CHD08", title="UNKNOWN from equal levels only (Easy Chart 1 OHLC): NO_CHOCH throughout",
-              rows=easy_rows("MED01"), swings=[], structure=("UNKNOWN",), check=None,
+              rows=easy_rows("EASY01"), swings=[], structure=("UNKNOWN",), check=None,
               expected=choch("UNKNOWN", "NO_CHOCH", None, None, None, "UNKNOWN", "Equal highs 105 and equal lows 99 "
               "are not swings: no confirmed swing at all -> UNKNOWN, no CHoCH on any candle.")))
 D.append(dict(case_id="CHD09", title="UNKNOWN (1 confirmed low) (Easy Chart 2 OHLC): BOS at c13 but NO_CHOCH",
-              rows=easy_rows("MED02"), swings=[("high", 4, 6, 127), ("high", 8, 10, 126), ("low", 10, 12, 117),
+              rows=easy_rows("EASY02"), swings=[("high", 4, 6, 127), ("high", 8, 10, 126), ("low", 10, 12, 117),
                                                ("high", 12, 14, 123)],
               structure=("UNKNOWN",), check=("close_below", 117), expected=choch("UNKNOWN", "NO_CHOCH", None, 13, None,
               "UNKNOWN", "Only one confirmed swing low (equal lows 120 are not swings) -> UNKNOWN. Candle 13 stays "

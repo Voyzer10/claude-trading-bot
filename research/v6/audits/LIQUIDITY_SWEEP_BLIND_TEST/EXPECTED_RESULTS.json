@@ -1,0 +1,3834 @@
+{
+ "spec": "EXPECTED RESULTS: V6 Liquidity Sweep blind examination (answer key, hand-derived)",
+ "fixtures_sha256": "fb0df27ed6786606320b9ae3630c97b97f320e5ef2a61f6032f89a3fcd760959",
+ "scoring": "Only `decidable` items are scored. `provisional_*` depend on the NOT-approved B0 proposal; `unresolved` items are never scored.",
+ "scenarios": [
+  {
+   "scenario_id": "LSB-E1",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "low",
+      "price": 98,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 109,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 101,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 116,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 106,
+      "source_candle": 16,
+      "confirmed_candle": 18,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 117,
+      "source_candle": 17,
+      "confirmed_candle": 19,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bullish",
+      "candle": 12,
+      "level": 109,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BULLISH",
+      "level": 101,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 19,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "SSL@98(c4)",
+     "side": "SSL",
+     "level": 98,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "level": 109,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "level": 101,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@116(c14)",
+     "side": "BSL",
+     "level": 116,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@106(c16)",
+     "side": "SSL",
+     "level": 106,
+     "source_candle": 16,
+     "active_from": 19,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@117(c17)",
+     "side": "BSL",
+     "level": 117,
+     "source_candle": 17,
+     "active_from": 20,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "high 111 > 109, close 110 > 109",
+     "bos_choch_interaction": [
+      "BOS bullish 109"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "BSL@116(c14)",
+     "side": "BSL",
+     "event": "SWEEP",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "high 117 > 116, close 108 <= 116",
+     "bos_choch_interaction": [
+      "NO_BOS bullish 116"
+     ],
+     "status": "PROVISIONAL (B0: LQ-08 S-wick, LQ-09 d=0, LQ-06)"
+    }
+   ],
+   "unresolved": []
+  },
+  {
+   "scenario_id": "LSB-E2",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "low",
+      "price": 98,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 109,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 101,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 116,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 100,
+      "source_candle": 17,
+      "confirmed_candle": 19,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bullish",
+      "candle": 12,
+      "level": 109,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BULLISH",
+      "level": 101,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [
+     {
+      "candle": 17,
+      "protected_level": 101,
+      "status": "APPROVED (A6 wick-only = NO_CHOCH)"
+     }
+    ],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 19,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "SSL@98(c4)",
+     "side": "SSL",
+     "level": 98,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "level": 109,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "level": 101,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@116(c14)",
+     "side": "BSL",
+     "level": 116,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@100(c17)",
+     "side": "SSL",
+     "level": 100,
+     "source_candle": 17,
+     "active_from": 20,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "high 111 > 109, close 110 > 109",
+     "bos_choch_interaction": [
+      "BOS bullish 109"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "event": "SWEEP",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "low 100 < 101, close 104 >= 101",
+     "bos_choch_interaction": [
+      "WICK_ONLY protected 101",
+      "NO_STATE_CHANGE  "
+     ],
+     "status": "PROVISIONAL (B0: LQ-08, LQ-09, LQ-22)"
+    }
+   ],
+   "unresolved": []
+  },
+  {
+   "scenario_id": "LSB-E3",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "high",
+      "price": 102,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 91,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 99,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 84,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 100,
+      "source_candle": 17,
+      "confirmed_candle": 19,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bearish",
+      "candle": 12,
+      "level": 91,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BEARISH",
+      "level": 99,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [
+     {
+      "candle": 17,
+      "protected_level": 99,
+      "status": "APPROVED (A6 wick-only = NO_CHOCH)"
+     }
+    ],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BEARISH",
+      "protected": 99,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "BEARISH",
+      "protected": 99,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 19,
+      "state": "BEARISH",
+      "protected": 99,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "BSL@102(c4)",
+     "side": "BSL",
+     "level": 102,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@91(c7)",
+     "side": "SSL",
+     "level": 91,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@99(c10)",
+     "side": "BSL",
+     "level": 99,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@84(c14)",
+     "side": "SSL",
+     "level": 84,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@100(c17)",
+     "side": "BSL",
+     "level": 100,
+     "source_candle": 17,
+     "active_from": 20,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "SSL@91(c7)",
+     "side": "SSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "low 89 < 91, close 90 < 91",
+     "bos_choch_interaction": [
+      "BOS bearish 91"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "BSL@99(c10)",
+     "side": "BSL",
+     "event": "SWEEP",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "high 100 > 99, close 96 <= 99",
+     "bos_choch_interaction": [
+      "WICK_ONLY protected 99",
+      "NO_STATE_CHANGE  "
+     ],
+     "status": "PROVISIONAL (B0: LQ-08, LQ-09, LQ-22)"
+    }
+   ],
+   "unresolved": []
+  },
+  {
+   "scenario_id": "LSB-E4",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "low",
+      "price": 98,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 109,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 101,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 116,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 106,
+      "source_candle": 16,
+      "confirmed_candle": 18,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bullish",
+      "candle": 12,
+      "level": 109,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     },
+     {
+      "direction": "bullish",
+      "candle": 17,
+      "level": 116,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BULLISH",
+      "level": 101,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "BULLISH",
+      "protected": 106,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "SSL@98(c4)",
+     "side": "SSL",
+     "level": 98,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "level": 109,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "level": 101,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@116(c14)",
+     "side": "BSL",
+     "level": 116,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@106(c16)",
+     "side": "SSL",
+     "level": 106,
+     "source_candle": 16,
+     "active_from": 19,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "high 111 > 109, close 110 > 109",
+     "bos_choch_interaction": [
+      "BOS bullish 109"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "BSL@116(c14)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "high 117.5 > 116, close 117 > 116",
+     "bos_choch_interaction": [
+      "BOS bullish 116"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02; LP-12 (BOS consumption is a separate rule))"
+    }
+   ],
+   "unresolved": []
+  },
+  {
+   "scenario_id": "LSB-E5",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "high",
+      "price": 102,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 91,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 99,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 84,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 94,
+      "source_candle": 16,
+      "confirmed_candle": 18,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bearish",
+      "candle": 12,
+      "level": 91,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     },
+     {
+      "direction": "bearish",
+      "candle": 17,
+      "level": 84,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BEARISH",
+      "level": 99,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BEARISH",
+      "protected": 99,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "BEARISH",
+      "protected": 94,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "BSL@102(c4)",
+     "side": "BSL",
+     "level": 102,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@91(c7)",
+     "side": "SSL",
+     "level": 91,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@99(c10)",
+     "side": "BSL",
+     "level": 99,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@84(c14)",
+     "side": "SSL",
+     "level": 84,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@94(c16)",
+     "side": "BSL",
+     "level": 94,
+     "source_candle": 16,
+     "active_from": 19,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "SSL@91(c7)",
+     "side": "SSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "low 89 < 91, close 90 < 91",
+     "bos_choch_interaction": [
+      "BOS bearish 91"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "SSL@84(c14)",
+     "side": "SSL",
+     "event": "TAKEN",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "low 82.5 < 84, close 83 < 84",
+     "bos_choch_interaction": [
+      "BOS bearish 84"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02; LP-12 (BOS consumption is a separate rule))"
+    }
+   ],
+   "unresolved": []
+  },
+  {
+   "scenario_id": "LSB-M1",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "low",
+      "price": 98,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 109,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 101,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 116,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 100,
+      "source_candle": 17,
+      "confirmed_candle": 19,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bullish",
+      "candle": 12,
+      "level": 109,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BULLISH",
+      "level": 101,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [
+     {
+      "candle": 17,
+      "protected_level": 101,
+      "status": "APPROVED (A6 wick-only = NO_CHOCH)"
+     },
+     {
+      "candle": 18,
+      "protected_level": 101,
+      "status": "APPROVED (A6 wick-only = NO_CHOCH)"
+     }
+    ],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 19,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 20,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "SSL@98(c4)",
+     "side": "SSL",
+     "level": 98,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "level": 109,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "level": 101,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@116(c14)",
+     "side": "BSL",
+     "level": 116,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@100(c17)",
+     "side": "SSL",
+     "level": 100,
+     "source_candle": 17,
+     "active_from": 20,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "high 111 > 109, close 110 > 109",
+     "bos_choch_interaction": [
+      "BOS bullish 109"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "event": "SWEEP",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "low 100 < 101, close 104 >= 101",
+     "bos_choch_interaction": [
+      "WICK_ONLY protected 101"
+     ],
+     "status": "PROVISIONAL (B0: LQ-08, LQ-09)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "event": "REPEAT_SWEEP (diagnostic)",
+     "candle": 18,
+     "state_before": "SWEPT",
+     "state_after": "SWEPT",
+     "evidence": "low 100.5 < 101, close 103.5 >= 101",
+     "bos_choch_interaction": [
+      "WICK_ONLY protected 101"
+     ],
+     "status": "PROVISIONAL (B0: LQ-15, LQ-06)"
+    }
+   ],
+   "unresolved": []
+  },
+  {
+   "scenario_id": "LSB-M2",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "low",
+      "price": 98,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 109,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 101,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 116,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bullish",
+      "candle": 12,
+      "level": 109,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     },
+     {
+      "direction": "bearish",
+      "candle": 18,
+      "level": 101,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BULLISH",
+      "level": 101,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     },
+     {
+      "type": "CHOCH",
+      "candle": 18,
+      "state_after": "TRANSITION(bearish)",
+      "level": 101,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [
+     {
+      "candle": 17,
+      "protected_level": 101,
+      "status": "APPROVED (A6 wick-only = NO_CHOCH)"
+     }
+    ],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "TRANSITION(bearish)",
+      "protected": null,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "SSL@98(c4)",
+     "side": "SSL",
+     "level": 98,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "level": 109,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "level": 101,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@116(c14)",
+     "side": "BSL",
+     "level": 116,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "high 111 > 109, close 110 > 109",
+     "bos_choch_interaction": [
+      "BOS bullish 109"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "event": "SWEEP",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "low 100 < 101, close 104 >= 101",
+     "bos_choch_interaction": [
+      "WICK_ONLY protected 101"
+     ],
+     "status": "PROVISIONAL (B0: LQ-08, LQ-09)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "event": "TAKEN",
+     "candle": 18,
+     "state_before": "SWEPT",
+     "state_after": "TAKEN",
+     "evidence": "low 99 < 101, close 99.5 < 101",
+     "bos_choch_interaction": [
+      "BOS bearish 101",
+      "CHOCH bearish 101"
+     ],
+     "status": "PROVISIONAL (B0: LQ-06 lifecycle, LS-S02)"
+    }
+   ],
+   "unresolved": []
+  },
+  {
+   "scenario_id": "LSB-M3",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "low",
+      "price": 98,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 109,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 101,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 116,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 97,
+      "source_candle": 17,
+      "confirmed_candle": 19,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bullish",
+      "candle": 12,
+      "level": 109,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BULLISH",
+      "level": 101,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [
+     {
+      "candle": 17,
+      "protected_level": 101,
+      "status": "APPROVED (A6 wick-only = NO_CHOCH)"
+     }
+    ],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 19,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "SSL@98(c4)",
+     "side": "SSL",
+     "level": 98,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "level": 109,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "level": 101,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@116(c14)",
+     "side": "BSL",
+     "level": 116,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@97(c17)",
+     "side": "SSL",
+     "level": 97,
+     "source_candle": 17,
+     "active_from": 20,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "high 111 > 109, close 110 > 109",
+     "bos_choch_interaction": [
+      "BOS bullish 109"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "event": "SWEEP",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "low 97 < 101, close 103 >= 101",
+     "bos_choch_interaction": [
+      "WICK_ONLY protected 101",
+      "SAME_CANDLE_GROUP  "
+     ],
+     "status": "PROVISIONAL (B0: LQ-08, LQ-14)"
+    },
+    {
+     "pool_id": "SSL@98(c4)",
+     "side": "SSL",
+     "event": "SWEEP",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "low 97 < 98, close 103 >= 98",
+     "bos_choch_interaction": [
+      "SAME_CANDLE_GROUP  "
+     ],
+     "status": "PROVISIONAL (B0: LQ-08, LQ-14)"
+    }
+   ],
+   "unresolved": []
+  },
+  {
+   "scenario_id": "LSB-M4",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "high",
+      "price": 102,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 91,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 99,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 84,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 103,
+      "source_candle": 17,
+      "confirmed_candle": 19,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bearish",
+      "candle": 12,
+      "level": 91,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BEARISH",
+      "level": 99,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [
+     {
+      "candle": 17,
+      "protected_level": 99,
+      "status": "APPROVED (A6 wick-only = NO_CHOCH)"
+     }
+    ],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BEARISH",
+      "protected": 99,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "BEARISH",
+      "protected": 99,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 19,
+      "state": "BEARISH",
+      "protected": 99,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "BSL@102(c4)",
+     "side": "BSL",
+     "level": 102,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@91(c7)",
+     "side": "SSL",
+     "level": 91,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@99(c10)",
+     "side": "BSL",
+     "level": 99,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@84(c14)",
+     "side": "SSL",
+     "level": 84,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@103(c17)",
+     "side": "BSL",
+     "level": 103,
+     "source_candle": 17,
+     "active_from": 20,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "SSL@91(c7)",
+     "side": "SSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "low 89 < 91, close 90 < 91",
+     "bos_choch_interaction": [
+      "BOS bearish 91"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "BSL@99(c10)",
+     "side": "BSL",
+     "event": "SWEEP",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "high 103 > 99, close 97 <= 99",
+     "bos_choch_interaction": [
+      "WICK_ONLY protected 99",
+      "SAME_CANDLE_GROUP  "
+     ],
+     "status": "PROVISIONAL (B0: LQ-08, LQ-14)"
+    },
+    {
+     "pool_id": "BSL@102(c4)",
+     "side": "BSL",
+     "event": "SWEEP",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "high 103 > 102, close 97 <= 102",
+     "bos_choch_interaction": [
+      "SAME_CANDLE_GROUP  "
+     ],
+     "status": "PROVISIONAL (B0: LQ-08, LQ-14)"
+    }
+   ],
+   "unresolved": []
+  },
+  {
+   "scenario_id": "LSB-M5",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "high",
+      "price": 102,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 91,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 99,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 84,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 100,
+      "source_candle": 17,
+      "confirmed_candle": 19,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bearish",
+      "candle": 12,
+      "level": 91,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BEARISH",
+      "level": 99,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [
+     {
+      "candle": 17,
+      "protected_level": 99,
+      "status": "APPROVED (A6 wick-only = NO_CHOCH)"
+     },
+     {
+      "candle": 18,
+      "protected_level": 99,
+      "status": "APPROVED (A6 wick-only = NO_CHOCH)"
+     }
+    ],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BEARISH",
+      "protected": 99,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "BEARISH",
+      "protected": 99,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 19,
+      "state": "BEARISH",
+      "protected": 99,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 20,
+      "state": "BEARISH",
+      "protected": 99,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "BSL@102(c4)",
+     "side": "BSL",
+     "level": 102,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@91(c7)",
+     "side": "SSL",
+     "level": 91,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@99(c10)",
+     "side": "BSL",
+     "level": 99,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@84(c14)",
+     "side": "SSL",
+     "level": 84,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@100(c17)",
+     "side": "BSL",
+     "level": 100,
+     "source_candle": 17,
+     "active_from": 20,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "SSL@91(c7)",
+     "side": "SSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "low 89 < 91, close 90 < 91",
+     "bos_choch_interaction": [
+      "BOS bearish 91"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "BSL@99(c10)",
+     "side": "BSL",
+     "event": "SWEEP",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "high 100 > 99, close 96 <= 99",
+     "bos_choch_interaction": [
+      "WICK_ONLY protected 99"
+     ],
+     "status": "PROVISIONAL (B0: LQ-08, LQ-09)"
+    },
+    {
+     "pool_id": "BSL@99(c10)",
+     "side": "BSL",
+     "event": "REPEAT_SWEEP (diagnostic)",
+     "candle": 18,
+     "state_before": "SWEPT",
+     "state_after": "SWEPT",
+     "evidence": "high 99.5 > 99, close 96.5 <= 99",
+     "bos_choch_interaction": [
+      "WICK_ONLY protected 99"
+     ],
+     "status": "PROVISIONAL (B0: LQ-15, LQ-06)"
+    }
+   ],
+   "unresolved": []
+  },
+  {
+   "scenario_id": "LSB-H1",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "low",
+      "price": 98,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 109,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 101,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 116,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 100.5,
+      "source_candle": 17,
+      "confirmed_candle": 19,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bullish",
+      "candle": 12,
+      "level": 109,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     },
+     {
+      "direction": "bullish",
+      "candle": 17,
+      "level": 116,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BULLISH",
+      "level": 101,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [
+     {
+      "candle": 17,
+      "protected_level": 101,
+      "status": "APPROVED (A6 wick-only = NO_CHOCH)"
+     }
+    ],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 19,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "SSL@98(c4)",
+     "side": "SSL",
+     "level": 98,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "level": 109,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "level": 101,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@116(c14)",
+     "side": "BSL",
+     "level": 116,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@100.5(c17)",
+     "side": "SSL",
+     "level": 100.5,
+     "source_candle": 17,
+     "active_from": 20,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "high 111 > 109, close 110 > 109",
+     "bos_choch_interaction": [
+      "BOS bullish 109"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "event": "SWEEP",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "low 100.5 < 101, close 116.5 >= 101",
+     "bos_choch_interaction": [
+      "WICK_ONLY protected 101",
+      "BOS bullish 116"
+     ],
+     "status": "PROVISIONAL (B0: LQ-08, LS-S11)"
+    },
+    {
+     "pool_id": "BSL@116(c14)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "high 117 > 116, close 116.5 > 116",
+     "bos_choch_interaction": [
+      "BOS bullish 116"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02, LS-S11)"
+    }
+   ],
+   "unresolved": []
+  },
+  {
+   "scenario_id": "LSB-H2",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "high",
+      "price": 102,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 91,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 99,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 84,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 99.5,
+      "source_candle": 17,
+      "confirmed_candle": 19,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bearish",
+      "candle": 12,
+      "level": 91,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     },
+     {
+      "direction": "bearish",
+      "candle": 17,
+      "level": 84,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BEARISH",
+      "level": 99,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [
+     {
+      "candle": 17,
+      "protected_level": 99,
+      "status": "APPROVED (A6 wick-only = NO_CHOCH)"
+     }
+    ],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BEARISH",
+      "protected": 99,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "BEARISH",
+      "protected": 99,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 19,
+      "state": "BEARISH",
+      "protected": 99,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "BSL@102(c4)",
+     "side": "BSL",
+     "level": 102,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@91(c7)",
+     "side": "SSL",
+     "level": 91,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@99(c10)",
+     "side": "BSL",
+     "level": 99,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@84(c14)",
+     "side": "SSL",
+     "level": 84,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@99.5(c17)",
+     "side": "BSL",
+     "level": 99.5,
+     "source_candle": 17,
+     "active_from": 20,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "SSL@91(c7)",
+     "side": "SSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "low 89 < 91, close 90 < 91",
+     "bos_choch_interaction": [
+      "BOS bearish 91"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "BSL@99(c10)",
+     "side": "BSL",
+     "event": "SWEEP",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "high 99.5 > 99, close 83.5 <= 99",
+     "bos_choch_interaction": [
+      "WICK_ONLY protected 99",
+      "BOS bearish 84"
+     ],
+     "status": "PROVISIONAL (B0: LQ-08, LS-S11)"
+    },
+    {
+     "pool_id": "SSL@84(c14)",
+     "side": "SSL",
+     "event": "TAKEN",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "low 83 < 84, close 83.5 < 84",
+     "bos_choch_interaction": [
+      "BOS bearish 84"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02, LS-S11)"
+    }
+   ],
+   "unresolved": []
+  },
+  {
+   "scenario_id": "LSB-H3",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "low",
+      "price": 98,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 109,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 101,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 116,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 106,
+      "source_candle": 16,
+      "confirmed_candle": 18,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 118.5,
+      "source_candle": 19,
+      "confirmed_candle": 21,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 105.5,
+      "source_candle": 19,
+      "confirmed_candle": 21,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bullish",
+      "candle": 12,
+      "level": 109,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     },
+     {
+      "direction": "bullish",
+      "candle": 17,
+      "level": 116,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BULLISH",
+      "level": 101,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [
+     {
+      "candle": 19,
+      "protected_level": 106,
+      "status": "APPROVED (A6 wick-only = NO_CHOCH)"
+     }
+    ],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "BULLISH",
+      "protected": 106,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 19,
+      "state": "BULLISH",
+      "protected": 106,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 20,
+      "state": "BULLISH",
+      "protected": 106,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 21,
+      "state": "BULLISH",
+      "protected": 106,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "SSL@98(c4)",
+     "side": "SSL",
+     "level": 98,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "level": 109,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "level": 101,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@116(c14)",
+     "side": "BSL",
+     "level": 116,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@106(c16)",
+     "side": "SSL",
+     "level": 106,
+     "source_candle": 16,
+     "active_from": 19,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@118.5(c19)",
+     "side": "BSL",
+     "level": 118.5,
+     "source_candle": 19,
+     "active_from": 22,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@105.5(c19)",
+     "side": "SSL",
+     "level": 105.5,
+     "source_candle": 19,
+     "active_from": 22,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "high 111 > 109, close 110 > 109",
+     "bos_choch_interaction": [
+      "BOS bullish 109"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "BSL@116(c14)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "high 117.5 > 116, close 117 > 116",
+     "bos_choch_interaction": [
+      "BOS bullish 116"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02)"
+    },
+    {
+     "pool_id": "SSL@106(c16)",
+     "side": "SSL",
+     "event": "SWEEP",
+     "candle": 19,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "low 105.5 < 106, close 108 >= 106",
+     "bos_choch_interaction": [
+      "WICK_ONLY protected 106"
+     ],
+     "status": "PROVISIONAL (B0: LQ-08; pool active from conf+1 = c19 (D5 step 4))"
+    }
+   ],
+   "unresolved": []
+  },
+  {
+   "scenario_id": "LSB-H4",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "low",
+      "price": 98,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 109,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 101,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 116,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 102,
+      "source_candle": 17,
+      "confirmed_candle": 19,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 103,
+      "source_candle": 20,
+      "confirmed_candle": 22,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bullish",
+      "candle": 12,
+      "level": 109,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BULLISH",
+      "level": 101,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 19,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 20,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 21,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 22,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 23,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "SSL@98(c4)",
+     "side": "SSL",
+     "level": 98,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "level": 109,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "level": 101,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@116(c14)",
+     "side": "BSL",
+     "level": 116,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@102(c17)",
+     "side": "SSL",
+     "level": 102,
+     "source_candle": 17,
+     "active_from": 20,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@103(c20)",
+     "side": "SSL",
+     "level": 103,
+     "source_candle": 20,
+     "active_from": 23,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "high 111 > 109, close 110 > 109",
+     "bos_choch_interaction": [
+      "BOS bullish 109"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "SSL@103(c20)",
+     "side": "SSL",
+     "event": "NO_EVENT (pool not yet formed; no back-dating)",
+     "candle": 17,
+     "state_before": "NONE",
+     "state_after": "NONE",
+     "evidence": "low 102 < 103, close 104 >= 103",
+     "bos_choch_interaction": [
+      "none"
+     ],
+     "status": "PROVISIONAL (approved swing timing + LQ-21; c17 low 102 < 103 is ignored)"
+    },
+    {
+     "pool_id": "SSL@103(c20)",
+     "side": "SSL",
+     "event": "SWEEP",
+     "candle": 23,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "low 102.5 < 103, close 105.5 >= 103",
+     "bos_choch_interaction": [
+      "none"
+     ],
+     "status": "PROVISIONAL (B0: LQ-08; active from c23)"
+    }
+   ],
+   "unresolved": []
+  },
+  {
+   "scenario_id": "LSB-H5",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "high",
+      "price": 102,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 91,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 99,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 84,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 94,
+      "source_candle": 16,
+      "confirmed_candle": 18,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 94.5,
+      "source_candle": 19,
+      "confirmed_candle": 21,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 81.5,
+      "source_candle": 19,
+      "confirmed_candle": 21,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bearish",
+      "candle": 12,
+      "level": 91,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     },
+     {
+      "direction": "bearish",
+      "candle": 17,
+      "level": 84,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BEARISH",
+      "level": 99,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [
+     {
+      "candle": 19,
+      "protected_level": 94,
+      "status": "APPROVED (A6 wick-only = NO_CHOCH)"
+     }
+    ],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BEARISH",
+      "protected": 99,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "BEARISH",
+      "protected": 94,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 19,
+      "state": "BEARISH",
+      "protected": 94,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 20,
+      "state": "BEARISH",
+      "protected": 94,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 21,
+      "state": "BEARISH",
+      "protected": 94,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "BSL@102(c4)",
+     "side": "BSL",
+     "level": 102,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@91(c7)",
+     "side": "SSL",
+     "level": 91,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@99(c10)",
+     "side": "BSL",
+     "level": 99,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@84(c14)",
+     "side": "SSL",
+     "level": 84,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@94(c16)",
+     "side": "BSL",
+     "level": 94,
+     "source_candle": 16,
+     "active_from": 19,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@81.5(c19)",
+     "side": "SSL",
+     "level": 81.5,
+     "source_candle": 19,
+     "active_from": 22,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@94.5(c19)",
+     "side": "BSL",
+     "level": 94.5,
+     "source_candle": 19,
+     "active_from": 22,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "SSL@91(c7)",
+     "side": "SSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "low 89 < 91, close 90 < 91",
+     "bos_choch_interaction": [
+      "BOS bearish 91"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "SSL@84(c14)",
+     "side": "SSL",
+     "event": "TAKEN",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "low 82.5 < 84, close 83 < 84",
+     "bos_choch_interaction": [
+      "BOS bearish 84"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02)"
+    },
+    {
+     "pool_id": "BSL@94(c16)",
+     "side": "BSL",
+     "event": "SWEEP",
+     "candle": 19,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "high 94.5 > 94, close 92 <= 94",
+     "bos_choch_interaction": [
+      "WICK_ONLY protected 94"
+     ],
+     "status": "PROVISIONAL (B0: LQ-08; pool active from conf+1 = c19 (D5 step 4))"
+    }
+   ],
+   "unresolved": []
+  },
+  {
+   "scenario_id": "LSB-X1",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "low",
+      "price": 98,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 109,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 101,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 116,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 100,
+      "source_candle": 17,
+      "confirmed_candle": 19,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bullish",
+      "candle": 12,
+      "level": 109,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BULLISH",
+      "level": 101,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [],
+    "structure_scored_up_to_candle": 16,
+    "checkpoints": [],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "SSL@98(c4)",
+     "side": "SSL",
+     "level": 98,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "level": 109,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "level": 101,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@116(c14)",
+     "side": "BSL",
+     "level": 116,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@100(c17)",
+     "side": "SSL",
+     "level": 100,
+     "source_candle": 17,
+     "active_from": 20,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "high 111 > 109, close 110 > 109",
+     "bos_choch_interaction": [
+      "BOS bullish 109"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    }
+   ],
+   "unresolved": [
+    {
+     "candle": 17,
+     "item": "structure state / CHoCH at c17: close == protected 101 (CHU04)",
+     "status": "UNRESOLVED"
+    },
+    {
+     "candle": 17,
+     "item": "SSL 101 sweep vs no-sweep when close == level (LQ-08 / CHU04 / LQ-09)",
+     "status": "UNRESOLVED"
+    },
+    {
+     "candle": 18,
+     "item": "state at c18-c19 depends on the c17 decision (CHU04)",
+     "status": "UNRESOLVED"
+    }
+   ]
+  },
+  {
+   "scenario_id": "LSB-X2",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "low",
+      "price": 98,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 109,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 101,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 116,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 106,
+      "source_candle": 16,
+      "confirmed_candle": 18,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 116,
+      "source_candle": 18,
+      "confirmed_candle": 20,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 108,
+      "source_candle": 20,
+      "confirmed_candle": 22,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bullish",
+      "candle": 12,
+      "level": 109,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BULLISH",
+      "level": 101,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 19,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 20,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 21,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 22,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "SSL@98(c4)",
+     "side": "SSL",
+     "level": 98,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "level": 109,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "level": 101,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@116(c14)",
+     "side": "BSL",
+     "level": 116,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@106(c16)",
+     "side": "SSL",
+     "level": 106,
+     "source_candle": 16,
+     "active_from": 19,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@108(c20)",
+     "side": "SSL",
+     "level": 108,
+     "source_candle": 20,
+     "active_from": 23,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "high 111 > 109, close 110 > 109",
+     "bos_choch_interaction": [
+      "BOS bullish 109"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    }
+   ],
+   "unresolved": [
+    {
+     "candle": 18,
+     "item": "c18 high == 116 exactly (touch, not beyond): sweep depth / equality (LQ-09)",
+     "status": "UNRESOLVED"
+    },
+    {
+     "candle": 18,
+     "item": "a second swing high at 116: separated equal highs as one pool or two (LQ-03)",
+     "status": "UNRESOLVED"
+    },
+    {
+     "candle": 21,
+     "item": "c21 high 117 / close 115 pierces both 116 levels: one or two sweeps (LQ-03, LQ-14)",
+     "status": "UNRESOLVED"
+    }
+   ]
+  },
+  {
+   "scenario_id": "LSB-X3",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "low",
+      "price": 98,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 109,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 101,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 116,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 99.5,
+      "source_candle": 17,
+      "confirmed_candle": 19,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bullish",
+      "candle": 12,
+      "level": 109,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     },
+     {
+      "direction": "bearish",
+      "candle": 17,
+      "level": 101,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BULLISH",
+      "level": 101,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     },
+     {
+      "type": "CHOCH",
+      "candle": 17,
+      "state_after": "TRANSITION(bearish)",
+      "level": 101,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "TRANSITION(bearish)",
+      "protected": null,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "SSL@98(c4)",
+     "side": "SSL",
+     "level": 98,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "level": 109,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "level": 101,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@116(c14)",
+     "side": "BSL",
+     "level": 116,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@99.5(c17)",
+     "side": "SSL",
+     "level": 99.5,
+     "source_candle": 17,
+     "active_from": 20,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "high 111 > 109, close 110 > 109",
+     "bos_choch_interaction": [
+      "BOS bullish 109"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "event": "TAKEN",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "low 99.5 < 101, close 100 < 101",
+     "bos_choch_interaction": [
+      "BOS bearish 101",
+      "CHOCH bearish 101"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02)"
+    }
+   ],
+   "unresolved": [
+    {
+     "candle": 18,
+     "item": "close back above the taken / consumed 101: reclaim (LQ-12) and failed CHoCH (O4)",
+     "status": "UNRESOLVED"
+    },
+    {
+     "candle": 18,
+     "item": "state at c18-c19 (O4 unresolved)",
+     "status": "UNRESOLVED"
+    }
+   ]
+  },
+  {
+   "scenario_id": "LSB-X4",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "low",
+      "price": 98,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 109,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 101,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 116,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 96,
+      "source_candle": 21,
+      "confirmed_candle": 23,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bullish",
+      "candle": 12,
+      "level": 109,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     },
+     {
+      "direction": "bearish",
+      "candle": 19,
+      "level": 101,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     },
+     {
+      "direction": "bearish",
+      "candle": 24,
+      "level": 96,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BULLISH",
+      "level": 101,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     },
+     {
+      "type": "CHOCH",
+      "candle": 19,
+      "state_after": "TRANSITION(bearish)",
+      "level": 101,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     },
+     {
+      "type": "REVERSAL_CONFIRMED",
+      "candle": 24,
+      "state_after": "BEARISH",
+      "level": null,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [
+     {
+      "candle": 17,
+      "protected_level": 101,
+      "status": "APPROVED (A6 wick-only = NO_CHOCH)"
+     },
+     {
+      "candle": 18,
+      "protected_level": 101,
+      "status": "APPROVED (A6 wick-only = NO_CHOCH)"
+     }
+    ],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "BULLISH",
+      "protected": 101,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 19,
+      "state": "TRANSITION(bearish)",
+      "protected": null,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 20,
+      "state": "TRANSITION(bearish)",
+      "protected": null,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 21,
+      "state": "TRANSITION(bearish)",
+      "protected": null,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 22,
+      "state": "TRANSITION(bearish)",
+      "protected": null,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 23,
+      "state": "TRANSITION(bearish)",
+      "protected": null,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 24,
+      "state": "BEARISH",
+      "protected": null,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "SSL@98(c4)",
+     "side": "SSL",
+     "level": 98,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "level": 109,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "level": 101,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@116(c14)",
+     "side": "BSL",
+     "level": 116,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@96(c21)",
+     "side": "SSL",
+     "level": 96,
+     "source_candle": 21,
+     "active_from": 24,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "BSL@109(c7)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "high 111 > 109, close 110 > 109",
+     "bos_choch_interaction": [
+      "BOS bullish 109"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "event": "SWEEP",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "low 100 < 101, close 104 >= 101",
+     "bos_choch_interaction": [
+      "WICK_ONLY protected 101"
+     ],
+     "status": "PROVISIONAL (B0: LQ-08)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "event": "REPEAT_SWEEP (diagnostic)",
+     "candle": 18,
+     "state_before": "SWEPT",
+     "state_after": "SWEPT",
+     "evidence": "low 100.5 < 101, close 103.5 >= 101",
+     "bos_choch_interaction": [
+      "WICK_ONLY protected 101"
+     ],
+     "status": "PROVISIONAL (B0: LQ-15)"
+    },
+    {
+     "pool_id": "SSL@101(c10)",
+     "side": "SSL",
+     "event": "TAKEN",
+     "candle": 19,
+     "state_before": "SWEPT",
+     "state_after": "TAKEN",
+     "evidence": "low 99 < 101, close 99.5 < 101",
+     "bos_choch_interaction": [
+      "BOS bearish 101",
+      "CHOCH bearish 101"
+     ],
+     "status": "PROVISIONAL (B0: LQ-06, LS-S02)"
+    },
+    {
+     "pool_id": "SSL@98(c4)",
+     "side": "SSL",
+     "event": "SWEEP",
+     "candle": 20,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "low 97.5 < 98, close 98.5 >= 98",
+     "bos_choch_interaction": [
+      "NO_BOS_D4 bearish 98"
+     ],
+     "status": "PROVISIONAL (B0: LQ-08; approved D4: no BOS, latest reference 101 already used)"
+    },
+    {
+     "pool_id": "SSL@98(c4)",
+     "side": "SSL",
+     "event": "TAKEN",
+     "candle": 21,
+     "state_before": "SWEPT",
+     "state_after": "TAKEN",
+     "evidence": "low 96 < 98, close 96.5 < 98",
+     "bos_choch_interaction": [
+      "NO_BOS_D4 bearish 98"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02; approved D4: no BOS on an older unbroken swing)"
+    },
+    {
+     "pool_id": "SSL@96(c21)",
+     "side": "SSL",
+     "event": "TAKEN",
+     "candle": 24,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "low 95 < 96, close 95.5 < 96",
+     "bos_choch_interaction": [
+      "BOS bearish 96",
+      "REVERSAL_CONFIRMED bearish "
+     ],
+     "status": "PROVISIONAL (B0: LS-S02; pool active from c24)"
+    }
+   ],
+   "unresolved": []
+  },
+  {
+   "scenario_id": "LSB-X5",
+   "decidable": {
+    "swings": [
+     {
+      "kind": "high",
+      "price": 102,
+      "source_candle": 4,
+      "confirmed_candle": 6,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 91,
+      "source_candle": 7,
+      "confirmed_candle": 9,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 99,
+      "source_candle": 10,
+      "confirmed_candle": 12,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "low",
+      "price": 84,
+      "source_candle": 14,
+      "confirmed_candle": 16,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     },
+     {
+      "kind": "high",
+      "price": 104,
+      "source_candle": 21,
+      "confirmed_candle": 23,
+      "status": "APPROVED (SW-001..005 L2/R2 strict)"
+     }
+    ],
+    "bos": [
+     {
+      "direction": "bearish",
+      "candle": 12,
+      "level": 91,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     },
+     {
+      "direction": "bullish",
+      "candle": 19,
+      "level": 99,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     },
+     {
+      "direction": "bullish",
+      "candle": 24,
+      "level": 104,
+      "status": "APPROVED (BOS-001..005, D4, D5)"
+     }
+    ],
+    "structure_events": [
+     {
+      "type": "ESTABLISHED",
+      "candle": 16,
+      "state_after": "BEARISH",
+      "level": 99,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     },
+     {
+      "type": "CHOCH",
+      "candle": 19,
+      "state_after": "TRANSITION(bullish)",
+      "level": 99,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     },
+     {
+      "type": "REVERSAL_CONFIRMED",
+      "candle": 24,
+      "state_after": "BULLISH",
+      "level": null,
+      "status": "APPROVED (A2-A10, D1-D3)"
+     }
+    ],
+    "wick_only": [
+     {
+      "candle": 17,
+      "protected_level": 99,
+      "status": "APPROVED (A6 wick-only = NO_CHOCH)"
+     },
+     {
+      "candle": 18,
+      "protected_level": 99,
+      "status": "APPROVED (A6 wick-only = NO_CHOCH)"
+     }
+    ],
+    "structure_scored_up_to_candle": null,
+    "checkpoints": [
+     {
+      "candle": 17,
+      "state": "BEARISH",
+      "protected": 99,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 18,
+      "state": "BEARISH",
+      "protected": 99,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 19,
+      "state": "TRANSITION(bullish)",
+      "protected": null,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 20,
+      "state": "TRANSITION(bullish)",
+      "protected": null,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 21,
+      "state": "TRANSITION(bullish)",
+      "protected": null,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 22,
+      "state": "TRANSITION(bullish)",
+      "protected": null,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 23,
+      "state": "TRANSITION(bullish)",
+      "protected": null,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     },
+     {
+      "candle": 24,
+      "state": "BULLISH",
+      "protected": null,
+      "status": "APPROVED (state + D2 P-B protected in force after the close)"
+     }
+    ],
+    "harness": {
+     "no_lookahead_violations": [],
+     "replay_audit_ok": true,
+     "status": "APPROVED (engine harness)"
+    }
+   },
+   "provisional_pools": [
+    {
+     "pool_id": "BSL@102(c4)",
+     "side": "BSL",
+     "level": 102,
+     "source_candle": 4,
+     "active_from": 7,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@91(c7)",
+     "side": "SSL",
+     "level": 91,
+     "source_candle": 7,
+     "active_from": 10,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@99(c10)",
+     "side": "BSL",
+     "level": 99,
+     "source_candle": 10,
+     "active_from": 13,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "SSL@84(c14)",
+     "side": "SSL",
+     "level": 84,
+     "source_candle": 14,
+     "active_from": 17,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    },
+    {
+     "pool_id": "BSL@104(c21)",
+     "side": "BSL",
+     "level": 104,
+     "source_candle": 21,
+     "active_from": 24,
+     "status": "PROVISIONAL (B0 LQ-01: every confirmed swing is a pool, active from confirmation + 1; NOT approved)"
+    }
+   ],
+   "provisional_liquidity_events": [
+    {
+     "pool_id": "SSL@91(c7)",
+     "side": "SSL",
+     "event": "TAKEN",
+     "candle": 12,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "low 89 < 91, close 90 < 91",
+     "bos_choch_interaction": [
+      "BOS bearish 91"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02 close beyond -> TAKEN; LP-12)"
+    },
+    {
+     "pool_id": "BSL@99(c10)",
+     "side": "BSL",
+     "event": "SWEEP",
+     "candle": 17,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "high 100 > 99, close 96 <= 99",
+     "bos_choch_interaction": [
+      "WICK_ONLY protected 99"
+     ],
+     "status": "PROVISIONAL (B0: LQ-08)"
+    },
+    {
+     "pool_id": "BSL@99(c10)",
+     "side": "BSL",
+     "event": "REPEAT_SWEEP (diagnostic)",
+     "candle": 18,
+     "state_before": "SWEPT",
+     "state_after": "SWEPT",
+     "evidence": "high 99.5 > 99, close 96.5 <= 99",
+     "bos_choch_interaction": [
+      "WICK_ONLY protected 99"
+     ],
+     "status": "PROVISIONAL (B0: LQ-15)"
+    },
+    {
+     "pool_id": "BSL@99(c10)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 19,
+     "state_before": "SWEPT",
+     "state_after": "TAKEN",
+     "evidence": "high 101 > 99, close 100.5 > 99",
+     "bos_choch_interaction": [
+      "BOS bullish 99",
+      "CHOCH bullish 99"
+     ],
+     "status": "PROVISIONAL (B0: LQ-06, LS-S02)"
+    },
+    {
+     "pool_id": "BSL@102(c4)",
+     "side": "BSL",
+     "event": "SWEEP",
+     "candle": 20,
+     "state_before": "ACTIVE",
+     "state_after": "SWEPT",
+     "evidence": "high 102.5 > 102, close 101.5 <= 102",
+     "bos_choch_interaction": [
+      "NO_BOS_D4 bullish 102"
+     ],
+     "status": "PROVISIONAL (B0: LQ-08; approved D4: no BOS, latest reference 101 already used)"
+    },
+    {
+     "pool_id": "BSL@102(c4)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 21,
+     "state_before": "SWEPT",
+     "state_after": "TAKEN",
+     "evidence": "high 104 > 102, close 103.5 > 102",
+     "bos_choch_interaction": [
+      "NO_BOS_D4 bullish 102"
+     ],
+     "status": "PROVISIONAL (B0: LS-S02; approved D4: no BOS on an older unbroken swing)"
+    },
+    {
+     "pool_id": "BSL@104(c21)",
+     "side": "BSL",
+     "event": "TAKEN",
+     "candle": 24,
+     "state_before": "ACTIVE",
+     "state_after": "TAKEN",
+     "evidence": "high 105 > 104, close 104.5 > 104",
+     "bos_choch_interaction": [
+      "BOS bullish 104",
+      "REVERSAL_CONFIRMED bullish "
+     ],
+     "status": "PROVISIONAL (B0: LS-S02; pool active from c24)"
+    }
+   ],
+   "unresolved": []
+  }
+ ]
+}

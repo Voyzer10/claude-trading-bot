@@ -24,6 +24,14 @@ from scanner_v6.structure.choch import (CHoCHBreak, ComplexStructureBreak, Struc
 D = json.load(open(os.path.join(ROOT, "research", "v6", "specs", "choch_v0_9", "choch_fixtures.draft.json")))
 CASES = {c["case_id"]: c for c in D["decidable"]}
 UNSCORED = {c["case_id"]: c for c in D["unscored"]}
+# Fixture expectations superseded by a later owner decision. The draft fixture file is NOT edited (historical spec
+# artifact); the superseding expectation lives here, with its decision.
+#   CHD15: SR-6 (spec 17.R, 23 Nov 2026). c16 closes 100 < the candidate protected 101 on the establishing candle, so the
+#          establishment is rejected: no ESTABLISHED event, the state stays UNKNOWN, diagnostic ESTABLISHMENT_REJECTED_O9
+#          (was: ESTABLISHED at c16 with O9_UNRESOLVED). BOS unchanged.
+SUPERSEDED = {"CHD15": {"bos": [["bullish", 12, 109.0], ["bearish", 16, 101.0]], "events": [],
+                        "final": ["UNKNOWN", None], "diags": [["ESTABLISHMENT_REJECTED_O9", 16]],
+                        "decision": "SR-6"}}
 
 
 def series_of(case):
@@ -50,7 +58,7 @@ def observed(rep):
 def test_all_decidable_fixtures_under_the_approved_rules():
     assert sorted(CASES) == ["CHD%02d" % i for i in range(1, 17)]
     for cid, case in CASES.items():
-        want = case["approved_rules_expected"]
+        want = SUPERSEDED.get(cid, case["approved_rules_expected"])
         rep = analyze_structure(series_of(case))
         assert [(b.direction.value, b.index + 1, b.level) for b in rep.bos] == [tuple(x) for x in want["bos"]], cid
         assert observed(rep) == [tuple(x[:4]) + (tuple(x[4]),) for x in want["events"]], (cid, observed(rep))
@@ -121,9 +129,11 @@ def test_d3_complex_guard_never_forces_a_choch():
 def test_d5_swing_confirmed_on_k_not_used_on_k():
     rep = analyze_structure(series_of(CASES["CHD15"]))
     assert not any(isinstance(e, CHoCHBreak) for e in rep.events)       # c16 closes below 101, but state was UNKNOWN
-    est = [e for e in rep.events if isinstance(e, StructureStateChange)]
-    assert [(e.index + 1, e.state_after, e.cause) for e in est] == [(16, "BULLISH", "ESTABLISHED")]
-    assert ("O9_UNRESOLVED", 16) in {(d.code, d.index + 1) for d in rep.diagnostics}
+    # SR-6 (23 Nov 2026) supersedes the former expectation (ESTABLISHED at c16 + O9_UNRESOLVED): the establishing close
+    # is already beyond the candidate protected 101, so the structure is NOT established and stays UNKNOWN.
+    assert not [e for e in rep.events if isinstance(e, StructureStateChange)]
+    assert ("ESTABLISHMENT_REJECTED_O9", 16) in {(d.code, d.index + 1) for d in rep.diagnostics}
+    assert rep.timeline[15].state == "UNKNOWN" and rep.timeline[15].protected_price is None
 
 
 def test_wick_only_is_a_diagnostic_not_an_event():

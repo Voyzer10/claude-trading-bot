@@ -98,7 +98,7 @@ python tests/scanner_v6/test_replay_audit.py      # G12 harness
 python tests/scanner_v6/test_swings.py            # swing unit tests
 python tests/scanner_v6/test_swing_fixtures.py    # all Volume-1 fixtures (-v for per-case lines)
 python tests/scanner_v6/test_swing_mutants.py     # faulty detectors must fail
-python tests/scanner_v6/test_regression_medium_bos.py   # permanent regression: the exam-chart BOS mistakes (MED01/MED02 = Easy charts 1/2)
+python tests/scanner_v6/test_regression_medium_bos.py   # permanent regression: the exam-chart BOS mistakes (easy_bos.json: EASY01/EASY02, formerly MED01/MED02)
 python tests/scanner_v6/test_bos.py               # BOS module vs Volume-1 drafts, regression, parity
 python tests/scanner_v6/test_choch.py             # CHoCH / structure vs CHD01-CHD16 (approved D1-D5)
 python research/v6/experiments/medium_bos_retest.py grade   # blind visual retest (reads PNG pixels only)

@@ -36,7 +36,7 @@
 
 ## Coverage added
 
-- `tests/scanner_v6/fixtures/regression/medium_bos.json`: MED01 and MED02. Exact OHLC, candle numbers 1–14, expected swings, equal levels, expected BOS, and the rejected mistake with its reason.
+- `tests/scanner_v6/fixtures/regression/easy_bos.json` (renamed 22 Nov 2026 from `medium_bos.json`, audit D-4: the charts were Easy Charts 1 and 2): EASY01 and EASY02 (formerly MED01 / MED02). Exact OHLC, candle numbers 1–14, expected swings, equal levels, expected BOS, and the rejected mistake with its reason.
 - `tests/scanner_v6/test_regression_medium_bos.py`: 6 tests.
   - The swing detector, batch and streaming, replay-audited.
   - The equal levels are rejected.

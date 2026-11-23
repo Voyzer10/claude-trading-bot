@@ -1,0 +1,6 @@
+market,instrument,timeframes,reason
+NSE index,NIFTY 50 (^NSEI),5m/15m/1h/1D,not in the uploaded cache; Yahoo / NSE unreachable from the workspace (proxy allowlist)
+NSE index,NIFTY BANK (^NSEBANK),5m/15m/1h/1D,same
+Crypto,"BTC-USD, ETH-USD, SOL-USD, XRP-USD (Coinbase)",5m/15m/1h/4h/1D,api.exchange.coinbase.com unreachable (HTTP 000 via proxy); no cached crypto candles found; linked VPS not connected
+US,"SPY, QQQ, AAPL, MSFT, NVDA, TSLA, AMZN, JPM (Alpaca IEX)",5m/15m/1h/1D,requires broker data key (excluded by the task); Yahoo / Stooq unreachable; no cached US candles found
+NSE,1D for every stock,1D,only ~60 trading days exist (Yahoo range=60d): evaluated but labelled INSUFFICIENT DATA

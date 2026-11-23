@@ -1,12 +1,12 @@
 {
- "dataset": "v6_regression_medium_bos",
+ "dataset": "v6_regression_easy_bos",
  "status": "PERMANENT REGRESSION FIXTURE (approved profile: L2/R2 strict, equal levels not swings, close-beyond latest confirmed swing, one BOS per reference)",
  "candle_numbering": "candle numbers are 1-based as on the exam charts; tests convert to 0-based indices (index = candle - 1)",
  "t0": "2026-01-05T09:00:00+00:00",
  "bar_minutes": 5,
  "cases": [
   {
-   "source": "Medium/Easy visual exam, Chart 1 (bullish), 21 Nov 2026",
+   "source": "Easy visual exam, Chart 1 (bullish), 21 Nov 2026 (formerly mislabelled Medium)",
    "expected_swings": [],
    "expected_equal_levels": [
     [
@@ -43,7 +43,7 @@
     "reported": "bullish BOS at candle 11 using level 105 (candles 3 and 4)",
     "why_wrong": "105 is an equal high (candle 3 high 105 == candle 4 high 105): no unique strict pivot, so no swing and no BOS reference. No confirmed swing exists in this chart, so no BOS at all."
    },
-   "case_id": "MED01",
+   "case_id": "EASY01",
    "candles": [
     {
      "candle": 1,
@@ -157,10 +157,11 @@
      "l": 110,
      "c": 112
     }
-   ]
+   ],
+   "legacy_case_id": "MED01"
   },
   {
-   "source": "Medium/Easy visual exam, Chart 2 (bearish), 21 Nov 2026",
+   "source": "Easy visual exam, Chart 2 (bearish), 21 Nov 2026 (formerly mislabelled Medium)",
    "expected_swings": [
     [
      "high",
@@ -219,7 +220,7 @@
     "reported": "bearish BOS at candle 9 using level 120 (candles 5 and 6)",
     "why_wrong": "120 is an equal low (candle 5 low 120 == candle 6 low 120): not a swing, so not a BOS reference. The only valid BOS is candle 13 closing at 116 below the confirmed swing low 117 (candle 10, confirmed at candle 12)."
    },
-   "case_id": "MED02",
+   "case_id": "EASY02",
    "candles": [
     {
      "candle": 1,
@@ -333,7 +334,9 @@
      "l": 114,
      "c": 115
     }
-   ]
+   ],
+   "legacy_case_id": "MED02"
   }
- ]
+ ],
+ "identity_note": "Renamed 22 Nov 2026 (audit defect D-4) from medium_bos.json / MED01, MED02. The charts were titled 'Easy Chart 1' and 'Easy Chart 2' (14 candles each); no Medium chart was ever supplied. OHLC, expected swings, equal levels, expected BOS and rejected mistakes are unchanged."
 }

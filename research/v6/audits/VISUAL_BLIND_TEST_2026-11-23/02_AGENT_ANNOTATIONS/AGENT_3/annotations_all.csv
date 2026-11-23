@@ -1,0 +1,601 @@
+chart_id,type,direction,candle_index,price,confidence,note
+E-01,POOL_SSL,,7,97.78,0.7,"swing low, margin 2px"
+E-01,POOL_BSL,,13,99.28,0.9,"swing high, margin 5px"
+E-01,BOS,bearish,15,97.78,0.65,close below swing low of candle 7
+E-01,TAKEN_SSL,,15,97.78,0.5,close below pool of candle 7
+E-01,POOL_SSL,,21,95.87,0.9,"swing low, margin 7px"
+E-01,POOL_BSL,,25,97.60,0.9,"swing high, margin 13px"
+E-01,SWEEP_SSL,,28,95.87,0.4,swept pool of candle 21
+E-01,BOS,bearish,29,95.87,0.85,close below swing low of candle 21 (state down)
+E-01,POOL_SSL,,33,93.87,0.9,"swing low, margin 7px"
+E-01,POOL_BSL,,38,95.59,0.9,"swing high, margin 7px"
+E-01,SWEEP_SSL,,41,93.87,0.8,swept pool of candle 33
+E-01,BOS,bearish,42,93.87,0.85,close below swing low of candle 33 (state down)
+E-01,POOL_SSL,,47,91.52,0.9,"swing low, margin 15px"
+E-01,SWEEP_BSL,,52,95.59,0.6,swept pool of candle 38
+E-01,CHOCH,bullish,53,95.59,0.55,downtrend protected high of candle 38 closed above
+E-01,POOL_BSL,,54,96.15,0.9,"swing high, margin 7px"
+E-01,POOL_SSL,,59,94.21,0.9,"swing low, margin 6px"
+E-01,SWEEP_BSL,,61,96.15,0.6,swept pool of candle 54
+E-01,BOS,bullish,62,96.15,0.85,close above swing high of candle 54 (state up)
+E-01,TAKEN_BSL,,65,97.60,0.7,close above pool of candle 25
+E-01,POOL_BSL,,67,98.73,0.9,"swing high, margin 5px"
+E-01,POOL_SSL,,72,96.78,0.9,"swing low, margin 8px"
+E-01,SWEEP_BSL,,74,98.73,0.7,swept pool of candle 67
+E-01,BOS,bullish,75,98.73,0.85,close above swing high of candle 67 (state up)
+E-01,TAKEN_BSL,,76,99.28,0.7,close above pool of candle 13
+E-02,POOL_SSL,,6,98.17,0.9,"swing low, margin 16px"
+E-02,POOL_BSL,,11,101.74,0.9,"swing high, margin 12px"
+E-02,POOL_SSL,,16,100.11,0.8,"swing low, margin 3px"
+E-02,SWEEP_BSL,,19,101.74,0.8,swept pool of candle 11
+E-02,BOS,bullish,20,101.74,0.85,close above swing high of candle 11
+E-02,POOL_BSL,,24,103.56,0.5,"swing high, margin 1px"
+E-02,POOL_SSL,,28,101.84,0.9,"swing low, margin 8px"
+E-02,SWEEP_BSL,,31,103.56,0.4,swept pool of candle 24
+E-02,BOS,bullish,32,103.56,0.45,close above swing high of candle 24 (state up)
+E-02,POOL_BSL,,35,105.51,0.8,"swing high, margin 3px"
+E-02,POOL_SSL,,40,103.48,0.9,"swing low, margin 21px"
+E-02,BOS,bullish,44,105.51,0.75,close above swing high of candle 35 (state up)
+E-02,TAKEN_BSL,,44,105.51,0.6,close above pool of candle 35
+E-02,POOL_BSL,,47,107.33,0.9,"swing high, margin 20px"
+E-02,POOL_SSL,,53,103.36,0.9,"swing low, margin 11px"
+E-02,SWEEP_SSL,,53,103.48,0.8,swept pool of candle 40
+E-02,POOL_BSL,,54,104.42,0.9,"swing high, margin 5px"
+E-02,BOS,bullish,57,104.42,0.85,close above swing high of candle 54 (state up)
+E-02,POOL_BSL,,57,104.87,0.9,"swing high, margin 6px"
+E-02,TAKEN_BSL,,57,104.42,0.7,close above pool of candle 54
+E-02,SWEEP_SSL,,60,103.36,0.7,swept pool of candle 53
+E-02,CHOCH,bearish,61,103.36,0.55,uptrend protected low of candle 53 closed below
+E-02,TAKEN_SSL,,63,101.84,0.3,close below pool of candle 28
+E-02,POOL_SSL,,66,101.03,0.9,"swing low, margin 4px"
+E-02,POOL_BSL,,70,102.53,0.9,"swing high, margin 11px"
+E-02,BOS,bearish,71,101.03,0.65,close below swing low of candle 66 (state down)
+E-02,TAKEN_SSL,,71,101.03,0.5,close below pool of candle 66
+E-02,TAKEN_SSL,,74,100.11,0.6,close below pool of candle 16
+E-03,POOL_BSL,,7,102.22,0.7,"swing high, margin 2px"
+E-03,POOL_SSL,,13,100.72,0.9,"swing low, margin 5px"
+E-03,BOS,bullish,15,102.22,0.65,close above swing high of candle 7
+E-03,TAKEN_BSL,,15,102.22,0.5,close above pool of candle 7
+E-03,POOL_BSL,,21,104.13,0.9,"swing high, margin 7px"
+E-03,POOL_SSL,,25,102.40,0.9,"swing low, margin 13px"
+E-03,SWEEP_BSL,,28,104.13,0.4,swept pool of candle 21
+E-03,BOS,bullish,29,104.13,0.85,close above swing high of candle 21 (state up)
+E-03,POOL_BSL,,33,106.13,0.9,"swing high, margin 7px"
+E-03,POOL_SSL,,38,104.41,0.9,"swing low, margin 7px"
+E-03,SWEEP_BSL,,41,106.13,0.8,swept pool of candle 33
+E-03,BOS,bullish,42,106.13,0.85,close above swing high of candle 33 (state up)
+E-03,POOL_BSL,,47,108.48,0.9,"swing high, margin 15px"
+E-03,SWEEP_SSL,,52,104.41,0.6,swept pool of candle 38
+E-03,CHOCH,bearish,53,104.41,0.55,uptrend protected low of candle 38 closed below
+E-03,POOL_SSL,,54,103.85,0.9,"swing low, margin 7px"
+E-03,POOL_BSL,,59,105.79,0.9,"swing high, margin 6px"
+E-03,SWEEP_SSL,,61,103.85,0.6,swept pool of candle 54
+E-03,BOS,bearish,62,103.85,0.85,close below swing low of candle 54 (state down)
+E-03,TAKEN_SSL,,65,102.40,0.7,close below pool of candle 25
+E-03,POOL_SSL,,67,101.27,0.9,"swing low, margin 5px"
+E-03,POOL_BSL,,72,103.22,0.9,"swing high, margin 8px"
+E-03,SWEEP_SSL,,74,101.27,0.7,swept pool of candle 67
+E-03,BOS,bearish,75,101.27,0.85,close below swing low of candle 67 (state down)
+E-03,TAKEN_SSL,,76,100.72,0.7,close below pool of candle 13
+E-04,POOL_BSL,,6,101.83,0.9,"swing high, margin 16px"
+E-04,POOL_SSL,,11,98.26,0.9,"swing low, margin 12px"
+E-04,POOL_BSL,,16,99.89,0.8,"swing high, margin 3px"
+E-04,SWEEP_SSL,,19,98.26,0.8,swept pool of candle 11
+E-04,BOS,bearish,20,98.26,0.85,close below swing low of candle 11
+E-04,POOL_SSL,,24,96.44,0.5,"swing low, margin 1px"
+E-04,POOL_BSL,,28,98.16,0.9,"swing high, margin 8px"
+E-04,SWEEP_SSL,,31,96.44,0.4,swept pool of candle 24
+E-04,BOS,bearish,32,96.44,0.45,close below swing low of candle 24 (state down)
+E-04,POOL_SSL,,35,94.49,0.8,"swing low, margin 3px"
+E-04,POOL_BSL,,40,96.52,0.9,"swing high, margin 21px"
+E-04,BOS,bearish,44,94.49,0.75,close below swing low of candle 35 (state down)
+E-04,TAKEN_SSL,,44,94.49,0.6,close below pool of candle 35
+E-04,POOL_SSL,,47,92.67,0.9,"swing low, margin 20px"
+E-04,POOL_BSL,,53,96.64,0.9,"swing high, margin 11px"
+E-04,SWEEP_BSL,,53,96.52,0.8,swept pool of candle 40
+E-04,POOL_SSL,,54,95.58,0.9,"swing low, margin 5px"
+E-04,BOS,bearish,57,95.58,0.85,close below swing low of candle 54 (state down)
+E-04,POOL_SSL,,57,95.13,0.9,"swing low, margin 6px"
+E-04,TAKEN_SSL,,57,95.58,0.7,close below pool of candle 54
+E-04,SWEEP_BSL,,60,96.64,0.7,swept pool of candle 53
+E-04,CHOCH,bullish,61,96.64,0.55,downtrend protected high of candle 53 closed above
+E-04,TAKEN_BSL,,63,98.16,0.3,close above pool of candle 28
+E-04,POOL_BSL,,66,98.97,0.9,"swing high, margin 4px"
+E-04,POOL_SSL,,70,97.47,0.9,"swing low, margin 11px"
+E-04,BOS,bullish,71,98.97,0.65,close above swing high of candle 66 (state up)
+E-04,TAKEN_BSL,,71,98.97,0.5,close above pool of candle 66
+E-04,TAKEN_BSL,,74,99.89,0.6,close above pool of candle 16
+X-01,POOL_BSL,,3,100.45,0.9,"swing high, margin 17px"
+X-01,POOL_SSL,,5,97.26,0.9,"swing low, margin 62px"
+X-01,POOL_BSL,,7,100.52,0.9,"swing high, margin 35px"
+X-01,SWEEP_BSL,,7,100.45,0.8,swept pool of candle 3
+X-01,BOS,bearish,11,97.26,0.85,close below swing low of candle 5
+X-01,TAKEN_SSL,,11,97.26,0.7,close below pool of candle 5
+X-01,POOL_SSL,,12,96.42,0.7,"swing low, margin 2px"
+X-01,POOL_SSL,,15,96.74,0.9,"swing low, margin 13px"
+X-01,POOL_BSL,,17,99.31,0.9,"swing high, margin 13px"
+X-01,BOS,bearish,21,96.74,0.85,close below swing low of candle 15
+X-01,SWEEP_SSL,,21,96.42,0.6,swept pool of candle 12
+X-01,TAKEN_SSL,,21,96.74,0.7,close below pool of candle 15
+X-01,POOL_SSL,,23,95.70,0.8,"swing low, margin 3px"
+X-01,POOL_BSL,,26,99.52,0.9,"swing high, margin 78px"
+X-01,SWEEP_BSL,,26,99.31,0.8,swept pool of candle 17
+X-01,BOS,bearish,32,95.70,0.75,close below swing low of candle 23 (state down)
+X-01,TAKEN_SSL,,32,95.70,0.6,close below pool of candle 23
+X-01,POOL_SSL,,34,95.03,0.9,"swing low, margin 50px"
+X-01,POOL_BSL,,38,100.29,0.9,"swing high, margin 46px"
+X-01,SWEEP_BSL,,38,99.52,0.8,swept pool of candle 26
+X-01,SWEEP_SSL,,43,95.03,0.6,swept pool of candle 34
+X-01,POOL_BSL,,44,100.45,0.9,"swing high, margin 98px"
+X-01,POOL_SSL,,44,94.84,0.9,"swing low, margin 16px"
+X-01,SWEEP_BSL,,44,100.29,0.8,swept pool of candle 38
+X-01,CHOCH,bullish,47,99.52,0.55,downtrend protected high of candle 26 closed above
+X-01,POOL_BSL,,48,99.77,0.9,"swing high, margin 15px"
+X-01,POOL_SSL,,53,96.83,0.5,"swing low, margin 1px"
+X-01,BOS,bullish,57,99.77,0.85,close above swing high of candle 48 (state up)
+X-01,SWEEP_BSL,,57,100.45,0.8,swept pool of candle 44
+X-01,TAKEN_BSL,,57,99.77,0.7,close above pool of candle 48
+X-01,POOL_BSL,,58,101.89,0.9,"swing high, margin 66px"
+X-01,TAKEN_BSL,,58,100.52,0.7,close above pool of candle 7
+X-01,POOL_SSL,,60,96.68,0.9,"swing low, margin 129px"
+X-01,SWEEP_SSL,,60,96.83,0.4,swept pool of candle 53
+X-01,POOL_SSL,,63,96.81,0.9,"swing low, margin 20px"
+X-01,POOL_BSL,,69,101.87,0.9,"swing high, margin 39px"
+X-01,POOL_BSL,,77,102.15,0.9,"swing high, margin 74px"
+X-01,POOL_SSL,,77,96.58,0.9,"swing low, margin 26px"
+X-01,SWEEP_BSL,,77,101.89,0.8,swept pool of candle 58
+X-01,SWEEP_BSL,,77,101.87,0.8,swept pool of candle 69
+X-01,SWEEP_SSL,,77,96.68,0.8,swept pool of candle 60
+X-01,SWEEP_SSL,,77,96.81,0.8,swept pool of candle 63
+X-01,POOL_BSL,,80,101.47,0.9,"swing high, margin 9px"
+X-01,CHOCH,bearish,85,96.83,0.55,uptrend protected low of candle 53 closed below
+X-01,TAKEN_SSL,,85,96.58,0.7,close below pool of candle 77
+X-01,POOL_SSL,,86,95.86,0.9,"swing low, margin 21px"
+X-01,POOL_BSL,,92,101.64,0.9,"swing high, margin 71px"
+X-01,SWEEP_BSL,,92,101.47,0.8,swept pool of candle 80
+X-01,POOL_SSL,,97,97.09,0.9,"swing low, margin 6px"
+X-01,CHOCH,bullish,102,101.47,0.55,downtrend protected high of candle 80 closed above
+X-01,TAKEN_BSL,,102,101.64,0.6,close above pool of candle 92
+X-02,POOL_BSL,,3,103.23,0.9,"swing high, margin 27px"
+X-02,POOL_SSL,,9,97.83,0.9,"swing low, margin 60px"
+X-02,POOL_BSL,,11,101.18,0.9,"swing high, margin 9px"
+X-02,POOL_BSL,,14,101.16,0.9,"swing high, margin 8px"
+X-02,BOS,bearish,19,97.83,0.85,close below swing low of candle 9
+X-02,POOL_SSL,,19,97.37,0.7,"swing low, margin 2px"
+X-02,TAKEN_SSL,,19,97.83,0.7,close below pool of candle 9
+X-02,POOL_BSL,,23,100.92,0.9,"swing high, margin 31px"
+X-02,SWEEP_SSL,,26,97.37,0.6,swept pool of candle 19
+X-02,BOS,bearish,28,97.37,0.65,close below swing low of candle 19 (state down)
+X-02,POOL_SSL,,28,96.48,0.9,"swing low, margin 11px"
+X-02,POOL_BSL,,32,100.83,0.9,"swing high, margin 22px"
+X-02,POOL_BSL,,36,101.03,0.9,"swing high, margin 37px"
+X-02,SWEEP_BSL,,36,100.92,0.8,swept pool of candle 23
+X-02,SWEEP_BSL,,36,100.83,0.8,swept pool of candle 32
+X-02,SWEEP_SSL,,36,96.48,0.8,swept pool of candle 28
+X-02,BOS,bearish,38,96.48,0.85,close below swing low of candle 28 (state down)
+X-02,POOL_SSL,,39,95.26,0.9,"swing low, margin 8px"
+X-02,POOL_BSL,,44,101.64,0.9,"swing high, margin 56px"
+X-02,SWEEP_BSL,,44,101.18,0.8,swept pool of candle 11
+X-02,SWEEP_BSL,,44,101.16,0.8,swept pool of candle 14
+X-02,SWEEP_BSL,,44,101.03,0.8,swept pool of candle 36
+X-02,POOL_SSL,,49,97.43,0.9,"swing low, margin 38px"
+X-02,CHOCH,bullish,52,101.03,0.55,downtrend protected high of candle 36 closed above
+X-02,BOS,bullish,53,101.64,0.85,close above swing high of candle 44 (state up)
+X-02,POOL_BSL,,53,102.56,0.9,"swing high, margin 54px"
+X-02,TAKEN_BSL,,53,101.64,0.7,close above pool of candle 44
+X-02,POOL_SSL,,60,98.67,0.9,"swing low, margin 23px"
+X-02,POOL_BSL,,64,102.12,0.9,"swing high, margin 7px"
+X-02,SWEEP_SSL,,67,98.67,0.8,swept pool of candle 60
+X-02,BOS,bearish,68,98.67,0.85,close below swing low of candle 60 (state up)
+X-02,SWEEP_SSL,,68,97.43,0.8,swept pool of candle 49
+X-02,CHOCH,bearish,69,97.43,0.55,uptrend protected low of candle 49 closed below
+X-02,POOL_BSL,,70,102.40,0.9,"swing high, margin 226px"
+X-02,POOL_SSL,,70,96.36,0.9,"swing low, margin 22px"
+X-02,SWEEP_BSL,,70,102.12,0.8,swept pool of candle 64
+X-02,POOL_BSL,,75,101.67,0.9,"swing high, margin 26px"
+X-02,BOS,bearish,80,96.36,0.85,close below swing low of candle 70 (state down)
+X-02,POOL_SSL,,80,94.68,0.9,"swing low, margin 13px"
+X-02,SWEEP_SSL,,80,95.26,0.8,swept pool of candle 39
+X-02,TAKEN_SSL,,80,96.36,0.7,close below pool of candle 70
+X-02,POOL_BSL,,85,100.99,0.9,"swing high, margin 83px"
+X-02,POOL_SSL,,88,94.42,0.9,"swing low, margin 123px"
+X-02,SWEEP_SSL,,88,94.68,0.8,swept pool of candle 80
+X-02,POOL_SSL,,91,94.49,0.9,"swing low, margin 35px"
+X-02,SWEEP_BSL,,97,100.99,0.6,swept pool of candle 85
+X-02,POOL_BSL,,99,101.04,0.7,"swing high, margin 2px"
+X-03,POOL_SSL,,3,96.77,0.9,"swing low, margin 27px"
+X-03,POOL_BSL,,9,102.17,0.9,"swing high, margin 60px"
+X-03,POOL_SSL,,11,98.82,0.9,"swing low, margin 9px"
+X-03,POOL_SSL,,14,98.84,0.9,"swing low, margin 8px"
+X-03,BOS,bullish,19,102.17,0.85,close above swing high of candle 9
+X-03,POOL_BSL,,19,102.63,0.7,"swing high, margin 2px"
+X-03,TAKEN_BSL,,19,102.17,0.7,close above pool of candle 9
+X-03,POOL_SSL,,23,99.08,0.9,"swing low, margin 31px"
+X-03,SWEEP_BSL,,26,102.63,0.6,swept pool of candle 19
+X-03,BOS,bullish,28,102.63,0.65,close above swing high of candle 19 (state up)
+X-03,POOL_BSL,,28,103.52,0.9,"swing high, margin 11px"
+X-03,POOL_SSL,,32,99.17,0.9,"swing low, margin 22px"
+X-03,POOL_SSL,,36,98.97,0.9,"swing low, margin 37px"
+X-03,SWEEP_BSL,,36,103.52,0.8,swept pool of candle 28
+X-03,SWEEP_SSL,,36,99.08,0.8,swept pool of candle 23
+X-03,SWEEP_SSL,,36,99.17,0.8,swept pool of candle 32
+X-03,BOS,bullish,38,103.52,0.85,close above swing high of candle 28 (state up)
+X-03,POOL_BSL,,39,104.74,0.9,"swing high, margin 8px"
+X-03,POOL_SSL,,44,98.36,0.9,"swing low, margin 56px"
+X-03,SWEEP_SSL,,44,98.82,0.8,swept pool of candle 11
+X-03,SWEEP_SSL,,44,98.84,0.8,swept pool of candle 14
+X-03,SWEEP_SSL,,44,98.97,0.8,swept pool of candle 36
+X-03,POOL_BSL,,49,102.57,0.9,"swing high, margin 38px"
+X-03,CHOCH,bearish,52,98.97,0.55,uptrend protected low of candle 36 closed below
+X-03,BOS,bearish,53,98.36,0.85,close below swing low of candle 44 (state down)
+X-03,POOL_SSL,,53,97.44,0.9,"swing low, margin 54px"
+X-03,TAKEN_SSL,,53,98.36,0.7,close below pool of candle 44
+X-03,POOL_BSL,,60,101.33,0.9,"swing high, margin 23px"
+X-03,POOL_SSL,,64,97.88,0.9,"swing low, margin 7px"
+X-03,SWEEP_BSL,,67,101.33,0.8,swept pool of candle 60
+X-03,BOS,bullish,68,101.33,0.85,close above swing high of candle 60 (state down)
+X-03,SWEEP_BSL,,68,102.57,0.8,swept pool of candle 49
+X-03,CHOCH,bullish,69,102.57,0.55,downtrend protected high of candle 49 closed above
+X-03,POOL_BSL,,70,103.64,0.9,"swing high, margin 22px"
+X-03,POOL_SSL,,70,97.60,0.9,"swing low, margin 226px"
+X-03,SWEEP_SSL,,70,97.88,0.8,swept pool of candle 64
+X-03,POOL_SSL,,75,98.33,0.9,"swing low, margin 26px"
+X-03,BOS,bullish,80,103.64,0.85,close above swing high of candle 70 (state up)
+X-03,POOL_BSL,,80,105.32,0.9,"swing high, margin 13px"
+X-03,SWEEP_BSL,,80,104.74,0.8,swept pool of candle 39
+X-03,TAKEN_BSL,,80,103.64,0.7,close above pool of candle 70
+X-03,POOL_SSL,,85,99.01,0.9,"swing low, margin 83px"
+X-03,POOL_BSL,,88,105.58,0.9,"swing high, margin 123px"
+X-03,SWEEP_BSL,,88,105.32,0.8,swept pool of candle 80
+X-03,POOL_BSL,,91,105.51,0.9,"swing high, margin 35px"
+X-03,SWEEP_SSL,,97,99.01,0.6,swept pool of candle 85
+X-03,POOL_SSL,,99,98.96,0.7,"swing low, margin 2px"
+X-04,POOL_SSL,,3,99.55,0.9,"swing low, margin 17px"
+X-04,POOL_BSL,,5,102.74,0.9,"swing high, margin 62px"
+X-04,POOL_SSL,,7,99.48,0.9,"swing low, margin 35px"
+X-04,SWEEP_SSL,,7,99.55,0.8,swept pool of candle 3
+X-04,BOS,bullish,11,102.74,0.85,close above swing high of candle 5
+X-04,TAKEN_BSL,,11,102.74,0.7,close above pool of candle 5
+X-04,POOL_BSL,,12,103.58,0.7,"swing high, margin 2px"
+X-04,POOL_BSL,,15,103.26,0.9,"swing high, margin 13px"
+X-04,POOL_SSL,,17,100.69,0.9,"swing low, margin 13px"
+X-04,BOS,bullish,21,103.26,0.85,close above swing high of candle 15
+X-04,SWEEP_BSL,,21,103.58,0.6,swept pool of candle 12
+X-04,TAKEN_BSL,,21,103.26,0.7,close above pool of candle 15
+X-04,POOL_BSL,,23,104.30,0.8,"swing high, margin 3px"
+X-04,POOL_SSL,,26,100.48,0.9,"swing low, margin 78px"
+X-04,SWEEP_SSL,,26,100.69,0.8,swept pool of candle 17
+X-04,BOS,bullish,32,104.30,0.75,close above swing high of candle 23 (state up)
+X-04,TAKEN_BSL,,32,104.30,0.6,close above pool of candle 23
+X-04,POOL_BSL,,34,104.97,0.9,"swing high, margin 50px"
+X-04,POOL_SSL,,38,99.71,0.9,"swing low, margin 46px"
+X-04,SWEEP_SSL,,38,100.48,0.8,swept pool of candle 26
+X-04,SWEEP_BSL,,43,104.97,0.6,swept pool of candle 34
+X-04,POOL_BSL,,44,105.16,0.9,"swing high, margin 16px"
+X-04,POOL_SSL,,44,99.55,0.9,"swing low, margin 98px"
+X-04,SWEEP_SSL,,44,99.71,0.8,swept pool of candle 38
+X-04,CHOCH,bearish,47,100.48,0.55,uptrend protected low of candle 26 closed below
+X-04,POOL_SSL,,48,100.23,0.9,"swing low, margin 15px"
+X-04,POOL_BSL,,53,103.17,0.5,"swing high, margin 1px"
+X-04,BOS,bearish,57,100.23,0.85,close below swing low of candle 48 (state down)
+X-04,SWEEP_SSL,,57,99.55,0.8,swept pool of candle 44
+X-04,TAKEN_SSL,,57,100.23,0.7,close below pool of candle 48
+X-04,POOL_SSL,,58,98.11,0.9,"swing low, margin 66px"
+X-04,TAKEN_SSL,,58,99.48,0.7,close below pool of candle 7
+X-04,POOL_BSL,,60,103.32,0.9,"swing high, margin 129px"
+X-04,SWEEP_BSL,,60,103.17,0.4,swept pool of candle 53
+X-04,POOL_BSL,,63,103.19,0.9,"swing high, margin 20px"
+X-04,POOL_SSL,,69,98.13,0.9,"swing low, margin 39px"
+X-04,POOL_BSL,,77,103.42,0.9,"swing high, margin 26px"
+X-04,POOL_SSL,,77,97.85,0.9,"swing low, margin 74px"
+X-04,SWEEP_BSL,,77,103.32,0.8,swept pool of candle 60
+X-04,SWEEP_BSL,,77,103.19,0.8,swept pool of candle 63
+X-04,SWEEP_SSL,,77,98.11,0.8,swept pool of candle 58
+X-04,SWEEP_SSL,,77,98.13,0.8,swept pool of candle 69
+X-04,POOL_SSL,,80,98.53,0.9,"swing low, margin 9px"
+X-04,CHOCH,bullish,85,103.17,0.55,downtrend protected high of candle 53 closed above
+X-04,TAKEN_BSL,,85,103.42,0.7,close above pool of candle 77
+X-04,POOL_BSL,,86,104.14,0.9,"swing high, margin 21px"
+X-04,POOL_SSL,,92,98.36,0.9,"swing low, margin 71px"
+X-04,SWEEP_SSL,,92,98.53,0.8,swept pool of candle 80
+X-04,POOL_BSL,,97,102.91,0.9,"swing high, margin 6px"
+X-04,CHOCH,bearish,102,98.53,0.55,uptrend protected low of candle 80 closed below
+X-04,TAKEN_SSL,,102,98.36,0.6,close below pool of candle 92
+H-01,POOL_SSL,,6,97.30,0.9,"swing low, margin 23px"
+H-01,POOL_BSL,,12,99.63,0.9,"swing high, margin 9px"
+H-01,BOS,bearish,17,97.30,0.85,close below swing low of candle 6
+H-01,TAKEN_SSL,,17,97.30,0.7,close below pool of candle 6
+H-01,POOL_SSL,,18,96.24,0.9,"swing low, margin 14px"
+H-01,POOL_BSL,,22,98.13,0.9,"swing high, margin 17px"
+H-01,SWEEP_BSL,,25,98.13,0.8,swept pool of candle 22
+H-01,POOL_BSL,,27,98.60,0.9,"swing high, margin 6px"
+H-01,POOL_SSL,,32,96.72,0.5,"swing low, margin 1px"
+H-01,BOS,bullish,37,98.60,0.85,close above swing high of candle 27 (state down)
+H-01,TAKEN_BSL,,37,98.60,0.7,close above pool of candle 27
+H-01,POOL_BSL,,40,99.40,0.9,"swing high, margin 18px"
+H-01,BOS,bearish,42,96.72,0.45,close below swing low of candle 32 (state down)
+H-01,TAKEN_SSL,,42,96.24,0.7,close below pool of candle 18
+H-01,TAKEN_SSL,,42,96.72,0.3,close below pool of candle 32
+H-01,POOL_SSL,,44,94.49,0.9,"swing low, margin 13px"
+H-01,POOL_SSL,,49,95.37,0.5,"swing low, margin 1px"
+H-01,SWEEP_SSL,,54,95.37,0.4,swept pool of candle 49
+H-01,BOS,bearish,56,95.37,0.45,close below swing low of candle 49 (state down)
+H-01,POOL_SSL,,56,94.26,0.9,"swing low, margin 42px"
+H-01,SWEEP_SSL,,56,94.49,0.8,swept pool of candle 44
+H-01,POOL_SSL,,59,94.63,0.9,"swing low, margin 5px"
+H-01,POOL_BSL,,64,97.92,0.9,"swing high, margin 34px"
+H-01,POOL_SSL,,70,94.51,0.9,"swing low, margin 115px"
+H-01,SWEEP_SSL,,70,94.63,0.8,swept pool of candle 59
+H-01,BOS,bullish,74,97.92,0.85,close above swing high of candle 64 (state down)
+H-01,TAKEN_BSL,,74,97.92,0.7,close above pool of candle 64
+H-01,POOL_BSL,,78,99.39,0.9,"swing high, margin 6px"
+H-01,POOL_SSL,,81,96.74,0.9,"swing low, margin 31px"
+H-01,POOL_BSL,,84,99.66,0.9,"swing high, margin 4px"
+H-01,SWEEP_BSL,,84,99.63,0.7,swept pool of candle 12
+H-01,SWEEP_BSL,,84,99.40,0.8,swept pool of candle 40
+H-01,SWEEP_BSL,,84,99.39,0.8,swept pool of candle 78
+H-01,CHOCH,bullish,87,99.40,0.55,downtrend protected high of candle 40 closed above
+H-01,TAKEN_BSL,,87,99.66,0.7,close above pool of candle 84
+H-01,BOS,bullish,88,99.66,0.75,close above swing high of candle 84 (state up)
+H-01,POOL_BSL,,88,100.39,0.9,"swing high, margin 54px"
+H-01,POOL_SSL,,95,96.84,0.7,"swing low, margin 2px"
+H-01,BOS,bullish,103,100.39,0.85,close above swing high of candle 88 (state up)
+H-01,TAKEN_BSL,,103,100.39,0.7,close above pool of candle 88
+H-01,POOL_BSL,,105,101.05,0.9,"swing high, margin 6px"
+H-02,POOL_BSL,,6,102.70,0.9,"swing high, margin 23px"
+H-02,POOL_SSL,,12,100.37,0.9,"swing low, margin 9px"
+H-02,BOS,bullish,17,102.70,0.85,close above swing high of candle 6
+H-02,TAKEN_BSL,,17,102.70,0.7,close above pool of candle 6
+H-02,POOL_BSL,,18,103.76,0.9,"swing high, margin 14px"
+H-02,POOL_SSL,,22,101.87,0.9,"swing low, margin 17px"
+H-02,SWEEP_SSL,,25,101.87,0.8,swept pool of candle 22
+H-02,POOL_SSL,,27,101.40,0.9,"swing low, margin 6px"
+H-02,POOL_BSL,,32,103.28,0.5,"swing high, margin 1px"
+H-02,BOS,bearish,37,101.40,0.85,close below swing low of candle 27 (state up)
+H-02,TAKEN_SSL,,37,101.40,0.7,close below pool of candle 27
+H-02,POOL_SSL,,40,100.60,0.9,"swing low, margin 18px"
+H-02,BOS,bullish,42,103.28,0.45,close above swing high of candle 32 (state up)
+H-02,TAKEN_BSL,,42,103.76,0.7,close above pool of candle 18
+H-02,TAKEN_BSL,,42,103.28,0.3,close above pool of candle 32
+H-02,POOL_BSL,,44,105.51,0.9,"swing high, margin 13px"
+H-02,POOL_BSL,,49,104.63,0.5,"swing high, margin 1px"
+H-02,SWEEP_BSL,,54,104.63,0.4,swept pool of candle 49
+H-02,BOS,bullish,56,104.63,0.45,close above swing high of candle 49 (state up)
+H-02,POOL_BSL,,56,105.74,0.9,"swing high, margin 42px"
+H-02,SWEEP_BSL,,56,105.51,0.8,swept pool of candle 44
+H-02,POOL_BSL,,59,105.37,0.9,"swing high, margin 5px"
+H-02,POOL_SSL,,64,102.08,0.9,"swing low, margin 34px"
+H-02,POOL_BSL,,70,105.49,0.9,"swing high, margin 115px"
+H-02,SWEEP_BSL,,70,105.37,0.8,swept pool of candle 59
+H-02,BOS,bearish,74,102.08,0.85,close below swing low of candle 64 (state up)
+H-02,TAKEN_SSL,,74,102.08,0.7,close below pool of candle 64
+H-02,POOL_SSL,,78,100.61,0.9,"swing low, margin 6px"
+H-02,POOL_BSL,,81,103.26,0.9,"swing high, margin 31px"
+H-02,POOL_SSL,,84,100.34,0.9,"swing low, margin 4px"
+H-02,SWEEP_SSL,,84,100.37,0.7,swept pool of candle 12
+H-02,SWEEP_SSL,,84,100.60,0.8,swept pool of candle 40
+H-02,SWEEP_SSL,,84,100.61,0.8,swept pool of candle 78
+H-02,CHOCH,bearish,87,100.60,0.55,uptrend protected low of candle 40 closed below
+H-02,TAKEN_SSL,,87,100.34,0.7,close below pool of candle 84
+H-02,BOS,bearish,88,100.34,0.75,close below swing low of candle 84 (state down)
+H-02,POOL_SSL,,88,99.61,0.9,"swing low, margin 54px"
+H-02,POOL_BSL,,95,103.16,0.7,"swing high, margin 2px"
+H-02,BOS,bearish,103,99.61,0.85,close below swing low of candle 88 (state down)
+H-02,TAKEN_SSL,,103,99.61,0.7,close below pool of candle 88
+H-02,POOL_SSL,,105,98.95,0.9,"swing low, margin 6px"
+H-03,POOL_SSL,,6,98.13,0.9,"swing low, margin 7px"
+H-03,POOL_BSL,,9,100.70,0.9,"swing high, margin 34px"
+H-03,POOL_SSL,,14,98.43,0.9,"swing low, margin 11px"
+H-03,SWEEP_BSL,,20,100.70,0.8,swept pool of candle 9
+H-03,BOS,bullish,22,100.70,0.85,close above swing high of candle 9
+H-03,POOL_BSL,,25,102.12,0.9,"swing high, margin 11px"
+H-03,POOL_SSL,,30,99.39,0.9,"swing low, margin 26px"
+H-03,BOS,bullish,35,102.12,0.85,close above swing high of candle 25 (state up)
+H-03,TAKEN_BSL,,35,102.12,0.7,close above pool of candle 25
+H-03,POOL_BSL,,36,103.14,0.9,"swing high, margin 24px"
+H-03,POOL_SSL,,44,100.04,0.8,"swing low, margin 3px"
+H-03,POOL_BSL,,49,103.35,0.9,"swing high, margin 26px"
+H-03,SWEEP_BSL,,49,103.14,0.8,swept pool of candle 36
+H-03,SWEEP_SSL,,55,100.04,0.7,swept pool of candle 44
+H-03,BOS,bearish,56,100.04,0.75,close below swing low of candle 44 (state up)
+H-03,SWEEP_SSL,,56,99.39,0.7,swept pool of candle 30
+H-03,POOL_SSL,,57,99.08,0.9,"swing low, margin 19px"
+H-03,POOL_BSL,,62,102.08,0.9,"swing high, margin 38px"
+H-03,POOL_BSL,,66,102.29,0.9,"swing high, margin 101px"
+H-03,SWEEP_BSL,,66,102.08,0.8,swept pool of candle 62
+H-03,CHOCH,bearish,67,99.39,0.55,uptrend protected low of candle 30 closed below
+H-03,POOL_SSL,,67,99.10,0.9,"swing low, margin 16px"
+H-03,POOL_SSL,,70,99.21,0.9,"swing low, margin 5px"
+H-03,POOL_SSL,,73,99.82,0.9,"swing low, margin 14px"
+H-03,CHOCH,bullish,77,102.08,0.55,downtrend protected high of candle 62 closed above
+H-03,TAKEN_BSL,,77,102.29,0.7,close above pool of candle 66
+H-03,POOL_SSL,,78,99.64,0.9,"swing low, margin 151px"
+H-03,SWEEP_SSL,,78,99.82,0.8,swept pool of candle 73
+H-03,BOS,bullish,79,102.29,0.85,close above swing high of candle 66 (state up)
+H-03,TAKEN_BSL,,79,103.35,0.3,close above pool of candle 49
+H-03,POOL_BSL,,82,103.90,0.9,"swing high, margin 23px"
+H-03,POOL_SSL,,87,101.20,0.9,"swing low, margin 5px"
+H-03,SWEEP_BSL,,92,103.90,0.8,swept pool of candle 82
+H-03,BOS,bullish,93,103.90,0.85,close above swing high of candle 82 (state up)
+H-03,POOL_BSL,,96,105.22,0.9,"swing high, margin 33px"
+H-03,CHOCH,bearish,103,101.20,0.55,uptrend protected low of candle 87 closed below
+H-03,TAKEN_SSL,,103,101.20,0.7,close below pool of candle 87
+H-04,POOL_BSL,,6,101.87,0.9,"swing high, margin 7px"
+H-04,POOL_SSL,,9,99.30,0.9,"swing low, margin 34px"
+H-04,POOL_BSL,,14,101.57,0.9,"swing high, margin 11px"
+H-04,SWEEP_SSL,,20,99.30,0.8,swept pool of candle 9
+H-04,BOS,bearish,22,99.30,0.85,close below swing low of candle 9
+H-04,POOL_SSL,,25,97.88,0.9,"swing low, margin 11px"
+H-04,POOL_BSL,,30,100.61,0.9,"swing high, margin 26px"
+H-04,BOS,bearish,35,97.88,0.85,close below swing low of candle 25 (state down)
+H-04,TAKEN_SSL,,35,97.88,0.7,close below pool of candle 25
+H-04,POOL_SSL,,36,96.86,0.9,"swing low, margin 24px"
+H-04,POOL_BSL,,44,99.96,0.8,"swing high, margin 3px"
+H-04,POOL_SSL,,49,96.65,0.9,"swing low, margin 26px"
+H-04,SWEEP_SSL,,49,96.86,0.8,swept pool of candle 36
+H-04,SWEEP_BSL,,55,99.96,0.7,swept pool of candle 44
+H-04,BOS,bullish,56,99.96,0.75,close above swing high of candle 44 (state down)
+H-04,SWEEP_BSL,,56,100.61,0.7,swept pool of candle 30
+H-04,POOL_BSL,,57,100.92,0.9,"swing high, margin 19px"
+H-04,POOL_SSL,,62,97.92,0.9,"swing low, margin 38px"
+H-04,POOL_SSL,,66,97.71,0.9,"swing low, margin 101px"
+H-04,SWEEP_SSL,,66,97.92,0.8,swept pool of candle 62
+H-04,CHOCH,bullish,67,100.61,0.55,downtrend protected high of candle 30 closed above
+H-04,POOL_BSL,,67,100.90,0.9,"swing high, margin 16px"
+H-04,POOL_BSL,,70,100.79,0.9,"swing high, margin 5px"
+H-04,POOL_BSL,,73,100.18,0.9,"swing high, margin 14px"
+H-04,CHOCH,bearish,77,97.92,0.55,uptrend protected low of candle 62 closed below
+H-04,TAKEN_SSL,,77,97.71,0.7,close below pool of candle 66
+H-04,POOL_BSL,,78,100.36,0.9,"swing high, margin 151px"
+H-04,SWEEP_BSL,,78,100.18,0.8,swept pool of candle 73
+H-04,BOS,bearish,79,97.71,0.85,close below swing low of candle 66 (state down)
+H-04,TAKEN_SSL,,79,96.65,0.3,close below pool of candle 49
+H-04,POOL_SSL,,82,96.10,0.9,"swing low, margin 23px"
+H-04,POOL_BSL,,87,98.80,0.9,"swing high, margin 5px"
+H-04,SWEEP_SSL,,92,96.10,0.8,swept pool of candle 82
+H-04,BOS,bearish,93,96.10,0.85,close below swing low of candle 82 (state down)
+H-04,POOL_SSL,,96,94.78,0.9,"swing low, margin 33px"
+H-04,CHOCH,bullish,103,98.80,0.55,downtrend protected high of candle 87 closed above
+H-04,TAKEN_BSL,,103,98.80,0.7,close above pool of candle 87
+M-01,POOL_SSL,,6,97.11,0.7,"swing low, margin 2px"
+M-01,POOL_BSL,,13,98.53,0.5,"swing high, margin 1px"
+M-01,BOS,bearish,15,97.11,0.65,close below swing low of candle 6
+M-01,TAKEN_SSL,,15,97.11,0.5,close below pool of candle 6
+M-01,POOL_SSL,,20,94.77,0.9,"swing low, margin 38px"
+M-01,POOL_BSL,,25,97.52,0.9,"swing high, margin 44px"
+M-01,SWEEP_SSL,,29,94.77,0.8,swept pool of candle 20
+M-01,BOS,bearish,31,94.77,0.85,close below swing low of candle 20 (state down)
+M-01,POOL_SSL,,32,93.28,0.9,"swing low, margin 11px"
+M-01,POOL_BSL,,39,96.31,0.9,"swing high, margin 56px"
+M-01,POOL_SSL,,43,93.25,0.9,"swing low, margin 5px"
+M-01,SWEEP_SSL,,43,93.28,0.7,swept pool of candle 32
+M-01,POOL_BSL,,50,96.62,0.9,"swing high, margin 19px"
+M-01,SWEEP_BSL,,50,96.31,0.8,swept pool of candle 39
+M-01,BOS,bullish,51,96.31,0.85,close above swing high of candle 39 (state down)
+M-01,POOL_BSL,,54,96.65,0.9,"swing high, margin 10px"
+M-01,SWEEP_BSL,,54,96.62,0.7,swept pool of candle 50
+M-01,POOL_SSL,,57,94.88,0.9,"swing low, margin 5px"
+M-01,POOL_SSL,,61,94.75,0.9,"swing low, margin 34px"
+M-01,SWEEP_BSL,,61,96.65,0.8,swept pool of candle 54
+M-01,SWEEP_SSL,,61,94.88,0.8,swept pool of candle 57
+M-01,BOS,bullish,62,96.65,0.85,close above swing high of candle 54 (state down)
+M-01,SWEEP_BSL,,62,97.52,0.8,swept pool of candle 25
+M-01,CHOCH,bullish,63,97.52,0.55,downtrend protected high of candle 25 closed above
+M-01,POOL_BSL,,64,98.61,0.9,"swing high, margin 12px"
+M-01,SWEEP_BSL,,64,98.53,0.4,swept pool of candle 13
+M-01,POOL_SSL,,70,95.73,0.9,"swing low, margin 63px"
+M-01,BOS,bullish,74,98.61,0.85,close above swing high of candle 64 (state up)
+M-01,TAKEN_BSL,,74,98.61,0.7,close above pool of candle 64
+M-01,POOL_BSL,,75,99.78,0.9,"swing high, margin 24px"
+M-01,POOL_BSL,,78,99.68,0.9,"swing high, margin 14px"
+M-01,POOL_SSL,,83,96.60,0.9,"swing low, margin 20px"
+M-01,BOS,bearish,86,96.60,0.85,close below swing low of candle 83 (state up)
+M-01,TAKEN_SSL,,86,96.60,0.7,close below pool of candle 83
+M-01,CHOCH,bearish,89,95.73,0.55,uptrend protected low of candle 70 closed below
+M-01,TAKEN_SSL,,89,95.73,0.7,close below pool of candle 70
+M-01,POOL_SSL,,90,95.17,0.9,"swing low, margin 32px"
+M-02,POOL_SSL,,8,98.73,0.8,"swing low, margin 3px"
+M-02,POOL_SSL,,11,98.73,0.9,"swing low, margin 29px"
+M-02,POOL_BSL,,13,101.21,0.9,"swing high, margin 13px"
+M-02,BOS,bearish,19,98.73,0.85,close below swing low of candle 11
+M-02,TAKEN_SSL,,19,98.73,0.6,close below pool of candle 8
+M-02,TAKEN_SSL,,19,98.73,0.7,close below pool of candle 11
+M-02,POOL_SSL,,20,97.91,0.9,"swing low, margin 24px"
+M-02,POOL_BSL,,25,101.27,0.9,"swing high, margin 21px"
+M-02,SWEEP_BSL,,25,101.21,0.8,swept pool of candle 13
+M-02,POOL_SSL,,34,98.22,0.9,"swing low, margin 15px"
+M-02,POOL_BSL,,37,100.42,0.9,"swing high, margin 6px"
+M-02,SWEEP_SSL,,40,98.22,0.8,swept pool of candle 34
+M-02,BOS,bearish,41,98.22,0.85,close below swing low of candle 34 (state up)
+M-02,SWEEP_SSL,,41,97.91,0.8,swept pool of candle 20
+M-02,CHOCH,bearish,42,97.91,0.55,uptrend protected low of candle 20 closed below
+M-02,POOL_BSL,,51,97.69,0.9,"swing high, margin 21px"
+M-02,POOL_SSL,,57,94.46,0.9,"swing low, margin 15px"
+M-02,POOL_BSL,,64,97.32,0.9,"swing high, margin 18px"
+M-02,BOS,bearish,69,94.46,0.85,close below swing low of candle 57 (state down)
+M-02,TAKEN_SSL,,69,94.46,0.7,close below pool of candle 57
+M-02,POOL_SSL,,71,93.19,0.9,"swing low, margin 23px"
+M-02,POOL_BSL,,76,96.79,0.7,"swing high, margin 2px"
+M-02,POOL_SSL,,81,94.89,0.9,"swing low, margin 22px"
+M-02,SWEEP_BSL,,84,96.79,0.6,swept pool of candle 76
+M-02,BOS,bullish,85,96.79,0.65,close above swing high of candle 76 (state down)
+M-02,CHOCH,bullish,86,97.32,0.55,downtrend protected high of candle 64 closed above
+M-02,SWEEP_BSL,,86,97.69,0.8,swept pool of candle 51
+M-02,TAKEN_BSL,,86,97.32,0.7,close above pool of candle 64
+M-02,POOL_BSL,,90,99.87,0.9,"swing high, margin 16px"
+M-02,POOL_SSL,,95,97.62,0.9,"swing low, margin 7px"
+M-02,SWEEP_BSL,,100,99.87,0.4,swept pool of candle 90
+M-02,BOS,bullish,101,99.87,0.85,close above swing high of candle 90 (state up)
+M-02,SWEEP_BSL,,101,100.42,0.8,swept pool of candle 37
+M-02,SWEEP_BSL,,103,101.27,0.7,swept pool of candle 25
+M-03,POOL_BSL,,6,102.89,0.7,"swing high, margin 2px"
+M-03,POOL_SSL,,13,101.47,0.5,"swing low, margin 1px"
+M-03,BOS,bullish,15,102.89,0.65,close above swing high of candle 6
+M-03,TAKEN_BSL,,15,102.89,0.5,close above pool of candle 6
+M-03,POOL_BSL,,20,105.23,0.9,"swing high, margin 38px"
+M-03,POOL_SSL,,25,102.48,0.9,"swing low, margin 44px"
+M-03,SWEEP_BSL,,29,105.23,0.8,swept pool of candle 20
+M-03,BOS,bullish,31,105.23,0.85,close above swing high of candle 20 (state up)
+M-03,POOL_BSL,,32,106.72,0.9,"swing high, margin 11px"
+M-03,POOL_SSL,,39,103.69,0.9,"swing low, margin 56px"
+M-03,POOL_BSL,,43,106.75,0.9,"swing high, margin 5px"
+M-03,SWEEP_BSL,,43,106.72,0.7,swept pool of candle 32
+M-03,POOL_SSL,,50,103.38,0.9,"swing low, margin 19px"
+M-03,SWEEP_SSL,,50,103.69,0.8,swept pool of candle 39
+M-03,BOS,bearish,51,103.69,0.85,close below swing low of candle 39 (state up)
+M-03,POOL_SSL,,54,103.35,0.9,"swing low, margin 10px"
+M-03,SWEEP_SSL,,54,103.38,0.7,swept pool of candle 50
+M-03,POOL_BSL,,57,105.12,0.9,"swing high, margin 5px"
+M-03,POOL_BSL,,61,105.25,0.9,"swing high, margin 34px"
+M-03,SWEEP_BSL,,61,105.12,0.8,swept pool of candle 57
+M-03,SWEEP_SSL,,61,103.35,0.8,swept pool of candle 54
+M-03,BOS,bearish,62,103.35,0.85,close below swing low of candle 54 (state up)
+M-03,SWEEP_SSL,,62,102.48,0.8,swept pool of candle 25
+M-03,CHOCH,bearish,63,102.48,0.55,uptrend protected low of candle 25 closed below
+M-03,POOL_SSL,,64,101.39,0.9,"swing low, margin 12px"
+M-03,SWEEP_SSL,,64,101.47,0.4,swept pool of candle 13
+M-03,POOL_BSL,,70,104.27,0.9,"swing high, margin 63px"
+M-03,BOS,bearish,74,101.39,0.85,close below swing low of candle 64 (state down)
+M-03,TAKEN_SSL,,74,101.39,0.7,close below pool of candle 64
+M-03,POOL_SSL,,75,100.22,0.9,"swing low, margin 24px"
+M-03,POOL_SSL,,78,100.32,0.9,"swing low, margin 14px"
+M-03,POOL_BSL,,83,103.40,0.9,"swing high, margin 20px"
+M-03,BOS,bullish,86,103.40,0.85,close above swing high of candle 83 (state down)
+M-03,TAKEN_BSL,,86,103.40,0.7,close above pool of candle 83
+M-03,CHOCH,bullish,89,104.27,0.55,downtrend protected high of candle 70 closed above
+M-03,TAKEN_BSL,,89,104.27,0.7,close above pool of candle 70
+M-03,POOL_BSL,,90,104.83,0.9,"swing high, margin 32px"
+M-04,POOL_BSL,,8,101.27,0.8,"swing high, margin 3px"
+M-04,POOL_BSL,,11,101.27,0.9,"swing high, margin 29px"
+M-04,POOL_SSL,,13,98.79,0.9,"swing low, margin 13px"
+M-04,BOS,bullish,19,101.27,0.85,close above swing high of candle 11
+M-04,TAKEN_BSL,,19,101.27,0.6,close above pool of candle 8
+M-04,TAKEN_BSL,,19,101.27,0.7,close above pool of candle 11
+M-04,POOL_BSL,,20,102.09,0.9,"swing high, margin 24px"
+M-04,POOL_SSL,,25,98.73,0.9,"swing low, margin 21px"
+M-04,SWEEP_SSL,,25,98.79,0.8,swept pool of candle 13
+M-04,POOL_BSL,,34,101.78,0.9,"swing high, margin 15px"
+M-04,POOL_SSL,,37,99.58,0.9,"swing low, margin 6px"
+M-04,SWEEP_BSL,,40,101.78,0.8,swept pool of candle 34
+M-04,BOS,bullish,41,101.78,0.85,close above swing high of candle 34 (state down)
+M-04,SWEEP_BSL,,41,102.09,0.8,swept pool of candle 20
+M-04,CHOCH,bullish,42,102.09,0.55,downtrend protected high of candle 20 closed above
+M-04,POOL_SSL,,51,102.31,0.9,"swing low, margin 21px"
+M-04,POOL_BSL,,57,105.54,0.9,"swing high, margin 15px"
+M-04,POOL_SSL,,64,102.68,0.9,"swing low, margin 18px"
+M-04,BOS,bullish,69,105.54,0.85,close above swing high of candle 57 (state up)
+M-04,TAKEN_BSL,,69,105.54,0.7,close above pool of candle 57
+M-04,POOL_BSL,,71,106.81,0.9,"swing high, margin 23px"
+M-04,POOL_SSL,,76,103.21,0.7,"swing low, margin 2px"
+M-04,POOL_BSL,,81,105.11,0.9,"swing high, margin 22px"
+M-04,SWEEP_SSL,,84,103.21,0.6,swept pool of candle 76
+M-04,BOS,bearish,85,103.21,0.65,close below swing low of candle 76 (state up)
+M-04,CHOCH,bearish,86,102.68,0.55,uptrend protected low of candle 64 closed below
+M-04,SWEEP_SSL,,86,102.31,0.8,swept pool of candle 51
+M-04,TAKEN_SSL,,86,102.68,0.7,close below pool of candle 64
+M-04,POOL_SSL,,90,100.13,0.9,"swing low, margin 16px"
+M-04,POOL_BSL,,95,102.38,0.9,"swing high, margin 7px"
+M-04,SWEEP_SSL,,100,100.13,0.4,swept pool of candle 90
+M-04,BOS,bearish,101,100.13,0.85,close below swing low of candle 90 (state down)
+M-04,SWEEP_SSL,,101,99.58,0.8,swept pool of candle 37
+M-04,SWEEP_SSL,,103,98.73,0.7,swept pool of candle 25

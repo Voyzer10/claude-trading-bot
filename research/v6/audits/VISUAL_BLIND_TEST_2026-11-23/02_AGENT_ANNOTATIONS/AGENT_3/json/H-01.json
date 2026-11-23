@@ -1,0 +1,302 @@
+{
+ "chart_id": "H-01",
+ "agent": "AGENT_3",
+ "method": "pixel analysis (PIL/numpy): axes calibrated from OCR of tick labels + tick-mark pixels; per-candle OHLC from wick/body pixel rows; README definitions applied in code on pixel rows; confidence lowered when decisive comparison margin is <=2 px",
+ "events": [
+  {
+   "type": "POOL_SSL",
+   "candle_index": 6,
+   "price": 97.3,
+   "confidence": 0.9,
+   "note": "swing low, margin 23px"
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 12,
+   "price": 99.63,
+   "confidence": 0.9,
+   "note": "swing high, margin 9px"
+  },
+  {
+   "type": "BOS",
+   "direction": "bearish",
+   "candle_index": 17,
+   "price": 97.3,
+   "confidence": 0.85,
+   "note": "close below swing low of candle 6"
+  },
+  {
+   "type": "TAKEN_SSL",
+   "candle_index": 17,
+   "price": 97.3,
+   "confidence": 0.7,
+   "note": "close below pool of candle 6"
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 18,
+   "price": 96.24,
+   "confidence": 0.9,
+   "note": "swing low, margin 14px"
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 22,
+   "price": 98.13,
+   "confidence": 0.9,
+   "note": "swing high, margin 17px"
+  },
+  {
+   "type": "SWEEP_BSL",
+   "candle_index": 25,
+   "price": 98.13,
+   "confidence": 0.8,
+   "note": "swept pool of candle 22"
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 27,
+   "price": 98.6,
+   "confidence": 0.9,
+   "note": "swing high, margin 6px"
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 32,
+   "price": 96.72,
+   "confidence": 0.5,
+   "note": "swing low, margin 1px"
+  },
+  {
+   "type": "BOS",
+   "direction": "bullish",
+   "candle_index": 37,
+   "price": 98.6,
+   "confidence": 0.85,
+   "note": "close above swing high of candle 27 (state down)"
+  },
+  {
+   "type": "TAKEN_BSL",
+   "candle_index": 37,
+   "price": 98.6,
+   "confidence": 0.7,
+   "note": "close above pool of candle 27"
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 40,
+   "price": 99.4,
+   "confidence": 0.9,
+   "note": "swing high, margin 18px"
+  },
+  {
+   "type": "BOS",
+   "direction": "bearish",
+   "candle_index": 42,
+   "price": 96.72,
+   "confidence": 0.45,
+   "note": "close below swing low of candle 32 (state down)"
+  },
+  {
+   "type": "TAKEN_SSL",
+   "candle_index": 42,
+   "price": 96.24,
+   "confidence": 0.7,
+   "note": "close below pool of candle 18"
+  },
+  {
+   "type": "TAKEN_SSL",
+   "candle_index": 42,
+   "price": 96.72,
+   "confidence": 0.3,
+   "note": "close below pool of candle 32"
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 44,
+   "price": 94.49,
+   "confidence": 0.9,
+   "note": "swing low, margin 13px"
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 49,
+   "price": 95.37,
+   "confidence": 0.5,
+   "note": "swing low, margin 1px"
+  },
+  {
+   "type": "SWEEP_SSL",
+   "candle_index": 54,
+   "price": 95.37,
+   "confidence": 0.4,
+   "note": "swept pool of candle 49"
+  },
+  {
+   "type": "BOS",
+   "direction": "bearish",
+   "candle_index": 56,
+   "price": 95.37,
+   "confidence": 0.45,
+   "note": "close below swing low of candle 49 (state down)"
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 56,
+   "price": 94.26,
+   "confidence": 0.9,
+   "note": "swing low, margin 42px"
+  },
+  {
+   "type": "SWEEP_SSL",
+   "candle_index": 56,
+   "price": 94.49,
+   "confidence": 0.8,
+   "note": "swept pool of candle 44"
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 59,
+   "price": 94.63,
+   "confidence": 0.9,
+   "note": "swing low, margin 5px"
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 64,
+   "price": 97.92,
+   "confidence": 0.9,
+   "note": "swing high, margin 34px"
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 70,
+   "price": 94.51,
+   "confidence": 0.9,
+   "note": "swing low, margin 115px"
+  },
+  {
+   "type": "SWEEP_SSL",
+   "candle_index": 70,
+   "price": 94.63,
+   "confidence": 0.8,
+   "note": "swept pool of candle 59"
+  },
+  {
+   "type": "BOS",
+   "direction": "bullish",
+   "candle_index": 74,
+   "price": 97.92,
+   "confidence": 0.85,
+   "note": "close above swing high of candle 64 (state down)"
+  },
+  {
+   "type": "TAKEN_BSL",
+   "candle_index": 74,
+   "price": 97.92,
+   "confidence": 0.7,
+   "note": "close above pool of candle 64"
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 78,
+   "price": 99.39,
+   "confidence": 0.9,
+   "note": "swing high, margin 6px"
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 81,
+   "price": 96.74,
+   "confidence": 0.9,
+   "note": "swing low, margin 31px"
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 84,
+   "price": 99.66,
+   "confidence": 0.9,
+   "note": "swing high, margin 4px"
+  },
+  {
+   "type": "SWEEP_BSL",
+   "candle_index": 84,
+   "price": 99.63,
+   "confidence": 0.7,
+   "note": "swept pool of candle 12"
+  },
+  {
+   "type": "SWEEP_BSL",
+   "candle_index": 84,
+   "price": 99.4,
+   "confidence": 0.8,
+   "note": "swept pool of candle 40"
+  },
+  {
+   "type": "SWEEP_BSL",
+   "candle_index": 84,
+   "price": 99.39,
+   "confidence": 0.8,
+   "note": "swept pool of candle 78"
+  },
+  {
+   "type": "CHOCH",
+   "direction": "bullish",
+   "candle_index": 87,
+   "price": 99.4,
+   "confidence": 0.55,
+   "note": "downtrend protected high of candle 40 closed above"
+  },
+  {
+   "type": "TAKEN_BSL",
+   "candle_index": 87,
+   "price": 99.66,
+   "confidence": 0.7,
+   "note": "close above pool of candle 84"
+  },
+  {
+   "type": "BOS",
+   "direction": "bullish",
+   "candle_index": 88,
+   "price": 99.66,
+   "confidence": 0.75,
+   "note": "close above swing high of candle 84 (state up)"
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 88,
+   "price": 100.39,
+   "confidence": 0.9,
+   "note": "swing high, margin 54px"
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 95,
+   "price": 96.84,
+   "confidence": 0.7,
+   "note": "swing low, margin 2px"
+  },
+  {
+   "type": "BOS",
+   "direction": "bullish",
+   "candle_index": 103,
+   "price": 100.39,
+   "confidence": 0.85,
+   "note": "close above swing high of candle 88 (state up)"
+  },
+  {
+   "type": "TAKEN_BSL",
+   "candle_index": 103,
+   "price": 100.39,
+   "confidence": 0.7,
+   "note": "close above pool of candle 88"
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 105,
+   "price": 101.05,
+   "confidence": 0.9,
+   "note": "swing high, margin 6px"
+  }
+ ]
+}

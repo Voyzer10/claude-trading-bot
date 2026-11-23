@@ -1,0 +1,3 @@
+5m {'legs': 13347, 'ACTIVATED': 7662, 'NOT_QUALIFIED': 5685, 'legs_with_in_leg_swing_before_origin': 1074, 'rejected_by_in_leg_base_but_HL_vs_pre_leg': 394}
+15m {'legs': 5044, 'NOT_QUALIFIED': 2149, 'legs_with_in_leg_swing_before_origin': 454, 'ACTIVATED': 2895, 'rejected_by_in_leg_base_but_HL_vs_pre_leg': 160}
+1h {'legs': 1469, 'NOT_QUALIFIED': 572, 'ACTIVATED': 897, 'legs_with_in_leg_swing_before_origin': 89, 'rejected_by_in_leg_base_but_HL_vs_pre_leg': 40}

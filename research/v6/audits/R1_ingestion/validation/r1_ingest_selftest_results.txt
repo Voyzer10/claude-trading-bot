@@ -1,0 +1,16 @@
+PASS  missing metadata 'adjusted' -> dataset error
+PASS  invalid adjusted value -> dataset error
+PASS  conflicting duplicate timestamp -> file FAIL
+PASS  identical duplicate -> dropped, file OK
+PASS  1 inconsistent OHLC row (<1%) -> excluded, file OK
+PASS  6 inconsistent OHLC rows (>1%) -> file FAIL
+PASS  row outside declared date_range -> file FAIL
+PASS  off-grid timestamp -> excluded, file OK
+PASS  epoch_ms + bar_close timestamps -> converted to bar open, OK
+PASS  US session across DST (naive local ISO): 156 bars on grid, pre-market bar excluded
+PASS  24x7 evaluate runs; 5m: 12 missing bars reported, not filled
+PASS  24x7: no SESSION_GAP candles; DATA_QUALITY > 0 around the hole
+PASS  24x7: the 1h hole -> 1h bar ABSENT (missing 1, incomplete 0); 4h and 1D bars INCOMPLETE (1 each)
+PASS  24x7: 5m structured candles exist (detector ran on the walk)
+PASS  24x7: WEEKEND session segment present (3-4 Jan, 10-11 Jan 2026)
+PASS  re-evaluating into an existing dataset_id is refused (no overwrite)

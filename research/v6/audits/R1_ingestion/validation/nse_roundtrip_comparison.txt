@@ -1,0 +1,6 @@
+Round-trip of the 6 primary NSE files through r1_ingest.py (CSV re-export, UTC ISO timestamps, NSE exchange session):
+series compared: 24 | metric fields compared: 1656 | differences vs Phase-3 R1_artifacts/r1_summary_by_instrument_timeframe.csv: 0
+pooled 15m ingest: 43.97 38.78 49.33 | phase-3: 43.97 38.78 49.33
+pooled 1D ingest: nan nan nan | phase-3: nan nan nan
+pooled 1h ingest: 34.32 28.88 40.03 | phase-3: 34.32 28.88 40.03
+pooled 5m ingest: 41.62 37.28 46.15 | phase-3: 41.62 37.28 46.15

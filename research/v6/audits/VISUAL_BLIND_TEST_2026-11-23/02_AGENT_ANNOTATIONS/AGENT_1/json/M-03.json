@@ -1,0 +1,322 @@
+{
+ "chart_id": "M-03",
+ "agent": "AGENT_1",
+ "method": "AGENT_1 visual inspection only: zoomed crops (with per-candle index labels and side-by-side same-row crops for near-equal levels), candle extremes/closes judged by eye, definitions applied by hand; code used only for cropping, price<->pixel conversion from visually read axis ticks, and drawing.",
+ "events": [
+  {
+   "type": "POOL_BSL",
+   "candle_index": 6,
+   "price": 102.89,
+   "confidence": 0.75,
+   "note": "candle 7 high ~0.02 lower"
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 13,
+   "price": 101.47,
+   "confidence": 0.5,
+   "note": "lows of 12/13/14 within ~0.03; 13 looked lowest"
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 20,
+   "price": 105.24,
+   "confidence": 0.9,
+   "note": ""
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 25,
+   "price": 102.48,
+   "confidence": 0.9,
+   "note": ""
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 32,
+   "price": 106.72,
+   "confidence": 0.85,
+   "note": ""
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 39,
+   "price": 103.7,
+   "confidence": 0.9,
+   "note": ""
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 43,
+   "price": 106.75,
+   "confidence": 0.6,
+   "note": "candle 44 high ~0.05 lower"
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 50,
+   "price": 103.38,
+   "confidence": 0.8,
+   "note": ""
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 54,
+   "price": 103.35,
+   "confidence": 0.8,
+   "note": ""
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 57,
+   "price": 105.12,
+   "confidence": 0.85,
+   "note": ""
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 61,
+   "price": 105.25,
+   "confidence": 0.85,
+   "note": ""
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 64,
+   "price": 101.38,
+   "confidence": 0.9,
+   "note": ""
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 70,
+   "price": 104.27,
+   "confidence": 0.9,
+   "note": ""
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 75,
+   "price": 100.22,
+   "confidence": 0.95,
+   "note": ""
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 78,
+   "price": 100.32,
+   "confidence": 0.8,
+   "note": ""
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 83,
+   "price": 103.4,
+   "confidence": 0.8,
+   "note": ""
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 90,
+   "price": 104.82,
+   "confidence": 0.95,
+   "note": ""
+  },
+  {
+   "type": "BOS",
+   "direction": "bullish",
+   "candle_index": 15,
+   "price": 102.89,
+   "confidence": 0.85,
+   "note": ""
+  },
+  {
+   "type": "SWEEP_BSL",
+   "candle_index": 29,
+   "price": 105.24,
+   "confidence": 0.8,
+   "note": ""
+  },
+  {
+   "type": "SWEEP_BSL",
+   "candle_index": 30,
+   "price": 105.24,
+   "confidence": 0.6,
+   "note": "close ~105.18 just below"
+  },
+  {
+   "type": "BOS",
+   "direction": "bullish",
+   "candle_index": 31,
+   "price": 105.24,
+   "confidence": 0.8,
+   "note": ""
+  },
+  {
+   "type": "SWEEP_BSL",
+   "candle_index": 43,
+   "price": 106.72,
+   "confidence": 0.6,
+   "note": "wick ~0.03 over SH32"
+  },
+  {
+   "type": "SWEEP_SSL",
+   "candle_index": 50,
+   "price": 103.7,
+   "confidence": 0.8,
+   "note": ""
+  },
+  {
+   "type": "CHOCH",
+   "direction": "bearish",
+   "candle_index": 51,
+   "price": 103.7,
+   "confidence": 0.8,
+   "note": "uptrend protected low 39 broken"
+  },
+  {
+   "type": "SWEEP_SSL",
+   "candle_index": 60,
+   "price": 103.38,
+   "confidence": 0.4,
+   "note": "wick ~0.02 below SL50 only"
+  },
+  {
+   "type": "SWEEP_SSL",
+   "candle_index": 61,
+   "price": 103.35,
+   "confidence": 0.7,
+   "note": "big candle wicks below SL50/SL54 then closes high"
+  },
+  {
+   "type": "SWEEP_SSL",
+   "candle_index": 61,
+   "price": 103.38,
+   "confidence": 0.65,
+   "note": ""
+  },
+  {
+   "type": "SWEEP_BSL",
+   "candle_index": 61,
+   "price": 105.12,
+   "confidence": 0.75,
+   "note": "same candle wicks over SH57, close ~105.02"
+  },
+  {
+   "type": "BOS",
+   "direction": "bearish",
+   "candle_index": 62,
+   "price": 103.35,
+   "confidence": 0.8,
+   "note": ""
+  },
+  {
+   "type": "SWEEP_SSL",
+   "candle_index": 62,
+   "price": 102.48,
+   "confidence": 0.6,
+   "note": "wick below SL25, close ~102.57"
+  },
+  {
+   "type": "SWEEP_SSL",
+   "candle_index": 64,
+   "price": 101.47,
+   "confidence": 0.7,
+   "note": "wick below SL13"
+  },
+  {
+   "type": "BOS",
+   "direction": "bearish",
+   "candle_index": 74,
+   "price": 101.38,
+   "confidence": 0.85,
+   "note": ""
+  },
+  {
+   "type": "BOS",
+   "direction": "bullish",
+   "candle_index": 86,
+   "price": 103.4,
+   "confidence": 0.65,
+   "note": "most recent swing high (83); alt engines may call this CHoCH"
+  },
+  {
+   "type": "CHOCH",
+   "direction": "bullish",
+   "candle_index": 89,
+   "price": 104.27,
+   "confidence": 0.6,
+   "note": "downtrend protected high 70 broken"
+  },
+  {
+   "type": "TAKEN_BSL",
+   "candle_index": 15,
+   "price": 102.89,
+   "confidence": 0.85,
+   "note": ""
+  },
+  {
+   "type": "TAKEN_BSL",
+   "candle_index": 31,
+   "price": 105.24,
+   "confidence": 0.8,
+   "note": ""
+  },
+  {
+   "type": "TAKEN_SSL",
+   "candle_index": 51,
+   "price": 103.7,
+   "confidence": 0.8,
+   "note": ""
+  },
+  {
+   "type": "TAKEN_SSL",
+   "candle_index": 62,
+   "price": 103.35,
+   "confidence": 0.8,
+   "note": ""
+  },
+  {
+   "type": "TAKEN_SSL",
+   "candle_index": 62,
+   "price": 103.38,
+   "confidence": 0.8,
+   "note": ""
+  },
+  {
+   "type": "TAKEN_SSL",
+   "candle_index": 63,
+   "price": 102.48,
+   "confidence": 0.8,
+   "note": ""
+  },
+  {
+   "type": "TAKEN_SSL",
+   "candle_index": 74,
+   "price": 101.38,
+   "confidence": 0.85,
+   "note": ""
+  },
+  {
+   "type": "TAKEN_SSL",
+   "candle_index": 74,
+   "price": 101.47,
+   "confidence": 0.8,
+   "note": ""
+  },
+  {
+   "type": "TAKEN_BSL",
+   "candle_index": 86,
+   "price": 103.4,
+   "confidence": 0.65,
+   "note": ""
+  },
+  {
+   "type": "TAKEN_BSL",
+   "candle_index": 89,
+   "price": 104.27,
+   "confidence": 0.6,
+   "note": ""
+  }
+ ]
+}

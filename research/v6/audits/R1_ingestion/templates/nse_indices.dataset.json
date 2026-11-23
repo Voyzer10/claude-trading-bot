@@ -1,0 +1,49 @@
+{
+ "dataset_id": "nse_indices_<source>_<YYYYMMDD>",
+ "market": "NSE indices",
+ "exchange": "NSE",
+ "timeframe": "5m",
+ "timezone": "Asia/Kolkata",
+ "timestamp_format": "iso",
+ "timestamp_is": "bar_open",
+ "date_range": {
+  "start": "<YYYY-MM-DD>",
+  "end": "<YYYY-MM-DD>"
+ },
+ "data_source": "<vendor + endpoint/product>",
+ "adjusted": "unadjusted",
+ "retrieval_date": "<YYYY-MM-DD>",
+ "session": {
+  "type": "exchange",
+  "tz": "Asia/Kolkata",
+  "open": "09:15",
+  "close": "15:30",
+  "segments": [
+   [
+    "OPEN_0915_1000",
+    "09:15",
+    "10:00"
+   ],
+   [
+    "MID_1000_1430",
+    "10:00",
+    "14:30"
+   ],
+   [
+    "CLOSE_1430_1530",
+    "14:30",
+    "15:30"
+   ]
+  ]
+ },
+ "files": [
+  {
+   "file": "NIFTY50_5m.csv",
+   "instrument": "NIFTY 50"
+  },
+  {
+   "file": "NIFTYBANK_5m.csv",
+   "instrument": "NIFTY BANK"
+  }
+ ]
+}

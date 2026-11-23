@@ -1,0 +1,1473 @@
+{
+ "events": [
+  {
+   "type": "POOL_SSL",
+   "index": 6,
+   "level": 97.11,
+   "id": "pool:swing:low:6:fixed-window-strict:L2R2",
+   "confirmation_index": 8,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     15,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 6,
+   "level": 97.11,
+   "id": "swing:low:6:fixed-window-strict:L2R2",
+   "confirmation_index": 8
+  },
+  {
+   "type": "POOL_BSL",
+   "index": 13,
+   "level": 98.53,
+   "id": "pool:swing:high:13:fixed-window-strict:L2R2",
+   "confirmation_index": 15,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     64,
+     "SWEEP"
+    ],
+    [
+     74,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 13,
+   "level": 98.53,
+   "id": "swing:high:13:fixed-window-strict:L2R2",
+   "confirmation_index": 15
+  },
+  {
+   "type": "BOS",
+   "direction": "bearish",
+   "index": 15,
+   "level": 97.11,
+   "id": "bos:bearish:swing:low:6:fixed-window-strict:L2R2",
+   "related_swing": "swing:low:6:fixed-window-strict:L2R2",
+   "confirmation_index": 15,
+   "role": "PRE_STRUCTURE"
+  },
+  {
+   "type": "TAKEN_SSL",
+   "index": 15,
+   "level": 97.11,
+   "id": "liquidity:pool:swing:low:6:fixed-window-strict:L2R2:TAKEN:15",
+   "related_pool": "pool:swing:low:6:fixed-window-strict:L2R2",
+   "confirmation_index": 15,
+   "state_before": "ACTIVE",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "POOL_SSL",
+   "index": 20,
+   "level": 94.77,
+   "id": "pool:swing:low:20:fixed-window-strict:L2R2",
+   "confirmation_index": 22,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     29,
+     "SWEEP"
+    ],
+    [
+     30,
+     "REPEAT_SWEEP"
+    ],
+    [
+     31,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 20,
+   "level": 94.77,
+   "id": "swing:low:20:fixed-window-strict:L2R2",
+   "confirmation_index": 22
+  },
+  {
+   "type": "POOL_BSL",
+   "index": 25,
+   "level": 97.52,
+   "id": "pool:swing:high:25:fixed-window-strict:L2R2",
+   "confirmation_index": 27,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     62,
+     "SWEEP"
+    ],
+    [
+     63,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 25,
+   "level": 97.52,
+   "id": "swing:high:25:fixed-window-strict:L2R2",
+   "confirmation_index": 27
+  },
+  {
+   "type": "STATE_ESTABLISHED",
+   "direction": "bearish",
+   "index": 27,
+   "state_before": "UNKNOWN",
+   "state_after": "BEARISH",
+   "confirmation_index": 27
+  },
+  {
+   "type": "SWEEP_GROUP_SSL",
+   "index": 29,
+   "id": "sweep:SSL:29",
+   "pools": [
+    "pool:swing:low:20:fixed-window-strict:L2R2"
+   ],
+   "confirmation_index": 29
+  },
+  {
+   "type": "SWEEP_SSL",
+   "index": 29,
+   "level": 94.77,
+   "id": "liquidity:pool:swing:low:20:fixed-window-strict:L2R2:SWEEP:29",
+   "related_pool": "pool:swing:low:20:fixed-window-strict:L2R2",
+   "confirmation_index": 29,
+   "state_before": "ACTIVE",
+   "state_after": "SWEPT",
+   "group_id": "sweep:SSL:29"
+  },
+  {
+   "type": "REPEAT_SWEEP_SSL",
+   "index": 30,
+   "level": 94.77,
+   "id": "liquidity:pool:swing:low:20:fixed-window-strict:L2R2:REPEAT_SWEEP:30",
+   "related_pool": "pool:swing:low:20:fixed-window-strict:L2R2",
+   "confirmation_index": 30,
+   "state_before": "SWEPT",
+   "state_after": "SWEPT",
+   "group_id": null
+  },
+  {
+   "type": "BOS",
+   "direction": "bearish",
+   "index": 31,
+   "level": 94.77,
+   "id": "bos:bearish:swing:low:20:fixed-window-strict:L2R2",
+   "related_swing": "swing:low:20:fixed-window-strict:L2R2",
+   "confirmation_index": 31,
+   "role": "CONTINUATION"
+  },
+  {
+   "type": "TAKEN_SSL",
+   "index": 31,
+   "level": 94.77,
+   "id": "liquidity:pool:swing:low:20:fixed-window-strict:L2R2:TAKEN:31",
+   "related_pool": "pool:swing:low:20:fixed-window-strict:L2R2",
+   "confirmation_index": 31,
+   "state_before": "SWEPT",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "POOL_SSL",
+   "index": 32,
+   "level": 93.28,
+   "id": "pool:swing:low:32:fixed-window-strict:L2R2",
+   "confirmation_index": 34,
+   "lifecycle_state": "SWEPT",
+   "lifecycle": [
+    [
+     43,
+     "SWEEP"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 32,
+   "level": 93.28,
+   "id": "swing:low:32:fixed-window-strict:L2R2",
+   "confirmation_index": 34
+  },
+  {
+   "type": "POOL_BSL",
+   "index": 39,
+   "level": 96.31,
+   "id": "pool:swing:high:39:fixed-window-strict:L2R2",
+   "confirmation_index": 41,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     50,
+     "SWEEP"
+    ],
+    [
+     51,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 39,
+   "level": 96.31,
+   "id": "swing:high:39:fixed-window-strict:L2R2",
+   "confirmation_index": 41
+  },
+  {
+   "type": "POOL_SSL",
+   "index": 43,
+   "level": 93.25,
+   "id": "pool:swing:low:43:fixed-window-strict:L2R2",
+   "confirmation_index": 45,
+   "lifecycle_state": "ACTIVE",
+   "lifecycle": []
+  },
+  {
+   "type": "SWEEP_GROUP_SSL",
+   "index": 43,
+   "id": "sweep:SSL:43",
+   "pools": [
+    "pool:swing:low:32:fixed-window-strict:L2R2"
+   ],
+   "confirmation_index": 43
+  },
+  {
+   "type": "SWEEP_SSL",
+   "index": 43,
+   "level": 93.28,
+   "id": "liquidity:pool:swing:low:32:fixed-window-strict:L2R2:SWEEP:43",
+   "related_pool": "pool:swing:low:32:fixed-window-strict:L2R2",
+   "confirmation_index": 43,
+   "state_before": "ACTIVE",
+   "state_after": "SWEPT",
+   "group_id": "sweep:SSL:43"
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 43,
+   "level": 93.25,
+   "id": "swing:low:43:fixed-window-strict:L2R2",
+   "confirmation_index": 45
+  },
+  {
+   "type": "POOL_BSL",
+   "index": 50,
+   "level": 96.62,
+   "id": "pool:swing:high:50:fixed-window-strict:L2R2",
+   "confirmation_index": 52,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     54,
+     "SWEEP"
+    ],
+    [
+     60,
+     "REPEAT_SWEEP"
+    ],
+    [
+     61,
+     "REPEAT_SWEEP"
+    ],
+    [
+     62,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWEEP_BSL",
+   "index": 50,
+   "level": 96.31,
+   "id": "liquidity:pool:swing:high:39:fixed-window-strict:L2R2:SWEEP:50",
+   "related_pool": "pool:swing:high:39:fixed-window-strict:L2R2",
+   "confirmation_index": 50,
+   "state_before": "ACTIVE",
+   "state_after": "SWEPT",
+   "group_id": "sweep:BSL:50"
+  },
+  {
+   "type": "SWEEP_GROUP_BSL",
+   "index": 50,
+   "id": "sweep:BSL:50",
+   "pools": [
+    "pool:swing:high:39:fixed-window-strict:L2R2"
+   ],
+   "confirmation_index": 50
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 50,
+   "level": 96.62,
+   "id": "swing:high:50:fixed-window-strict:L2R2",
+   "confirmation_index": 52
+  },
+  {
+   "type": "BOS",
+   "direction": "bullish",
+   "index": 51,
+   "level": 96.31,
+   "id": "bos:bullish:swing:high:39:fixed-window-strict:L2R2",
+   "related_swing": "swing:high:39:fixed-window-strict:L2R2",
+   "confirmation_index": 51,
+   "role": "COUNTER_STRUCTURE"
+  },
+  {
+   "type": "TAKEN_BSL",
+   "index": 51,
+   "level": 96.31,
+   "id": "liquidity:pool:swing:high:39:fixed-window-strict:L2R2:TAKEN:51",
+   "related_pool": "pool:swing:high:39:fixed-window-strict:L2R2",
+   "confirmation_index": 51,
+   "state_before": "SWEPT",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "POOL_BSL",
+   "index": 54,
+   "level": 96.65,
+   "id": "pool:swing:high:54:fixed-window-strict:L2R2",
+   "confirmation_index": 56,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     61,
+     "SWEEP"
+    ],
+    [
+     62,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWEEP_BSL",
+   "index": 54,
+   "level": 96.62,
+   "id": "liquidity:pool:swing:high:50:fixed-window-strict:L2R2:SWEEP:54",
+   "related_pool": "pool:swing:high:50:fixed-window-strict:L2R2",
+   "confirmation_index": 54,
+   "state_before": "ACTIVE",
+   "state_after": "SWEPT",
+   "group_id": "sweep:BSL:54"
+  },
+  {
+   "type": "SWEEP_GROUP_BSL",
+   "index": 54,
+   "id": "sweep:BSL:54",
+   "pools": [
+    "pool:swing:high:50:fixed-window-strict:L2R2"
+   ],
+   "confirmation_index": 54
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 54,
+   "level": 96.65,
+   "id": "swing:high:54:fixed-window-strict:L2R2",
+   "confirmation_index": 56
+  },
+  {
+   "type": "POOL_SSL",
+   "index": 57,
+   "level": 94.88,
+   "id": "pool:swing:low:57:fixed-window-strict:L2R2",
+   "confirmation_index": 59,
+   "lifecycle_state": "SWEPT",
+   "lifecycle": [
+    [
+     61,
+     "SWEEP"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 57,
+   "level": 94.88,
+   "id": "swing:low:57:fixed-window-strict:L2R2",
+   "confirmation_index": 59
+  },
+  {
+   "type": "REPEAT_SWEEP_BSL",
+   "index": 60,
+   "level": 96.62,
+   "id": "liquidity:pool:swing:high:50:fixed-window-strict:L2R2:REPEAT_SWEEP:60",
+   "related_pool": "pool:swing:high:50:fixed-window-strict:L2R2",
+   "confirmation_index": 60,
+   "state_before": "SWEPT",
+   "state_after": "SWEPT",
+   "group_id": null
+  },
+  {
+   "type": "POOL_SSL",
+   "index": 61,
+   "level": 94.75,
+   "id": "pool:swing:low:61:fixed-window-strict:L2R2",
+   "confirmation_index": 63,
+   "lifecycle_state": "ACTIVE",
+   "lifecycle": []
+  },
+  {
+   "type": "REPEAT_SWEEP_BSL",
+   "index": 61,
+   "level": 96.62,
+   "id": "liquidity:pool:swing:high:50:fixed-window-strict:L2R2:REPEAT_SWEEP:61",
+   "related_pool": "pool:swing:high:50:fixed-window-strict:L2R2",
+   "confirmation_index": 61,
+   "state_before": "SWEPT",
+   "state_after": "SWEPT",
+   "group_id": null
+  },
+  {
+   "type": "SWEEP_BSL",
+   "index": 61,
+   "level": 96.65,
+   "id": "liquidity:pool:swing:high:54:fixed-window-strict:L2R2:SWEEP:61",
+   "related_pool": "pool:swing:high:54:fixed-window-strict:L2R2",
+   "confirmation_index": 61,
+   "state_before": "ACTIVE",
+   "state_after": "SWEPT",
+   "group_id": "sweep:BSL:61"
+  },
+  {
+   "type": "SWEEP_GROUP_BSL",
+   "index": 61,
+   "id": "sweep:BSL:61",
+   "pools": [
+    "pool:swing:high:54:fixed-window-strict:L2R2"
+   ],
+   "confirmation_index": 61
+  },
+  {
+   "type": "SWEEP_GROUP_SSL",
+   "index": 61,
+   "id": "sweep:SSL:61",
+   "pools": [
+    "pool:swing:low:57:fixed-window-strict:L2R2"
+   ],
+   "confirmation_index": 61
+  },
+  {
+   "type": "SWEEP_SSL",
+   "index": 61,
+   "level": 94.88,
+   "id": "liquidity:pool:swing:low:57:fixed-window-strict:L2R2:SWEEP:61",
+   "related_pool": "pool:swing:low:57:fixed-window-strict:L2R2",
+   "confirmation_index": 61,
+   "state_before": "ACTIVE",
+   "state_after": "SWEPT",
+   "group_id": "sweep:SSL:61"
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 61,
+   "level": 94.75,
+   "id": "swing:low:61:fixed-window-strict:L2R2",
+   "confirmation_index": 63
+  },
+  {
+   "type": "BOS",
+   "direction": "bullish",
+   "index": 62,
+   "level": 96.65,
+   "id": "bos:bullish:swing:high:54:fixed-window-strict:L2R2",
+   "related_swing": "swing:high:54:fixed-window-strict:L2R2",
+   "confirmation_index": 62,
+   "role": "COUNTER_STRUCTURE"
+  },
+  {
+   "type": "SWEEP_BSL",
+   "index": 62,
+   "level": 97.52,
+   "id": "liquidity:pool:swing:high:25:fixed-window-strict:L2R2:SWEEP:62",
+   "related_pool": "pool:swing:high:25:fixed-window-strict:L2R2",
+   "confirmation_index": 62,
+   "state_before": "ACTIVE",
+   "state_after": "SWEPT",
+   "group_id": "sweep:BSL:62"
+  },
+  {
+   "type": "SWEEP_GROUP_BSL",
+   "index": 62,
+   "id": "sweep:BSL:62",
+   "pools": [
+    "pool:swing:high:25:fixed-window-strict:L2R2"
+   ],
+   "confirmation_index": 62
+  },
+  {
+   "type": "TAKEN_BSL",
+   "index": 62,
+   "level": 96.62,
+   "id": "liquidity:pool:swing:high:50:fixed-window-strict:L2R2:TAKEN:62",
+   "related_pool": "pool:swing:high:50:fixed-window-strict:L2R2",
+   "confirmation_index": 62,
+   "state_before": "SWEPT",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "TAKEN_BSL",
+   "index": 62,
+   "level": 96.65,
+   "id": "liquidity:pool:swing:high:54:fixed-window-strict:L2R2:TAKEN:62",
+   "related_pool": "pool:swing:high:54:fixed-window-strict:L2R2",
+   "confirmation_index": 62,
+   "state_before": "SWEPT",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "CHOCH",
+   "direction": "bullish",
+   "index": 63,
+   "level": 97.52,
+   "id": "choch:bullish:swing:high:25:fixed-window-strict:L2R2",
+   "related_swing": "swing:high:25:fixed-window-strict:L2R2",
+   "confirmation_index": 63,
+   "state_before": "BEARISH",
+   "state_after": "TRANSITION(bullish)"
+  },
+  {
+   "type": "TAKEN_BSL",
+   "index": 63,
+   "level": 97.52,
+   "id": "liquidity:pool:swing:high:25:fixed-window-strict:L2R2:TAKEN:63",
+   "related_pool": "pool:swing:high:25:fixed-window-strict:L2R2",
+   "confirmation_index": 63,
+   "state_before": "SWEPT",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "POOL_BSL",
+   "index": 64,
+   "level": 98.61,
+   "id": "pool:swing:high:64:fixed-window-strict:L2R2",
+   "confirmation_index": 66,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     74,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWEEP_BSL",
+   "index": 64,
+   "level": 98.53,
+   "id": "liquidity:pool:swing:high:13:fixed-window-strict:L2R2:SWEEP:64",
+   "related_pool": "pool:swing:high:13:fixed-window-strict:L2R2",
+   "confirmation_index": 64,
+   "state_before": "ACTIVE",
+   "state_after": "SWEPT",
+   "group_id": "sweep:BSL:64"
+  },
+  {
+   "type": "SWEEP_GROUP_BSL",
+   "index": 64,
+   "id": "sweep:BSL:64",
+   "pools": [
+    "pool:swing:high:13:fixed-window-strict:L2R2"
+   ],
+   "confirmation_index": 64
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 64,
+   "level": 98.61,
+   "id": "swing:high:64:fixed-window-strict:L2R2",
+   "confirmation_index": 66
+  },
+  {
+   "type": "POOL_SSL",
+   "index": 70,
+   "level": 95.73,
+   "id": "pool:swing:low:70:fixed-window-strict:L2R2",
+   "confirmation_index": 72,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     89,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 70,
+   "level": 95.73,
+   "id": "swing:low:70:fixed-window-strict:L2R2",
+   "confirmation_index": 72
+  },
+  {
+   "type": "BOS",
+   "direction": "bullish",
+   "index": 74,
+   "level": 98.61,
+   "id": "bos:bullish:swing:high:64:fixed-window-strict:L2R2",
+   "related_swing": "swing:high:64:fixed-window-strict:L2R2",
+   "confirmation_index": 74,
+   "role": "REVERSAL_CONFIRMING"
+  },
+  {
+   "type": "STATE_REVERSAL_CONFIRMED",
+   "direction": "bullish",
+   "index": 74,
+   "state_before": "TRANSITION(bullish)",
+   "state_after": "BULLISH",
+   "confirmation_index": 74
+  },
+  {
+   "type": "TAKEN_BSL",
+   "index": 74,
+   "level": 98.53,
+   "id": "liquidity:pool:swing:high:13:fixed-window-strict:L2R2:TAKEN:74",
+   "related_pool": "pool:swing:high:13:fixed-window-strict:L2R2",
+   "confirmation_index": 74,
+   "state_before": "SWEPT",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "TAKEN_BSL",
+   "index": 74,
+   "level": 98.61,
+   "id": "liquidity:pool:swing:high:64:fixed-window-strict:L2R2:TAKEN:74",
+   "related_pool": "pool:swing:high:64:fixed-window-strict:L2R2",
+   "confirmation_index": 74,
+   "state_before": "ACTIVE",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "POOL_BSL",
+   "index": 75,
+   "level": 99.78,
+   "id": "pool:swing:high:75:fixed-window-strict:L2R2",
+   "confirmation_index": 77,
+   "lifecycle_state": "ACTIVE",
+   "lifecycle": []
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 75,
+   "level": 99.78,
+   "id": "swing:high:75:fixed-window-strict:L2R2",
+   "confirmation_index": 77
+  },
+  {
+   "type": "POOL_BSL",
+   "index": 78,
+   "level": 99.68,
+   "id": "pool:swing:high:78:fixed-window-strict:L2R2",
+   "confirmation_index": 80,
+   "lifecycle_state": "ACTIVE",
+   "lifecycle": []
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 78,
+   "level": 99.68,
+   "id": "swing:high:78:fixed-window-strict:L2R2",
+   "confirmation_index": 80
+  },
+  {
+   "type": "POOL_SSL",
+   "index": 83,
+   "level": 96.6,
+   "id": "pool:swing:low:83:fixed-window-strict:L2R2",
+   "confirmation_index": 85,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     86,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 83,
+   "level": 96.6,
+   "id": "swing:low:83:fixed-window-strict:L2R2",
+   "confirmation_index": 85
+  },
+  {
+   "type": "BOS",
+   "direction": "bearish",
+   "index": 86,
+   "level": 96.6,
+   "id": "bos:bearish:swing:low:83:fixed-window-strict:L2R2",
+   "related_swing": "swing:low:83:fixed-window-strict:L2R2",
+   "confirmation_index": 86,
+   "role": "COUNTER_STRUCTURE"
+  },
+  {
+   "type": "TAKEN_SSL",
+   "index": 86,
+   "level": 96.6,
+   "id": "liquidity:pool:swing:low:83:fixed-window-strict:L2R2:TAKEN:86",
+   "related_pool": "pool:swing:low:83:fixed-window-strict:L2R2",
+   "confirmation_index": 86,
+   "state_before": "ACTIVE",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "CHOCH",
+   "direction": "bearish",
+   "index": 89,
+   "level": 95.73,
+   "id": "choch:bearish:swing:low:70:fixed-window-strict:L2R2",
+   "related_swing": "swing:low:70:fixed-window-strict:L2R2",
+   "confirmation_index": 89,
+   "state_before": "BULLISH",
+   "state_after": "TRANSITION(bearish)"
+  },
+  {
+   "type": "TAKEN_SSL",
+   "index": 89,
+   "level": 95.73,
+   "id": "liquidity:pool:swing:low:70:fixed-window-strict:L2R2:TAKEN:89",
+   "related_pool": "pool:swing:low:70:fixed-window-strict:L2R2",
+   "confirmation_index": 89,
+   "state_before": "ACTIVE",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "POOL_SSL",
+   "index": 90,
+   "level": 95.17,
+   "id": "pool:swing:low:90:fixed-window-strict:L2R2",
+   "confirmation_index": 92,
+   "lifecycle_state": "ACTIVE",
+   "lifecycle": []
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 90,
+   "level": 95.17,
+   "id": "swing:low:90:fixed-window-strict:L2R2",
+   "confirmation_index": 92
+  }
+ ],
+ "setup_candidates": [],
+ "timeline": [
+  {
+   "index": 0,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 1,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 2,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 3,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 4,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 5,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 6,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 7,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 8,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 9,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 10,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 11,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 12,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 13,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 14,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 15,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 16,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 17,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 18,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 19,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 20,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 21,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 22,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 23,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 24,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 25,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 26,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 27,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 28,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 29,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 30,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 31,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 32,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 33,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 34,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 35,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 36,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 37,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 38,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 39,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 40,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 41,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 42,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 43,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 44,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 45,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 46,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 47,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 48,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 49,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 50,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 51,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 52,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 53,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 54,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 55,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 56,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 57,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 58,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 59,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 60,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 61,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 62,
+   "state": "BEARISH",
+   "protected_level": 97.52,
+   "protected_swing": "swing:high:25:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 63,
+   "state": "TRANSITION(bullish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 64,
+   "state": "TRANSITION(bullish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 65,
+   "state": "TRANSITION(bullish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 66,
+   "state": "TRANSITION(bullish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 67,
+   "state": "TRANSITION(bullish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 68,
+   "state": "TRANSITION(bullish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 69,
+   "state": "TRANSITION(bullish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 70,
+   "state": "TRANSITION(bullish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 71,
+   "state": "TRANSITION(bullish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 72,
+   "state": "TRANSITION(bullish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 73,
+   "state": "TRANSITION(bullish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 74,
+   "state": "BULLISH",
+   "protected_level": 95.73,
+   "protected_swing": "swing:low:70:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 75,
+   "state": "BULLISH",
+   "protected_level": 95.73,
+   "protected_swing": "swing:low:70:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 76,
+   "state": "BULLISH",
+   "protected_level": 95.73,
+   "protected_swing": "swing:low:70:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 77,
+   "state": "BULLISH",
+   "protected_level": 95.73,
+   "protected_swing": "swing:low:70:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 78,
+   "state": "BULLISH",
+   "protected_level": 95.73,
+   "protected_swing": "swing:low:70:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 79,
+   "state": "BULLISH",
+   "protected_level": 95.73,
+   "protected_swing": "swing:low:70:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 80,
+   "state": "BULLISH",
+   "protected_level": 95.73,
+   "protected_swing": "swing:low:70:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 81,
+   "state": "BULLISH",
+   "protected_level": 95.73,
+   "protected_swing": "swing:low:70:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 82,
+   "state": "BULLISH",
+   "protected_level": 95.73,
+   "protected_swing": "swing:low:70:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 83,
+   "state": "BULLISH",
+   "protected_level": 95.73,
+   "protected_swing": "swing:low:70:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 84,
+   "state": "BULLISH",
+   "protected_level": 95.73,
+   "protected_swing": "swing:low:70:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 85,
+   "state": "BULLISH",
+   "protected_level": 95.73,
+   "protected_swing": "swing:low:70:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 86,
+   "state": "BULLISH",
+   "protected_level": 95.73,
+   "protected_swing": "swing:low:70:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 87,
+   "state": "BULLISH",
+   "protected_level": 95.73,
+   "protected_swing": "swing:low:70:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 88,
+   "state": "BULLISH",
+   "protected_level": 95.73,
+   "protected_swing": "swing:low:70:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 89,
+   "state": "TRANSITION(bearish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 90,
+   "state": "TRANSITION(bearish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 91,
+   "state": "TRANSITION(bearish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 92,
+   "state": "TRANSITION(bearish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 93,
+   "state": "TRANSITION(bearish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 94,
+   "state": "TRANSITION(bearish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 95,
+   "state": "TRANSITION(bearish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 96,
+   "state": "TRANSITION(bearish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 97,
+   "state": "TRANSITION(bearish)",
+   "protected_level": null,
+   "protected_swing": null
+  }
+ ],
+ "diagnostics": [
+  {
+   "index": 15,
+   "code": "NOT_QUALIFIED",
+   "detail": "origin 98.53 is not an LH (A5) (bos:bearish:swing:low:6:fixed-window-strict:L2R2)"
+  },
+  {
+   "index": 31,
+   "code": "ACTIVATED",
+   "detail": "protected high 97.52 activated at the close of index 31, in force from index 32 (bos:bearish:swing:low:20:fixed-window-strict:L2R2)"
+  },
+  {
+   "index": 51,
+   "code": "NOT_QUALIFIED",
+   "detail": "origin 93.25 is not an HL (A5) (bos:bullish:swing:high:39:fixed-window-strict:L2R2)"
+  },
+  {
+   "index": 62,
+   "code": "WICK_ONLY",
+   "detail": "NO_CHOCH: high 97.57 beyond protected 97.52, close 97.43"
+  },
+  {
+   "index": 62,
+   "code": "ACTIVATED",
+   "detail": "protected low 94.88 activated at the close of index 62, in force from index 63 (bos:bullish:swing:high:54:fixed-window-strict:L2R2)"
+  },
+  {
+   "index": 63,
+   "code": "NOT_QUALIFIED",
+   "detail": "origin 94.75 is not an HL (A5) (bos:bullish:swing:high:54:fixed-window-strict:L2R2)"
+  },
+  {
+   "index": 67,
+   "code": "O4_UNRESOLVED",
+   "detail": "close 97.35 back across the consumed protected 97.52 during TRANSITION(bullish): failed-CHoCH rule not approved"
+  },
+  {
+   "index": 68,
+   "code": "O4_UNRESOLVED",
+   "detail": "close 96.96 back across the consumed protected 97.52 during TRANSITION(bullish): failed-CHoCH rule not approved"
+  },
+  {
+   "index": 69,
+   "code": "O4_UNRESOLVED",
+   "detail": "close 96.76 back across the consumed protected 97.52 during TRANSITION(bullish): failed-CHoCH rule not approved"
+  },
+  {
+   "index": 70,
+   "code": "O4_UNRESOLVED",
+   "detail": "close 97.18 back across the consumed protected 97.52 during TRANSITION(bullish): failed-CHoCH rule not approved"
+  },
+  {
+   "index": 74,
+   "code": "ACTIVATED",
+   "detail": "protected low 95.73 activated at the close of index 74, in force from index 75 (bos:bullish:swing:high:64:fixed-window-strict:L2R2)"
+  },
+  {
+   "index": 88,
+   "code": "NO_ORIGIN_SWING",
+   "detail": "no confirmed high swing in the BOS leg; protected unchanged (bos:bearish:swing:low:83:fixed-window-strict:L2R2)"
+  },
+  {
+   "index": 90,
+   "code": "O4_UNRESOLVED",
+   "detail": "close 95.96 back across the consumed protected 95.73 during TRANSITION(bearish): failed-CHoCH rule not approved"
+  },
+  {
+   "index": 91,
+   "code": "O4_UNRESOLVED",
+   "detail": "close 96.6 back across the consumed protected 95.73 during TRANSITION(bearish): failed-CHoCH rule not approved"
+  },
+  {
+   "index": 92,
+   "code": "O4_UNRESOLVED",
+   "detail": "close 97.19 back across the consumed protected 95.73 during TRANSITION(bearish): failed-CHoCH rule not approved"
+  },
+  {
+   "index": 93,
+   "code": "O4_UNRESOLVED",
+   "detail": "close 97.53 back across the consumed protected 95.73 during TRANSITION(bearish): failed-CHoCH rule not approved"
+  },
+  {
+   "index": 94,
+   "code": "O4_UNRESOLVED",
+   "detail": "close 97.85 back across the consumed protected 95.73 during TRANSITION(bearish): failed-CHoCH rule not approved"
+  },
+  {
+   "index": 95,
+   "code": "O4_UNRESOLVED",
+   "detail": "close 98.35 back across the consumed protected 95.73 during TRANSITION(bearish): failed-CHoCH rule not approved"
+  },
+  {
+   "index": 96,
+   "code": "O4_UNRESOLVED",
+   "detail": "close 99.14 back across the consumed protected 95.73 during TRANSITION(bearish): failed-CHoCH rule not approved"
+  },
+  {
+   "index": 97,
+   "code": "O4_UNRESOLVED",
+   "detail": "close 99.52 back across the consumed protected 95.73 during TRANSITION(bearish): failed-CHoCH rule not approved"
+  },
+  {
+   "index": 86,
+   "code": "BOS_ELIGIBILITY_ENDED",
+   "detail": "bos:bearish:swing:low:83:fixed-window-strict:L2R2 ends the eligibility of bos:bullish:swing:high:64:fixed-window-strict:L2R2"
+  }
+ ],
+ "chart_id": "M-01",
+ "source": "V6 scanner_v6 on OHLC CSV (no image input)"
+}

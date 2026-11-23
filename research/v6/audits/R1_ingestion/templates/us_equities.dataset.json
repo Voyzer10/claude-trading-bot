@@ -1,0 +1,74 @@
+{
+ "dataset_id": "us_equities_<source>_<YYYYMMDD>",
+ "market": "US equities",
+ "exchange": "<IEX | SIP consolidated | NYSE / NASDAQ>",
+ "timeframe": "5m",
+ "timezone": "America/New_York",
+ "timestamp_format": "iso",
+ "timestamp_is": "bar_open",
+ "date_range": {
+  "start": "<YYYY-MM-DD>",
+  "end": "<YYYY-MM-DD>"
+ },
+ "data_source": "<vendor + endpoint/product; feed (IEX only or SIP)>",
+ "adjusted": "<adjusted | unadjusted>",
+ "retrieval_date": "<YYYY-MM-DD>",
+ "session": {
+  "type": "exchange",
+  "tz": "America/New_York",
+  "open": "09:30",
+  "close": "16:00",
+  "segments": [
+   [
+    "OPEN_0930_1030",
+    "09:30",
+    "10:30"
+   ],
+   [
+    "MID_1030_1500",
+    "10:30",
+    "15:00"
+   ],
+   [
+    "CLOSE_1500_1600",
+    "15:00",
+    "16:00"
+   ]
+  ],
+  "holidays": []
+ },
+ "files": [
+  {
+   "file": "SPY_5m.csv",
+   "instrument": "SPY"
+  },
+  {
+   "file": "QQQ_5m.csv",
+   "instrument": "QQQ"
+  },
+  {
+   "file": "AAPL_5m.csv",
+   "instrument": "AAPL"
+  },
+  {
+   "file": "MSFT_5m.csv",
+   "instrument": "MSFT"
+  },
+  {
+   "file": "NVDA_5m.csv",
+   "instrument": "NVDA"
+  },
+  {
+   "file": "TSLA_5m.csv",
+   "instrument": "TSLA"
+  },
+  {
+   "file": "AMZN_5m.csv",
+   "instrument": "AMZN"
+  },
+  {
+   "file": "JPM_5m.csv",
+   "instrument": "JPM"
+  }
+ ]
+}

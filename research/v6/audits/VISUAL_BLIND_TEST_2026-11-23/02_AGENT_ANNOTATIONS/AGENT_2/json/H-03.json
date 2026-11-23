@@ -1,0 +1,301 @@
+{
+ "chart_id": "H-03",
+ "agent": "AGENT_2",
+ "method": "Visual inspection only: read each candle by eye from the PNG (with enlarged crops), identified 2-left/2-right swings, then BOS/CHoCH/sweeps by eye from estimated levels; code used only to crop and to draw marks.",
+ "events": [
+  {
+   "type": "POOL_BSL",
+   "candle_index": 9,
+   "price": 100.71,
+   "confidence": 0.85,
+   "note": ""
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 25,
+   "price": 102.13,
+   "confidence": 0.75,
+   "note": ""
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 36,
+   "price": 103.14,
+   "confidence": 0.85,
+   "note": ""
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 49,
+   "price": 103.36,
+   "confidence": 0.85,
+   "note": ""
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 62,
+   "price": 102.08,
+   "confidence": 0.8,
+   "note": ""
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 66,
+   "price": 102.29,
+   "confidence": 0.85,
+   "note": ""
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 82,
+   "price": 103.9,
+   "confidence": 0.85,
+   "note": ""
+  },
+  {
+   "type": "POOL_BSL",
+   "candle_index": 96,
+   "price": 105.21,
+   "confidence": 0.9,
+   "note": ""
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 6,
+   "price": 98.14,
+   "confidence": 0.6,
+   "note": "5 low close"
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 14,
+   "price": 98.43,
+   "confidence": 0.85,
+   "note": ""
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 30,
+   "price": 99.4,
+   "confidence": 0.85,
+   "note": ""
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 44,
+   "price": 100.04,
+   "confidence": 0.45,
+   "note": "43 low close"
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 57,
+   "price": 99.08,
+   "confidence": 0.85,
+   "note": ""
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 67,
+   "price": 99.1,
+   "confidence": 0.75,
+   "note": ""
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 70,
+   "price": 99.22,
+   "confidence": 0.4,
+   "note": "68 low close"
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 78,
+   "price": 99.64,
+   "confidence": 0.85,
+   "note": ""
+  },
+  {
+   "type": "POOL_SSL",
+   "candle_index": 87,
+   "price": 101.22,
+   "confidence": 0.45,
+   "note": "89 low close"
+  },
+  {
+   "type": "BOS",
+   "direction": "bullish",
+   "candle_index": 22,
+   "price": 100.71,
+   "confidence": 0.75,
+   "note": "breaks SH9"
+  },
+  {
+   "type": "BOS",
+   "direction": "bullish",
+   "candle_index": 35,
+   "price": 102.13,
+   "confidence": 0.5,
+   "note": "breaks SH25, small margin"
+  },
+  {
+   "type": "BOS",
+   "direction": "bearish",
+   "candle_index": 56,
+   "price": 100.04,
+   "confidence": 0.6,
+   "note": "breaks SL44 (internal)"
+  },
+  {
+   "type": "CHOCH",
+   "direction": "bearish",
+   "candle_index": 67,
+   "price": 99.4,
+   "confidence": 0.55,
+   "note": "protected low SL30; candle 56 closed just above it"
+  },
+  {
+   "type": "CHOCH",
+   "direction": "bullish",
+   "candle_index": 77,
+   "price": 102.29,
+   "confidence": 0.55,
+   "note": "protected high SH66 (also BOS of most recent SH)"
+  },
+  {
+   "type": "BOS",
+   "direction": "bullish",
+   "candle_index": 93,
+   "price": 103.9,
+   "confidence": 0.7,
+   "note": "breaks SH82"
+  },
+  {
+   "type": "BOS",
+   "direction": "bearish",
+   "candle_index": 103,
+   "price": 101.22,
+   "confidence": 0.7,
+   "note": "breaks SL87"
+  },
+  {
+   "type": "SWEEP_BSL",
+   "candle_index": 20,
+   "price": 100.71,
+   "confidence": 0.6,
+   "note": "pool 9"
+  },
+  {
+   "type": "SWEEP_BSL",
+   "candle_index": 49,
+   "price": 103.14,
+   "confidence": 0.65,
+   "note": "pool 36"
+  },
+  {
+   "type": "SWEEP_BSL",
+   "candle_index": 66,
+   "price": 102.08,
+   "confidence": 0.65,
+   "note": "pool 62"
+  },
+  {
+   "type": "SWEEP_BSL",
+   "candle_index": 76,
+   "price": 102.08,
+   "confidence": 0.35,
+   "note": "pool 62 again"
+  },
+  {
+   "type": "SWEEP_BSL",
+   "candle_index": 78,
+   "price": 103.14,
+   "confidence": 0.6,
+   "note": "pool 36"
+  },
+  {
+   "type": "SWEEP_BSL",
+   "candle_index": 79,
+   "price": 103.36,
+   "confidence": 0.3,
+   "note": "close at level"
+  },
+  {
+   "type": "SWEEP_BSL",
+   "candle_index": 92,
+   "price": 103.9,
+   "confidence": 0.55,
+   "note": "pool 82"
+  },
+  {
+   "type": "SWEEP_SSL",
+   "candle_index": 55,
+   "price": 100.04,
+   "confidence": 0.55,
+   "note": "pool 44"
+  },
+  {
+   "type": "SWEEP_SSL",
+   "candle_index": 56,
+   "price": 99.4,
+   "confidence": 0.6,
+   "note": "pool 30"
+  },
+  {
+   "type": "TAKEN_BSL",
+   "candle_index": 22,
+   "price": 100.71,
+   "confidence": 0.6,
+   "note": ""
+  },
+  {
+   "type": "TAKEN_BSL",
+   "candle_index": 35,
+   "price": 102.13,
+   "confidence": 0.5,
+   "note": ""
+  },
+  {
+   "type": "TAKEN_SSL",
+   "candle_index": 56,
+   "price": 100.04,
+   "confidence": 0.55,
+   "note": ""
+  },
+  {
+   "type": "TAKEN_SSL",
+   "candle_index": 67,
+   "price": 99.4,
+   "confidence": 0.55,
+   "note": ""
+  },
+  {
+   "type": "TAKEN_BSL",
+   "candle_index": 77,
+   "price": 102.29,
+   "confidence": 0.6,
+   "note": ""
+  },
+  {
+   "type": "TAKEN_BSL",
+   "candle_index": 81,
+   "price": 103.36,
+   "confidence": 0.5,
+   "note": ""
+  },
+  {
+   "type": "TAKEN_BSL",
+   "candle_index": 93,
+   "price": 103.9,
+   "confidence": 0.6,
+   "note": ""
+  },
+  {
+   "type": "TAKEN_SSL",
+   "candle_index": 103,
+   "price": 101.22,
+   "confidence": 0.6,
+   "note": ""
+  }
+ ]
+}

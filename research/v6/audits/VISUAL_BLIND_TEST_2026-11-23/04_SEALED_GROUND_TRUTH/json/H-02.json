@@ -1,0 +1,1600 @@
+{
+ "events": [
+  {
+   "type": "POOL_BSL",
+   "index": 6,
+   "level": 102.7,
+   "id": "pool:swing:high:6:fixed-window-strict:L2R2",
+   "confirmation_index": 8,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     17,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 6,
+   "level": 102.7,
+   "id": "swing:high:6:fixed-window-strict:L2R2",
+   "confirmation_index": 8
+  },
+  {
+   "type": "POOL_SSL",
+   "index": 12,
+   "level": 100.38,
+   "id": "pool:swing:low:12:fixed-window-strict:L2R2",
+   "confirmation_index": 14,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     84,
+     "SWEEP"
+    ],
+    [
+     87,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 12,
+   "level": 100.38,
+   "id": "swing:low:12:fixed-window-strict:L2R2",
+   "confirmation_index": 14
+  },
+  {
+   "type": "BOS",
+   "direction": "bullish",
+   "index": 17,
+   "level": 102.7,
+   "id": "bos:bullish:swing:high:6:fixed-window-strict:L2R2",
+   "related_swing": "swing:high:6:fixed-window-strict:L2R2",
+   "confirmation_index": 17,
+   "role": "PRE_STRUCTURE"
+  },
+  {
+   "type": "TAKEN_BSL",
+   "index": 17,
+   "level": 102.7,
+   "id": "liquidity:pool:swing:high:6:fixed-window-strict:L2R2:TAKEN:17",
+   "related_pool": "pool:swing:high:6:fixed-window-strict:L2R2",
+   "confirmation_index": 17,
+   "state_before": "ACTIVE",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "POOL_BSL",
+   "index": 18,
+   "level": 103.77,
+   "id": "pool:swing:high:18:fixed-window-strict:L2R2",
+   "confirmation_index": 20,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     42,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 18,
+   "level": 103.77,
+   "id": "swing:high:18:fixed-window-strict:L2R2",
+   "confirmation_index": 20
+  },
+  {
+   "type": "POOL_SSL",
+   "index": 22,
+   "level": 101.87,
+   "id": "pool:swing:low:22:fixed-window-strict:L2R2",
+   "confirmation_index": 24,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     25,
+     "SWEEP"
+    ],
+    [
+     26,
+     "REPEAT_SWEEP"
+    ],
+    [
+     27,
+     "REPEAT_SWEEP"
+    ],
+    [
+     33,
+     "REPEAT_SWEEP"
+    ],
+    [
+     35,
+     "REPEAT_SWEEP"
+    ],
+    [
+     36,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 22,
+   "level": 101.87,
+   "id": "swing:low:22:fixed-window-strict:L2R2",
+   "confirmation_index": 24
+  },
+  {
+   "type": "STATE_ESTABLISHED",
+   "direction": "bullish",
+   "index": 24,
+   "level": null,
+   "state_before": "UNKNOWN",
+   "state_after": "BULLISH",
+   "confirmation_index": 24
+  },
+  {
+   "type": "SWEEP_GROUP_SSL",
+   "index": 25,
+   "id": "sweep:SSL:25",
+   "pools": [
+    "pool:swing:low:22:fixed-window-strict:L2R2"
+   ],
+   "confirmation_index": 25
+  },
+  {
+   "type": "SWEEP_SSL",
+   "index": 25,
+   "level": 101.87,
+   "id": "liquidity:pool:swing:low:22:fixed-window-strict:L2R2:SWEEP:25",
+   "related_pool": "pool:swing:low:22:fixed-window-strict:L2R2",
+   "confirmation_index": 25,
+   "state_before": "ACTIVE",
+   "state_after": "SWEPT",
+   "group_id": "sweep:SSL:25"
+  },
+  {
+   "type": "REPEAT_SWEEP_SSL",
+   "index": 26,
+   "level": 101.87,
+   "id": "liquidity:pool:swing:low:22:fixed-window-strict:L2R2:REPEAT_SWEEP:26",
+   "related_pool": "pool:swing:low:22:fixed-window-strict:L2R2",
+   "confirmation_index": 26,
+   "state_before": "SWEPT",
+   "state_after": "SWEPT",
+   "group_id": null
+  },
+  {
+   "type": "POOL_SSL",
+   "index": 27,
+   "level": 101.4,
+   "id": "pool:swing:low:27:fixed-window-strict:L2R2",
+   "confirmation_index": 29,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     37,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "REPEAT_SWEEP_SSL",
+   "index": 27,
+   "level": 101.87,
+   "id": "liquidity:pool:swing:low:22:fixed-window-strict:L2R2:REPEAT_SWEEP:27",
+   "related_pool": "pool:swing:low:22:fixed-window-strict:L2R2",
+   "confirmation_index": 27,
+   "state_before": "SWEPT",
+   "state_after": "SWEPT",
+   "group_id": null
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 27,
+   "level": 101.4,
+   "id": "swing:low:27:fixed-window-strict:L2R2",
+   "confirmation_index": 29
+  },
+  {
+   "type": "POOL_BSL",
+   "index": 32,
+   "level": 103.29,
+   "id": "pool:swing:high:32:fixed-window-strict:L2R2",
+   "confirmation_index": 34,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     42,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 32,
+   "level": 103.29,
+   "id": "swing:high:32:fixed-window-strict:L2R2",
+   "confirmation_index": 34
+  },
+  {
+   "type": "REPEAT_SWEEP_SSL",
+   "index": 33,
+   "level": 101.87,
+   "id": "liquidity:pool:swing:low:22:fixed-window-strict:L2R2:REPEAT_SWEEP:33",
+   "related_pool": "pool:swing:low:22:fixed-window-strict:L2R2",
+   "confirmation_index": 33,
+   "state_before": "SWEPT",
+   "state_after": "SWEPT",
+   "group_id": null
+  },
+  {
+   "type": "REPEAT_SWEEP_SSL",
+   "index": 35,
+   "level": 101.87,
+   "id": "liquidity:pool:swing:low:22:fixed-window-strict:L2R2:REPEAT_SWEEP:35",
+   "related_pool": "pool:swing:low:22:fixed-window-strict:L2R2",
+   "confirmation_index": 35,
+   "state_before": "SWEPT",
+   "state_after": "SWEPT",
+   "group_id": null
+  },
+  {
+   "type": "CHOCH",
+   "direction": "bearish",
+   "index": 36,
+   "level": 101.87,
+   "id": "choch:bearish:swing:low:22:fixed-window-strict:L2R2",
+   "related_swing": "swing:low:22:fixed-window-strict:L2R2",
+   "confirmation_index": 36,
+   "state_before": "BULLISH",
+   "state_after": "TRANSITION(bearish)"
+  },
+  {
+   "type": "TAKEN_SSL",
+   "index": 36,
+   "level": 101.87,
+   "id": "liquidity:pool:swing:low:22:fixed-window-strict:L2R2:TAKEN:36",
+   "related_pool": "pool:swing:low:22:fixed-window-strict:L2R2",
+   "confirmation_index": 36,
+   "state_before": "SWEPT",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "BOS",
+   "direction": "bearish",
+   "index": 37,
+   "level": 101.4,
+   "id": "bos:bearish:swing:low:27:fixed-window-strict:L2R2",
+   "related_swing": "swing:low:27:fixed-window-strict:L2R2",
+   "confirmation_index": 37,
+   "role": "TRANSITION_REF_BEFORE_CHOCH"
+  },
+  {
+   "type": "TAKEN_SSL",
+   "index": 37,
+   "level": 101.4,
+   "id": "liquidity:pool:swing:low:27:fixed-window-strict:L2R2:TAKEN:37",
+   "related_pool": "pool:swing:low:27:fixed-window-strict:L2R2",
+   "confirmation_index": 37,
+   "state_before": "ACTIVE",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "POOL_SSL",
+   "index": 40,
+   "level": 100.6,
+   "id": "pool:swing:low:40:fixed-window-strict:L2R2",
+   "confirmation_index": 42,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     84,
+     "SWEEP"
+    ],
+    [
+     86,
+     "REPEAT_SWEEP"
+    ],
+    [
+     87,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 40,
+   "level": 100.6,
+   "id": "swing:low:40:fixed-window-strict:L2R2",
+   "confirmation_index": 42
+  },
+  {
+   "type": "BOS",
+   "direction": "bullish",
+   "index": 42,
+   "level": 103.29,
+   "id": "bos:bullish:swing:high:32:fixed-window-strict:L2R2",
+   "related_swing": "swing:high:32:fixed-window-strict:L2R2",
+   "confirmation_index": 42,
+   "role": "REVERSAL_INVALIDATING"
+  },
+  {
+   "type": "STATE_REVERSAL_INVALIDATED",
+   "direction": "bullish",
+   "index": 42,
+   "level": null,
+   "state_before": "TRANSITION(bearish)",
+   "state_after": "BULLISH",
+   "confirmation_index": 42
+  },
+  {
+   "type": "TAKEN_BSL",
+   "index": 42,
+   "level": 103.77,
+   "id": "liquidity:pool:swing:high:18:fixed-window-strict:L2R2:TAKEN:42",
+   "related_pool": "pool:swing:high:18:fixed-window-strict:L2R2",
+   "confirmation_index": 42,
+   "state_before": "ACTIVE",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "TAKEN_BSL",
+   "index": 42,
+   "level": 103.29,
+   "id": "liquidity:pool:swing:high:32:fixed-window-strict:L2R2:TAKEN:42",
+   "related_pool": "pool:swing:high:32:fixed-window-strict:L2R2",
+   "confirmation_index": 42,
+   "state_before": "ACTIVE",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "POOL_BSL",
+   "index": 44,
+   "level": 105.51,
+   "id": "pool:swing:high:44:fixed-window-strict:L2R2",
+   "confirmation_index": 46,
+   "lifecycle_state": "SWEPT",
+   "lifecycle": [
+    [
+     56,
+     "SWEEP"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 44,
+   "level": 105.51,
+   "id": "swing:high:44:fixed-window-strict:L2R2",
+   "confirmation_index": 46
+  },
+  {
+   "type": "POOL_BSL",
+   "index": 49,
+   "level": 104.63,
+   "id": "pool:swing:high:49:fixed-window-strict:L2R2",
+   "confirmation_index": 51,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     54,
+     "SWEEP"
+    ],
+    [
+     55,
+     "REPEAT_SWEEP"
+    ],
+    [
+     56,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 49,
+   "level": 104.63,
+   "id": "swing:high:49:fixed-window-strict:L2R2",
+   "confirmation_index": 51
+  },
+  {
+   "type": "SWEEP_BSL",
+   "index": 54,
+   "level": 104.63,
+   "id": "liquidity:pool:swing:high:49:fixed-window-strict:L2R2:SWEEP:54",
+   "related_pool": "pool:swing:high:49:fixed-window-strict:L2R2",
+   "confirmation_index": 54,
+   "state_before": "ACTIVE",
+   "state_after": "SWEPT",
+   "group_id": "sweep:BSL:54"
+  },
+  {
+   "type": "SWEEP_GROUP_BSL",
+   "index": 54,
+   "id": "sweep:BSL:54",
+   "pools": [
+    "pool:swing:high:49:fixed-window-strict:L2R2"
+   ],
+   "confirmation_index": 54
+  },
+  {
+   "type": "REPEAT_SWEEP_BSL",
+   "index": 55,
+   "level": 104.63,
+   "id": "liquidity:pool:swing:high:49:fixed-window-strict:L2R2:REPEAT_SWEEP:55",
+   "related_pool": "pool:swing:high:49:fixed-window-strict:L2R2",
+   "confirmation_index": 55,
+   "state_before": "SWEPT",
+   "state_after": "SWEPT",
+   "group_id": null
+  },
+  {
+   "type": "BOS",
+   "direction": "bullish",
+   "index": 56,
+   "level": 104.63,
+   "id": "bos:bullish:swing:high:49:fixed-window-strict:L2R2",
+   "related_swing": "swing:high:49:fixed-window-strict:L2R2",
+   "confirmation_index": 56,
+   "role": "CONTINUATION"
+  },
+  {
+   "type": "POOL_BSL",
+   "index": 56,
+   "level": 105.73,
+   "id": "pool:swing:high:56:fixed-window-strict:L2R2",
+   "confirmation_index": 58,
+   "lifecycle_state": "ACTIVE",
+   "lifecycle": []
+  },
+  {
+   "type": "SWEEP_BSL",
+   "index": 56,
+   "level": 105.51,
+   "id": "liquidity:pool:swing:high:44:fixed-window-strict:L2R2:SWEEP:56",
+   "related_pool": "pool:swing:high:44:fixed-window-strict:L2R2",
+   "confirmation_index": 56,
+   "state_before": "ACTIVE",
+   "state_after": "SWEPT",
+   "group_id": "sweep:BSL:56"
+  },
+  {
+   "type": "SWEEP_GROUP_BSL",
+   "index": 56,
+   "id": "sweep:BSL:56",
+   "pools": [
+    "pool:swing:high:44:fixed-window-strict:L2R2"
+   ],
+   "confirmation_index": 56
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 56,
+   "level": 105.73,
+   "id": "swing:high:56:fixed-window-strict:L2R2",
+   "confirmation_index": 58
+  },
+  {
+   "type": "TAKEN_BSL",
+   "index": 56,
+   "level": 104.63,
+   "id": "liquidity:pool:swing:high:49:fixed-window-strict:L2R2:TAKEN:56",
+   "related_pool": "pool:swing:high:49:fixed-window-strict:L2R2",
+   "confirmation_index": 56,
+   "state_before": "SWEPT",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "POOL_BSL",
+   "index": 59,
+   "level": 105.37,
+   "id": "pool:swing:high:59:fixed-window-strict:L2R2",
+   "confirmation_index": 61,
+   "lifecycle_state": "SWEPT",
+   "lifecycle": [
+    [
+     70,
+     "SWEEP"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 59,
+   "level": 105.37,
+   "id": "swing:high:59:fixed-window-strict:L2R2",
+   "confirmation_index": 61
+  },
+  {
+   "type": "POOL_SSL",
+   "index": 64,
+   "level": 102.08,
+   "id": "pool:swing:low:64:fixed-window-strict:L2R2",
+   "confirmation_index": 66,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     74,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 64,
+   "level": 102.08,
+   "id": "swing:low:64:fixed-window-strict:L2R2",
+   "confirmation_index": 66
+  },
+  {
+   "type": "POOL_BSL",
+   "index": 70,
+   "level": 105.49,
+   "id": "pool:swing:high:70:fixed-window-strict:L2R2",
+   "confirmation_index": 72,
+   "lifecycle_state": "ACTIVE",
+   "lifecycle": []
+  },
+  {
+   "type": "SWEEP_BSL",
+   "index": 70,
+   "level": 105.37,
+   "id": "liquidity:pool:swing:high:59:fixed-window-strict:L2R2:SWEEP:70",
+   "related_pool": "pool:swing:high:59:fixed-window-strict:L2R2",
+   "confirmation_index": 70,
+   "state_before": "ACTIVE",
+   "state_after": "SWEPT",
+   "group_id": "sweep:BSL:70"
+  },
+  {
+   "type": "SWEEP_GROUP_BSL",
+   "index": 70,
+   "id": "sweep:BSL:70",
+   "pools": [
+    "pool:swing:high:59:fixed-window-strict:L2R2"
+   ],
+   "confirmation_index": 70
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 70,
+   "level": 105.49,
+   "id": "swing:high:70:fixed-window-strict:L2R2",
+   "confirmation_index": 72
+  },
+  {
+   "type": "BOS",
+   "direction": "bearish",
+   "index": 74,
+   "level": 102.08,
+   "id": "bos:bearish:swing:low:64:fixed-window-strict:L2R2",
+   "related_swing": "swing:low:64:fixed-window-strict:L2R2",
+   "confirmation_index": 74,
+   "role": "COUNTER_STRUCTURE"
+  },
+  {
+   "type": "TAKEN_SSL",
+   "index": 74,
+   "level": 102.08,
+   "id": "liquidity:pool:swing:low:64:fixed-window-strict:L2R2:TAKEN:74",
+   "related_pool": "pool:swing:low:64:fixed-window-strict:L2R2",
+   "confirmation_index": 74,
+   "state_before": "ACTIVE",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "POOL_SSL",
+   "index": 78,
+   "level": 100.61,
+   "id": "pool:swing:low:78:fixed-window-strict:L2R2",
+   "confirmation_index": 80,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     84,
+     "SWEEP"
+    ],
+    [
+     86,
+     "REPEAT_SWEEP"
+    ],
+    [
+     87,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 78,
+   "level": 100.61,
+   "id": "swing:low:78:fixed-window-strict:L2R2",
+   "confirmation_index": 80
+  },
+  {
+   "type": "POOL_BSL",
+   "index": 81,
+   "level": 103.27,
+   "id": "pool:swing:high:81:fixed-window-strict:L2R2",
+   "confirmation_index": 83,
+   "lifecycle_state": "ACTIVE",
+   "lifecycle": []
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 81,
+   "level": 103.27,
+   "id": "swing:high:81:fixed-window-strict:L2R2",
+   "confirmation_index": 83
+  },
+  {
+   "type": "POOL_SSL",
+   "index": 84,
+   "level": 100.35,
+   "id": "pool:swing:low:84:fixed-window-strict:L2R2",
+   "confirmation_index": 86,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     87,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWEEP_GROUP_SSL",
+   "index": 84,
+   "id": "sweep:SSL:84",
+   "pools": [
+    "pool:swing:low:12:fixed-window-strict:L2R2",
+    "pool:swing:low:40:fixed-window-strict:L2R2",
+    "pool:swing:low:78:fixed-window-strict:L2R2"
+   ],
+   "confirmation_index": 84
+  },
+  {
+   "type": "SWEEP_SSL",
+   "index": 84,
+   "level": 100.38,
+   "id": "liquidity:pool:swing:low:12:fixed-window-strict:L2R2:SWEEP:84",
+   "related_pool": "pool:swing:low:12:fixed-window-strict:L2R2",
+   "confirmation_index": 84,
+   "state_before": "ACTIVE",
+   "state_after": "SWEPT",
+   "group_id": "sweep:SSL:84"
+  },
+  {
+   "type": "SWEEP_SSL",
+   "index": 84,
+   "level": 100.6,
+   "id": "liquidity:pool:swing:low:40:fixed-window-strict:L2R2:SWEEP:84",
+   "related_pool": "pool:swing:low:40:fixed-window-strict:L2R2",
+   "confirmation_index": 84,
+   "state_before": "ACTIVE",
+   "state_after": "SWEPT",
+   "group_id": "sweep:SSL:84"
+  },
+  {
+   "type": "SWEEP_SSL",
+   "index": 84,
+   "level": 100.61,
+   "id": "liquidity:pool:swing:low:78:fixed-window-strict:L2R2:SWEEP:84",
+   "related_pool": "pool:swing:low:78:fixed-window-strict:L2R2",
+   "confirmation_index": 84,
+   "state_before": "ACTIVE",
+   "state_after": "SWEPT",
+   "group_id": "sweep:SSL:84"
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 84,
+   "level": 100.35,
+   "id": "swing:low:84:fixed-window-strict:L2R2",
+   "confirmation_index": 86
+  },
+  {
+   "type": "REPEAT_SWEEP_SSL",
+   "index": 86,
+   "level": 100.6,
+   "id": "liquidity:pool:swing:low:40:fixed-window-strict:L2R2:REPEAT_SWEEP:86",
+   "related_pool": "pool:swing:low:40:fixed-window-strict:L2R2",
+   "confirmation_index": 86,
+   "state_before": "SWEPT",
+   "state_after": "SWEPT",
+   "group_id": null
+  },
+  {
+   "type": "REPEAT_SWEEP_SSL",
+   "index": 86,
+   "level": 100.61,
+   "id": "liquidity:pool:swing:low:78:fixed-window-strict:L2R2:REPEAT_SWEEP:86",
+   "related_pool": "pool:swing:low:78:fixed-window-strict:L2R2",
+   "confirmation_index": 86,
+   "state_before": "SWEPT",
+   "state_after": "SWEPT",
+   "group_id": null
+  },
+  {
+   "type": "BOS",
+   "direction": "bearish",
+   "index": 87,
+   "level": 100.35,
+   "id": "bos:bearish:swing:low:84:fixed-window-strict:L2R2",
+   "related_swing": "swing:low:84:fixed-window-strict:L2R2",
+   "confirmation_index": 87,
+   "role": "COUNTER_STRUCTURE"
+  },
+  {
+   "type": "TAKEN_SSL",
+   "index": 87,
+   "level": 100.38,
+   "id": "liquidity:pool:swing:low:12:fixed-window-strict:L2R2:TAKEN:87",
+   "related_pool": "pool:swing:low:12:fixed-window-strict:L2R2",
+   "confirmation_index": 87,
+   "state_before": "SWEPT",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "TAKEN_SSL",
+   "index": 87,
+   "level": 100.6,
+   "id": "liquidity:pool:swing:low:40:fixed-window-strict:L2R2:TAKEN:87",
+   "related_pool": "pool:swing:low:40:fixed-window-strict:L2R2",
+   "confirmation_index": 87,
+   "state_before": "SWEPT",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "TAKEN_SSL",
+   "index": 87,
+   "level": 100.61,
+   "id": "liquidity:pool:swing:low:78:fixed-window-strict:L2R2:TAKEN:87",
+   "related_pool": "pool:swing:low:78:fixed-window-strict:L2R2",
+   "confirmation_index": 87,
+   "state_before": "SWEPT",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "TAKEN_SSL",
+   "index": 87,
+   "level": 100.35,
+   "id": "liquidity:pool:swing:low:84:fixed-window-strict:L2R2:TAKEN:87",
+   "related_pool": "pool:swing:low:84:fixed-window-strict:L2R2",
+   "confirmation_index": 87,
+   "state_before": "ACTIVE",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "POOL_SSL",
+   "index": 88,
+   "level": 99.61,
+   "id": "pool:swing:low:88:fixed-window-strict:L2R2",
+   "confirmation_index": 90,
+   "lifecycle_state": "TAKEN",
+   "lifecycle": [
+    [
+     103,
+     "TAKEN"
+    ]
+   ]
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 88,
+   "level": 99.61,
+   "id": "swing:low:88:fixed-window-strict:L2R2",
+   "confirmation_index": 90
+  },
+  {
+   "type": "POOL_BSL",
+   "index": 95,
+   "level": 103.16,
+   "id": "pool:swing:high:95:fixed-window-strict:L2R2",
+   "confirmation_index": 97,
+   "lifecycle_state": "ACTIVE",
+   "lifecycle": []
+  },
+  {
+   "type": "SWING_HIGH",
+   "index": 95,
+   "level": 103.16,
+   "id": "swing:high:95:fixed-window-strict:L2R2",
+   "confirmation_index": 97
+  },
+  {
+   "type": "BOS",
+   "direction": "bearish",
+   "index": 103,
+   "level": 99.61,
+   "id": "bos:bearish:swing:low:88:fixed-window-strict:L2R2",
+   "related_swing": "swing:low:88:fixed-window-strict:L2R2",
+   "confirmation_index": 103,
+   "role": "COUNTER_STRUCTURE"
+  },
+  {
+   "type": "TAKEN_SSL",
+   "index": 103,
+   "level": 99.61,
+   "id": "liquidity:pool:swing:low:88:fixed-window-strict:L2R2:TAKEN:103",
+   "related_pool": "pool:swing:low:88:fixed-window-strict:L2R2",
+   "confirmation_index": 103,
+   "state_before": "ACTIVE",
+   "state_after": "TAKEN",
+   "group_id": null
+  },
+  {
+   "type": "POOL_SSL",
+   "index": 105,
+   "level": 98.96,
+   "id": "pool:swing:low:105:fixed-window-strict:L2R2",
+   "confirmation_index": 107,
+   "lifecycle_state": "ACTIVE",
+   "lifecycle": []
+  },
+  {
+   "type": "SWING_LOW",
+   "index": 105,
+   "level": 98.96,
+   "id": "swing:low:105:fixed-window-strict:L2R2",
+   "confirmation_index": 107
+  }
+ ],
+ "setup_candidates": [],
+ "unscored": [
+  {
+   "kind": "EQUAL_LOWS",
+   "indices": [
+    9,
+    10
+   ],
+   "level": 101.36,
+   "rule": "LQ-03 OPEN (equal-level pools); SW-003: equal extremes are not L2/R2 swings, so no pool in GT",
+   "scope": "pool scoring"
+  },
+  {
+   "kind": "EQUAL_HIGHS",
+   "indices": [
+    22,
+    24
+   ],
+   "level": 102.91,
+   "rule": "LQ-03 OPEN (equal-level pools); SW-003: equal extremes are not L2/R2 swings, so no pool in GT",
+   "scope": "pool scoring"
+  },
+  {
+   "kind": "EQUAL_LOWS",
+   "indices": [
+    49,
+    50
+   ],
+   "level": 103.09,
+   "rule": "LQ-03 OPEN (equal-level pools); SW-003: equal extremes are not L2/R2 swings, so no pool in GT",
+   "scope": "pool scoring"
+  },
+  {
+   "kind": "CLOSE_EQUALS_SWING_LEVEL",
+   "indices": [
+    1
+   ],
+   "level": 100.6,
+   "rule": "BOS-006 / C1 tick epsilon OPEN; strict comparison applied (no BOS / no CHoCH / no TAKEN)",
+   "scope": "BOS, CHoCH, TAKEN"
+  },
+  {
+   "kind": "CLOSE_EQUALS_SWING_LEVEL",
+   "indices": [
+    7
+   ],
+   "level": 102.08,
+   "rule": "BOS-006 / C1 tick epsilon OPEN; strict comparison applied (no BOS / no CHoCH / no TAKEN)",
+   "scope": "BOS, CHoCH, TAKEN"
+  },
+  {
+   "kind": "CLOSE_EQUALS_SWING_LEVEL",
+   "indices": [
+    93
+   ],
+   "level": 102.08,
+   "rule": "BOS-006 / C1 tick epsilon OPEN; strict comparison applied (no BOS / no CHoCH / no TAKEN)",
+   "scope": "BOS, CHoCH, TAKEN"
+  },
+  {
+   "kind": "OQ12_GROUP_MEMBERSHIP",
+   "indices": [],
+   "rule": "OQ-12 OPEN: REPEAT_SWEEP / TAKEN carry no group",
+   "scope": "group membership of REPEAT_SWEEP / TAKEN not scored"
+  }
+ ],
+ "timeline": [
+  {
+   "index": 0,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 1,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 2,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 3,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 4,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 5,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 6,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 7,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 8,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 9,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 10,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 11,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 12,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 13,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 14,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 15,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 16,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 17,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 18,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 19,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 20,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 21,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 22,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 23,
+   "state": "UNKNOWN",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 24,
+   "state": "BULLISH",
+   "protected_level": 101.87,
+   "protected_swing": "swing:low:22:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 25,
+   "state": "BULLISH",
+   "protected_level": 101.87,
+   "protected_swing": "swing:low:22:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 26,
+   "state": "BULLISH",
+   "protected_level": 101.87,
+   "protected_swing": "swing:low:22:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 27,
+   "state": "BULLISH",
+   "protected_level": 101.87,
+   "protected_swing": "swing:low:22:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 28,
+   "state": "BULLISH",
+   "protected_level": 101.87,
+   "protected_swing": "swing:low:22:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 29,
+   "state": "BULLISH",
+   "protected_level": 101.87,
+   "protected_swing": "swing:low:22:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 30,
+   "state": "BULLISH",
+   "protected_level": 101.87,
+   "protected_swing": "swing:low:22:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 31,
+   "state": "BULLISH",
+   "protected_level": 101.87,
+   "protected_swing": "swing:low:22:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 32,
+   "state": "BULLISH",
+   "protected_level": 101.87,
+   "protected_swing": "swing:low:22:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 33,
+   "state": "BULLISH",
+   "protected_level": 101.87,
+   "protected_swing": "swing:low:22:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 34,
+   "state": "BULLISH",
+   "protected_level": 101.87,
+   "protected_swing": "swing:low:22:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 35,
+   "state": "BULLISH",
+   "protected_level": 101.87,
+   "protected_swing": "swing:low:22:fixed-window-strict:L2R2"
+  },
+  {
+   "index": 36,
+   "state": "TRANSITION(bearish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 37,
+   "state": "TRANSITION(bearish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 38,
+   "state": "TRANSITION(bearish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 39,
+   "state": "TRANSITION(bearish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 40,
+   "state": "TRANSITION(bearish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 41,
+   "state": "TRANSITION(bearish)",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 42,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 43,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 44,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 45,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 46,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 47,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 48,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 49,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 50,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 51,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 52,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 53,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 54,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 55,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 56,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 57,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 58,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 59,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 60,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 61,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 62,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 63,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 64,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 65,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 66,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 67,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 68,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 69,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 70,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 71,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 72,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 73,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 74,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 75,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 76,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 77,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 78,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 79,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 80,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 81,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 82,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 83,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 84,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 85,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 86,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 87,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 88,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 89,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 90,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 91,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 92,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 93,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 94,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 95,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 96,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 97,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 98,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 99,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 100,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 101,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 102,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 103,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 104,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 105,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 106,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 107,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 108,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 109,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  },
+  {
+   "index": 110,
+   "state": "BULLISH",
+   "protected_level": null,
+   "protected_swing": null
+  }
+ ],
+ "chart_id": "H-02",
+ "tier": "HARD",
+ "scenario_id": "S-H1",
+ "variant": "A",
+ "mirror_of": null,
+ "candles": 111,
+ "generator": "oracle2 + liquidity + setup-link oracles (spec text; no scanner_v6 import)",
+ "index_base": "zero-based"
+}

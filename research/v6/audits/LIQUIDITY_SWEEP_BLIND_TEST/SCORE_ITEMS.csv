@@ -1,0 +1,378 @@
+scenario,difficulty,category,item,result
+LSB-E1,Easy,swings,"('low', 98.0, 4, 6)",PASS
+LSB-E1,Easy,swings,"('high', 109.0, 7, 9)",PASS
+LSB-E1,Easy,swings,"('low', 101.0, 10, 12)",PASS
+LSB-E1,Easy,swings,"('high', 116.0, 14, 16)",PASS
+LSB-E1,Easy,swings,"('low', 106.0, 16, 18)",PASS
+LSB-E1,Easy,swings,"('high', 117.0, 17, 19)",PASS
+LSB-E1,Easy,swings_no_unexpected,"no extra swings",PASS
+LSB-E1,Easy,bos,"('bullish', 12, 109.0)",PASS
+LSB-E1,Easy,bos_no_unexpected,"no extra bos",PASS
+LSB-E1,Easy,structure_events,"('ESTABLISHED', 16, 'BULLISH', 101.0)",PASS
+LSB-E1,Easy,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-E1,Easy,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-E1,Easy,checkpoints,"c17 ('BULLISH', 101.0)",PASS
+LSB-E1,Easy,checkpoints,"c18 ('BULLISH', 101.0)",PASS
+LSB-E1,Easy,checkpoints,"c19 ('BULLISH', 101.0)",PASS
+LSB-E1,Easy,harness,"no_lookahead_violations == []",PASS
+LSB-E1,Easy,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-E2,Easy,swings,"('low', 98.0, 4, 6)",PASS
+LSB-E2,Easy,swings,"('high', 109.0, 7, 9)",PASS
+LSB-E2,Easy,swings,"('low', 101.0, 10, 12)",PASS
+LSB-E2,Easy,swings,"('high', 116.0, 14, 16)",PASS
+LSB-E2,Easy,swings,"('low', 100.0, 17, 19)",PASS
+LSB-E2,Easy,swings_no_unexpected,"no extra swings",PASS
+LSB-E2,Easy,bos,"('bullish', 12, 109.0)",PASS
+LSB-E2,Easy,bos_no_unexpected,"no extra bos",PASS
+LSB-E2,Easy,structure_events,"('ESTABLISHED', 16, 'BULLISH', 101.0)",PASS
+LSB-E2,Easy,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-E2,Easy,wick_only,"(17, 101.0)",PASS
+LSB-E2,Easy,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-E2,Easy,checkpoints,"c17 ('BULLISH', 101.0)",PASS
+LSB-E2,Easy,checkpoints,"c18 ('BULLISH', 101.0)",PASS
+LSB-E2,Easy,checkpoints,"c19 ('BULLISH', 101.0)",PASS
+LSB-E2,Easy,harness,"no_lookahead_violations == []",PASS
+LSB-E2,Easy,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-E3,Easy,swings,"('high', 102.0, 4, 6)",PASS
+LSB-E3,Easy,swings,"('low', 91.0, 7, 9)",PASS
+LSB-E3,Easy,swings,"('high', 99.0, 10, 12)",PASS
+LSB-E3,Easy,swings,"('low', 84.0, 14, 16)",PASS
+LSB-E3,Easy,swings,"('high', 100.0, 17, 19)",PASS
+LSB-E3,Easy,swings_no_unexpected,"no extra swings",PASS
+LSB-E3,Easy,bos,"('bearish', 12, 91.0)",PASS
+LSB-E3,Easy,bos_no_unexpected,"no extra bos",PASS
+LSB-E3,Easy,structure_events,"('ESTABLISHED', 16, 'BEARISH', 99.0)",PASS
+LSB-E3,Easy,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-E3,Easy,wick_only,"(17, 99.0)",PASS
+LSB-E3,Easy,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-E3,Easy,checkpoints,"c17 ('BEARISH', 99.0)",PASS
+LSB-E3,Easy,checkpoints,"c18 ('BEARISH', 99.0)",PASS
+LSB-E3,Easy,checkpoints,"c19 ('BEARISH', 99.0)",PASS
+LSB-E3,Easy,harness,"no_lookahead_violations == []",PASS
+LSB-E3,Easy,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-E4,Easy,swings,"('low', 98.0, 4, 6)",PASS
+LSB-E4,Easy,swings,"('high', 109.0, 7, 9)",PASS
+LSB-E4,Easy,swings,"('low', 101.0, 10, 12)",PASS
+LSB-E4,Easy,swings,"('high', 116.0, 14, 16)",PASS
+LSB-E4,Easy,swings,"('low', 106.0, 16, 18)",PASS
+LSB-E4,Easy,swings_no_unexpected,"no extra swings",PASS
+LSB-E4,Easy,bos,"('bullish', 12, 109.0)",PASS
+LSB-E4,Easy,bos,"('bullish', 17, 116.0)",PASS
+LSB-E4,Easy,bos_no_unexpected,"no extra bos",PASS
+LSB-E4,Easy,structure_events,"('ESTABLISHED', 16, 'BULLISH', 101.0)",PASS
+LSB-E4,Easy,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-E4,Easy,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-E4,Easy,checkpoints,"c17 ('BULLISH', 101.0)",PASS
+LSB-E4,Easy,checkpoints,"c18 ('BULLISH', 106.0)",PASS
+LSB-E4,Easy,harness,"no_lookahead_violations == []",PASS
+LSB-E4,Easy,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-E5,Easy,swings,"('high', 102.0, 4, 6)",PASS
+LSB-E5,Easy,swings,"('low', 91.0, 7, 9)",PASS
+LSB-E5,Easy,swings,"('high', 99.0, 10, 12)",PASS
+LSB-E5,Easy,swings,"('low', 84.0, 14, 16)",PASS
+LSB-E5,Easy,swings,"('high', 94.0, 16, 18)",PASS
+LSB-E5,Easy,swings_no_unexpected,"no extra swings",PASS
+LSB-E5,Easy,bos,"('bearish', 12, 91.0)",PASS
+LSB-E5,Easy,bos,"('bearish', 17, 84.0)",PASS
+LSB-E5,Easy,bos_no_unexpected,"no extra bos",PASS
+LSB-E5,Easy,structure_events,"('ESTABLISHED', 16, 'BEARISH', 99.0)",PASS
+LSB-E5,Easy,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-E5,Easy,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-E5,Easy,checkpoints,"c17 ('BEARISH', 99.0)",PASS
+LSB-E5,Easy,checkpoints,"c18 ('BEARISH', 94.0)",PASS
+LSB-E5,Easy,harness,"no_lookahead_violations == []",PASS
+LSB-E5,Easy,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-M1,Medium,swings,"('low', 98.0, 4, 6)",PASS
+LSB-M1,Medium,swings,"('high', 109.0, 7, 9)",PASS
+LSB-M1,Medium,swings,"('low', 101.0, 10, 12)",PASS
+LSB-M1,Medium,swings,"('high', 116.0, 14, 16)",PASS
+LSB-M1,Medium,swings,"('low', 100.0, 17, 19)",PASS
+LSB-M1,Medium,swings_no_unexpected,"no extra swings",PASS
+LSB-M1,Medium,bos,"('bullish', 12, 109.0)",PASS
+LSB-M1,Medium,bos_no_unexpected,"no extra bos",PASS
+LSB-M1,Medium,structure_events,"('ESTABLISHED', 16, 'BULLISH', 101.0)",PASS
+LSB-M1,Medium,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-M1,Medium,wick_only,"(17, 101.0)",PASS
+LSB-M1,Medium,wick_only,"(18, 101.0)",PASS
+LSB-M1,Medium,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-M1,Medium,checkpoints,"c17 ('BULLISH', 101.0)",PASS
+LSB-M1,Medium,checkpoints,"c18 ('BULLISH', 101.0)",PASS
+LSB-M1,Medium,checkpoints,"c19 ('BULLISH', 101.0)",PASS
+LSB-M1,Medium,checkpoints,"c20 ('BULLISH', 101.0)",PASS
+LSB-M1,Medium,harness,"no_lookahead_violations == []",PASS
+LSB-M1,Medium,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-M2,Medium,swings,"('low', 98.0, 4, 6)",PASS
+LSB-M2,Medium,swings,"('high', 109.0, 7, 9)",PASS
+LSB-M2,Medium,swings,"('low', 101.0, 10, 12)",PASS
+LSB-M2,Medium,swings,"('high', 116.0, 14, 16)",PASS
+LSB-M2,Medium,swings_no_unexpected,"no extra swings",PASS
+LSB-M2,Medium,bos,"('bullish', 12, 109.0)",PASS
+LSB-M2,Medium,bos,"('bearish', 18, 101.0)",PASS
+LSB-M2,Medium,bos_no_unexpected,"no extra bos",PASS
+LSB-M2,Medium,structure_events,"('ESTABLISHED', 16, 'BULLISH', 101.0)",PASS
+LSB-M2,Medium,structure_events,"('CHOCH', 18, 'TRANSITION(bearish)', 101.0)",PASS
+LSB-M2,Medium,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-M2,Medium,wick_only,"(17, 101.0)",PASS
+LSB-M2,Medium,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-M2,Medium,checkpoints,"c17 ('BULLISH', 101.0)",PASS
+LSB-M2,Medium,checkpoints,"c18 ('TRANSITION(bearish)', None)",PASS
+LSB-M2,Medium,harness,"no_lookahead_violations == []",PASS
+LSB-M2,Medium,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-M3,Medium,swings,"('low', 98.0, 4, 6)",PASS
+LSB-M3,Medium,swings,"('high', 109.0, 7, 9)",PASS
+LSB-M3,Medium,swings,"('low', 101.0, 10, 12)",PASS
+LSB-M3,Medium,swings,"('high', 116.0, 14, 16)",PASS
+LSB-M3,Medium,swings,"('low', 97.0, 17, 19)",PASS
+LSB-M3,Medium,swings_no_unexpected,"no extra swings",PASS
+LSB-M3,Medium,bos,"('bullish', 12, 109.0)",PASS
+LSB-M3,Medium,bos_no_unexpected,"no extra bos",PASS
+LSB-M3,Medium,structure_events,"('ESTABLISHED', 16, 'BULLISH', 101.0)",PASS
+LSB-M3,Medium,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-M3,Medium,wick_only,"(17, 101.0)",PASS
+LSB-M3,Medium,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-M3,Medium,checkpoints,"c17 ('BULLISH', 101.0)",PASS
+LSB-M3,Medium,checkpoints,"c18 ('BULLISH', 101.0)",PASS
+LSB-M3,Medium,checkpoints,"c19 ('BULLISH', 101.0)",PASS
+LSB-M3,Medium,harness,"no_lookahead_violations == []",PASS
+LSB-M3,Medium,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-M4,Medium,swings,"('high', 102.0, 4, 6)",PASS
+LSB-M4,Medium,swings,"('low', 91.0, 7, 9)",PASS
+LSB-M4,Medium,swings,"('high', 99.0, 10, 12)",PASS
+LSB-M4,Medium,swings,"('low', 84.0, 14, 16)",PASS
+LSB-M4,Medium,swings,"('high', 103.0, 17, 19)",PASS
+LSB-M4,Medium,swings_no_unexpected,"no extra swings",PASS
+LSB-M4,Medium,bos,"('bearish', 12, 91.0)",PASS
+LSB-M4,Medium,bos_no_unexpected,"no extra bos",PASS
+LSB-M4,Medium,structure_events,"('ESTABLISHED', 16, 'BEARISH', 99.0)",PASS
+LSB-M4,Medium,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-M4,Medium,wick_only,"(17, 99.0)",PASS
+LSB-M4,Medium,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-M4,Medium,checkpoints,"c17 ('BEARISH', 99.0)",PASS
+LSB-M4,Medium,checkpoints,"c18 ('BEARISH', 99.0)",PASS
+LSB-M4,Medium,checkpoints,"c19 ('BEARISH', 99.0)",PASS
+LSB-M4,Medium,harness,"no_lookahead_violations == []",PASS
+LSB-M4,Medium,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-M5,Medium,swings,"('high', 102.0, 4, 6)",PASS
+LSB-M5,Medium,swings,"('low', 91.0, 7, 9)",PASS
+LSB-M5,Medium,swings,"('high', 99.0, 10, 12)",PASS
+LSB-M5,Medium,swings,"('low', 84.0, 14, 16)",PASS
+LSB-M5,Medium,swings,"('high', 100.0, 17, 19)",PASS
+LSB-M5,Medium,swings_no_unexpected,"no extra swings",PASS
+LSB-M5,Medium,bos,"('bearish', 12, 91.0)",PASS
+LSB-M5,Medium,bos_no_unexpected,"no extra bos",PASS
+LSB-M5,Medium,structure_events,"('ESTABLISHED', 16, 'BEARISH', 99.0)",PASS
+LSB-M5,Medium,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-M5,Medium,wick_only,"(17, 99.0)",PASS
+LSB-M5,Medium,wick_only,"(18, 99.0)",PASS
+LSB-M5,Medium,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-M5,Medium,checkpoints,"c17 ('BEARISH', 99.0)",PASS
+LSB-M5,Medium,checkpoints,"c18 ('BEARISH', 99.0)",PASS
+LSB-M5,Medium,checkpoints,"c19 ('BEARISH', 99.0)",PASS
+LSB-M5,Medium,checkpoints,"c20 ('BEARISH', 99.0)",PASS
+LSB-M5,Medium,harness,"no_lookahead_violations == []",PASS
+LSB-M5,Medium,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-H1,Hard,swings,"('low', 98.0, 4, 6)",PASS
+LSB-H1,Hard,swings,"('high', 109.0, 7, 9)",PASS
+LSB-H1,Hard,swings,"('low', 101.0, 10, 12)",PASS
+LSB-H1,Hard,swings,"('high', 116.0, 14, 16)",PASS
+LSB-H1,Hard,swings,"('low', 100.5, 17, 19)",PASS
+LSB-H1,Hard,swings_no_unexpected,"no extra swings",PASS
+LSB-H1,Hard,bos,"('bullish', 12, 109.0)",PASS
+LSB-H1,Hard,bos,"('bullish', 17, 116.0)",PASS
+LSB-H1,Hard,bos_no_unexpected,"no extra bos",PASS
+LSB-H1,Hard,structure_events,"('ESTABLISHED', 16, 'BULLISH', 101.0)",PASS
+LSB-H1,Hard,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-H1,Hard,wick_only,"(17, 101.0)",PASS
+LSB-H1,Hard,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-H1,Hard,checkpoints,"c17 ('BULLISH', 101.0)",PASS
+LSB-H1,Hard,checkpoints,"c18 ('BULLISH', 101.0)",PASS
+LSB-H1,Hard,checkpoints,"c19 ('BULLISH', 101.0)",PASS
+LSB-H1,Hard,harness,"no_lookahead_violations == []",PASS
+LSB-H1,Hard,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-H2,Hard,swings,"('high', 102.0, 4, 6)",PASS
+LSB-H2,Hard,swings,"('low', 91.0, 7, 9)",PASS
+LSB-H2,Hard,swings,"('high', 99.0, 10, 12)",PASS
+LSB-H2,Hard,swings,"('low', 84.0, 14, 16)",PASS
+LSB-H2,Hard,swings,"('high', 99.5, 17, 19)",PASS
+LSB-H2,Hard,swings_no_unexpected,"no extra swings",PASS
+LSB-H2,Hard,bos,"('bearish', 12, 91.0)",PASS
+LSB-H2,Hard,bos,"('bearish', 17, 84.0)",PASS
+LSB-H2,Hard,bos_no_unexpected,"no extra bos",PASS
+LSB-H2,Hard,structure_events,"('ESTABLISHED', 16, 'BEARISH', 99.0)",PASS
+LSB-H2,Hard,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-H2,Hard,wick_only,"(17, 99.0)",PASS
+LSB-H2,Hard,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-H2,Hard,checkpoints,"c17 ('BEARISH', 99.0)",PASS
+LSB-H2,Hard,checkpoints,"c18 ('BEARISH', 99.0)",PASS
+LSB-H2,Hard,checkpoints,"c19 ('BEARISH', 99.0)",PASS
+LSB-H2,Hard,harness,"no_lookahead_violations == []",PASS
+LSB-H2,Hard,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-H3,Hard,swings,"('low', 98.0, 4, 6)",PASS
+LSB-H3,Hard,swings,"('high', 109.0, 7, 9)",PASS
+LSB-H3,Hard,swings,"('low', 101.0, 10, 12)",PASS
+LSB-H3,Hard,swings,"('high', 116.0, 14, 16)",PASS
+LSB-H3,Hard,swings,"('low', 106.0, 16, 18)",PASS
+LSB-H3,Hard,swings,"('high', 118.5, 19, 21)",PASS
+LSB-H3,Hard,swings,"('low', 105.5, 19, 21)",PASS
+LSB-H3,Hard,swings_no_unexpected,"no extra swings",PASS
+LSB-H3,Hard,bos,"('bullish', 12, 109.0)",PASS
+LSB-H3,Hard,bos,"('bullish', 17, 116.0)",PASS
+LSB-H3,Hard,bos_no_unexpected,"no extra bos",PASS
+LSB-H3,Hard,structure_events,"('ESTABLISHED', 16, 'BULLISH', 101.0)",PASS
+LSB-H3,Hard,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-H3,Hard,wick_only,"(19, 106.0)",PASS
+LSB-H3,Hard,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-H3,Hard,checkpoints,"c17 ('BULLISH', 101.0)",PASS
+LSB-H3,Hard,checkpoints,"c18 ('BULLISH', 106.0)",PASS
+LSB-H3,Hard,checkpoints,"c19 ('BULLISH', 106.0)",PASS
+LSB-H3,Hard,checkpoints,"c20 ('BULLISH', 106.0)",PASS
+LSB-H3,Hard,checkpoints,"c21 ('BULLISH', 106.0)",PASS
+LSB-H3,Hard,harness,"no_lookahead_violations == []",PASS
+LSB-H3,Hard,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-H4,Hard,swings,"('low', 98.0, 4, 6)",PASS
+LSB-H4,Hard,swings,"('high', 109.0, 7, 9)",PASS
+LSB-H4,Hard,swings,"('low', 101.0, 10, 12)",PASS
+LSB-H4,Hard,swings,"('high', 116.0, 14, 16)",PASS
+LSB-H4,Hard,swings,"('low', 102.0, 17, 19)",PASS
+LSB-H4,Hard,swings,"('low', 103.0, 20, 22)",PASS
+LSB-H4,Hard,swings_no_unexpected,"no extra swings",PASS
+LSB-H4,Hard,bos,"('bullish', 12, 109.0)",PASS
+LSB-H4,Hard,bos_no_unexpected,"no extra bos",PASS
+LSB-H4,Hard,structure_events,"('ESTABLISHED', 16, 'BULLISH', 101.0)",PASS
+LSB-H4,Hard,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-H4,Hard,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-H4,Hard,checkpoints,"c17 ('BULLISH', 101.0)",PASS
+LSB-H4,Hard,checkpoints,"c18 ('BULLISH', 101.0)",PASS
+LSB-H4,Hard,checkpoints,"c19 ('BULLISH', 101.0)",PASS
+LSB-H4,Hard,checkpoints,"c20 ('BULLISH', 101.0)",PASS
+LSB-H4,Hard,checkpoints,"c21 ('BULLISH', 101.0)",PASS
+LSB-H4,Hard,checkpoints,"c22 ('BULLISH', 101.0)",PASS
+LSB-H4,Hard,checkpoints,"c23 ('BULLISH', 101.0)",PASS
+LSB-H4,Hard,harness,"no_lookahead_violations == []",PASS
+LSB-H4,Hard,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-H5,Hard,swings,"('high', 102.0, 4, 6)",PASS
+LSB-H5,Hard,swings,"('low', 91.0, 7, 9)",PASS
+LSB-H5,Hard,swings,"('high', 99.0, 10, 12)",PASS
+LSB-H5,Hard,swings,"('low', 84.0, 14, 16)",PASS
+LSB-H5,Hard,swings,"('high', 94.0, 16, 18)",PASS
+LSB-H5,Hard,swings,"('high', 94.5, 19, 21)",PASS
+LSB-H5,Hard,swings,"('low', 81.5, 19, 21)",PASS
+LSB-H5,Hard,swings_no_unexpected,"no extra swings",PASS
+LSB-H5,Hard,bos,"('bearish', 12, 91.0)",PASS
+LSB-H5,Hard,bos,"('bearish', 17, 84.0)",PASS
+LSB-H5,Hard,bos_no_unexpected,"no extra bos",PASS
+LSB-H5,Hard,structure_events,"('ESTABLISHED', 16, 'BEARISH', 99.0)",PASS
+LSB-H5,Hard,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-H5,Hard,wick_only,"(19, 94.0)",PASS
+LSB-H5,Hard,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-H5,Hard,checkpoints,"c17 ('BEARISH', 99.0)",PASS
+LSB-H5,Hard,checkpoints,"c18 ('BEARISH', 94.0)",PASS
+LSB-H5,Hard,checkpoints,"c19 ('BEARISH', 94.0)",PASS
+LSB-H5,Hard,checkpoints,"c20 ('BEARISH', 94.0)",PASS
+LSB-H5,Hard,checkpoints,"c21 ('BEARISH', 94.0)",PASS
+LSB-H5,Hard,harness,"no_lookahead_violations == []",PASS
+LSB-H5,Hard,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-X1,Extreme,swings,"('low', 98.0, 4, 6)",PASS
+LSB-X1,Extreme,swings,"('high', 109.0, 7, 9)",PASS
+LSB-X1,Extreme,swings,"('low', 101.0, 10, 12)",PASS
+LSB-X1,Extreme,swings,"('high', 116.0, 14, 16)",PASS
+LSB-X1,Extreme,swings,"('low', 100.0, 17, 19)",PASS
+LSB-X1,Extreme,swings_no_unexpected,"no extra swings",PASS
+LSB-X1,Extreme,bos,"('bullish', 12, 109.0)",PASS
+LSB-X1,Extreme,bos_no_unexpected,"no extra bos",PASS
+LSB-X1,Extreme,structure_events,"('ESTABLISHED', 16, 'BULLISH', 101.0)",PASS
+LSB-X1,Extreme,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-X1,Extreme,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-X1,Extreme,harness,"no_lookahead_violations == []",PASS
+LSB-X1,Extreme,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-X2,Extreme,swings,"('low', 98.0, 4, 6)",PASS
+LSB-X2,Extreme,swings,"('high', 109.0, 7, 9)",PASS
+LSB-X2,Extreme,swings,"('low', 101.0, 10, 12)",PASS
+LSB-X2,Extreme,swings,"('high', 116.0, 14, 16)",PASS
+LSB-X2,Extreme,swings,"('low', 106.0, 16, 18)",PASS
+LSB-X2,Extreme,swings,"('high', 116.0, 18, 20)",PASS
+LSB-X2,Extreme,swings,"('low', 108.0, 20, 22)",PASS
+LSB-X2,Extreme,swings_no_unexpected,"no extra swings",PASS
+LSB-X2,Extreme,bos,"('bullish', 12, 109.0)",PASS
+LSB-X2,Extreme,bos_no_unexpected,"no extra bos",PASS
+LSB-X2,Extreme,structure_events,"('ESTABLISHED', 16, 'BULLISH', 101.0)",PASS
+LSB-X2,Extreme,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-X2,Extreme,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-X2,Extreme,checkpoints,"c17 ('BULLISH', 101.0)",PASS
+LSB-X2,Extreme,checkpoints,"c18 ('BULLISH', 101.0)",PASS
+LSB-X2,Extreme,checkpoints,"c19 ('BULLISH', 101.0)",PASS
+LSB-X2,Extreme,checkpoints,"c20 ('BULLISH', 101.0)",PASS
+LSB-X2,Extreme,checkpoints,"c21 ('BULLISH', 101.0)",PASS
+LSB-X2,Extreme,checkpoints,"c22 ('BULLISH', 101.0)",PASS
+LSB-X2,Extreme,harness,"no_lookahead_violations == []",PASS
+LSB-X2,Extreme,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-X3,Extreme,swings,"('low', 98.0, 4, 6)",PASS
+LSB-X3,Extreme,swings,"('high', 109.0, 7, 9)",PASS
+LSB-X3,Extreme,swings,"('low', 101.0, 10, 12)",PASS
+LSB-X3,Extreme,swings,"('high', 116.0, 14, 16)",PASS
+LSB-X3,Extreme,swings,"('low', 99.5, 17, 19)",PASS
+LSB-X3,Extreme,swings_no_unexpected,"no extra swings",PASS
+LSB-X3,Extreme,bos,"('bullish', 12, 109.0)",PASS
+LSB-X3,Extreme,bos,"('bearish', 17, 101.0)",PASS
+LSB-X3,Extreme,bos_no_unexpected,"no extra bos",PASS
+LSB-X3,Extreme,structure_events,"('ESTABLISHED', 16, 'BULLISH', 101.0)",PASS
+LSB-X3,Extreme,structure_events,"('CHOCH', 17, 'TRANSITION(bearish)', 101.0)",PASS
+LSB-X3,Extreme,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-X3,Extreme,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-X3,Extreme,checkpoints,"c17 ('TRANSITION(bearish)', None)",PASS
+LSB-X3,Extreme,harness,"no_lookahead_violations == []",PASS
+LSB-X3,Extreme,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-X4,Extreme,swings,"('low', 98.0, 4, 6)",PASS
+LSB-X4,Extreme,swings,"('high', 109.0, 7, 9)",PASS
+LSB-X4,Extreme,swings,"('low', 101.0, 10, 12)",PASS
+LSB-X4,Extreme,swings,"('high', 116.0, 14, 16)",PASS
+LSB-X4,Extreme,swings,"('low', 96.0, 21, 23)",PASS
+LSB-X4,Extreme,swings_no_unexpected,"no extra swings",PASS
+LSB-X4,Extreme,bos,"('bullish', 12, 109.0)",PASS
+LSB-X4,Extreme,bos,"('bearish', 19, 101.0)",PASS
+LSB-X4,Extreme,bos,"('bearish', 24, 96.0)",PASS
+LSB-X4,Extreme,bos_no_unexpected,"no extra bos",PASS
+LSB-X4,Extreme,structure_events,"('ESTABLISHED', 16, 'BULLISH', 101.0)",PASS
+LSB-X4,Extreme,structure_events,"('CHOCH', 19, 'TRANSITION(bearish)', 101.0)",PASS
+LSB-X4,Extreme,structure_events,"('REVERSAL_CONFIRMED', 24, 'BEARISH', None)",PASS
+LSB-X4,Extreme,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-X4,Extreme,wick_only,"(17, 101.0)",PASS
+LSB-X4,Extreme,wick_only,"(18, 101.0)",PASS
+LSB-X4,Extreme,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-X4,Extreme,checkpoints,"c17 ('BULLISH', 101.0)",PASS
+LSB-X4,Extreme,checkpoints,"c18 ('BULLISH', 101.0)",PASS
+LSB-X4,Extreme,checkpoints,"c19 ('TRANSITION(bearish)', None)",PASS
+LSB-X4,Extreme,checkpoints,"c20 ('TRANSITION(bearish)', None)",PASS
+LSB-X4,Extreme,checkpoints,"c21 ('TRANSITION(bearish)', None)",PASS
+LSB-X4,Extreme,checkpoints,"c22 ('TRANSITION(bearish)', None)",PASS
+LSB-X4,Extreme,checkpoints,"c23 ('TRANSITION(bearish)', None)",PASS
+LSB-X4,Extreme,checkpoints,"c24 ('BEARISH', None)",PASS
+LSB-X4,Extreme,harness,"no_lookahead_violations == []",PASS
+LSB-X4,Extreme,harness,"replay_audit ok (batch / stream parity)",PASS
+LSB-X5,Extreme,swings,"('high', 102.0, 4, 6)",PASS
+LSB-X5,Extreme,swings,"('low', 91.0, 7, 9)",PASS
+LSB-X5,Extreme,swings,"('high', 99.0, 10, 12)",PASS
+LSB-X5,Extreme,swings,"('low', 84.0, 14, 16)",PASS
+LSB-X5,Extreme,swings,"('high', 104.0, 21, 23)",PASS
+LSB-X5,Extreme,swings_no_unexpected,"no extra swings",PASS
+LSB-X5,Extreme,bos,"('bearish', 12, 91.0)",PASS
+LSB-X5,Extreme,bos,"('bullish', 19, 99.0)",PASS
+LSB-X5,Extreme,bos,"('bullish', 24, 104.0)",PASS
+LSB-X5,Extreme,bos_no_unexpected,"no extra bos",PASS
+LSB-X5,Extreme,structure_events,"('ESTABLISHED', 16, 'BEARISH', 99.0)",PASS
+LSB-X5,Extreme,structure_events,"('CHOCH', 19, 'TRANSITION(bullish)', 99.0)",PASS
+LSB-X5,Extreme,structure_events,"('REVERSAL_CONFIRMED', 24, 'BULLISH', None)",PASS
+LSB-X5,Extreme,structure_events_no_unexpected,"no extra structure_events",PASS
+LSB-X5,Extreme,wick_only,"(17, 99.0)",PASS
+LSB-X5,Extreme,wick_only,"(18, 99.0)",PASS
+LSB-X5,Extreme,wick_only_no_unexpected,"no extra wick_only",PASS
+LSB-X5,Extreme,checkpoints,"c17 ('BEARISH', 99.0)",PASS
+LSB-X5,Extreme,checkpoints,"c18 ('BEARISH', 99.0)",PASS
+LSB-X5,Extreme,checkpoints,"c19 ('TRANSITION(bullish)', None)",PASS
+LSB-X5,Extreme,checkpoints,"c20 ('TRANSITION(bullish)', None)",PASS
+LSB-X5,Extreme,checkpoints,"c21 ('TRANSITION(bullish)', None)",PASS
+LSB-X5,Extreme,checkpoints,"c22 ('TRANSITION(bullish)', None)",PASS
+LSB-X5,Extreme,checkpoints,"c23 ('TRANSITION(bullish)', None)",PASS
+LSB-X5,Extreme,checkpoints,"c24 ('BULLISH', None)",PASS
+LSB-X5,Extreme,harness,"no_lookahead_violations == []",PASS
+LSB-X5,Extreme,harness,"replay_audit ok (batch / stream parity)",PASS

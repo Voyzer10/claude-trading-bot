@@ -1,0 +1,121 @@
+diff -ruN a/research/v6/specs/V6_TRADING_SPEC_v0.2.md b/research/v6/specs/V6_TRADING_SPEC_v0.2.md
+--- a/research/v6/specs/V6_TRADING_SPEC_v0.2.md	2026-11-23 15:19:14.488452910 +0000
++++ b/research/v6/specs/V6_TRADING_SPEC_v0.2.md	2026-11-23 15:19:14.490214037 +0000
+@@ -1779,6 +1779,10 @@
+   low). Group records follow their SWEEP events; new pools come last.
+ - In the candidate link, structure events at close k are applied before the sweep groups of k. An opposite CHoCH or BOS
+   on the same candle therefore ends the eligibility first (conservative).
++- MB-3 terminator on a tie: when an opposite BOS and an opposite CHoCH occur at the same close, the terminating event
++  (`closed_by`, `ended_by`) is taken in the canonical D5 order (PHASE1_2_DECISIONS D5: (1) BOS evaluation, (2) CHoCH
++  evaluation, (3) state update): the opposite BOS first (BOS-stream emission order), then the opposite CHoCH. This only
++  orders events MB-3 already names; it does not change which events end eligibility.
+ - A candidate is keyed by (BOS id, group id). No setup id is created: CK-2's `setup:<sweep_group_id>:<pattern_id>` needs
+   a pattern id (Module C).
+ - All candidate bookkeeping is per BOS and per candidate key; nothing is selected globally. EXPIRED, NO_TRADE and
+diff -ruN a/scanner_v6/liquidity/setup_sweep.py b/scanner_v6/liquidity/setup_sweep.py
+--- a/scanner_v6/liquidity/setup_sweep.py	2026-11-23 15:19:14.470154359 +0000
++++ b/scanner_v6/liquidity/setup_sweep.py	2026-11-23 15:19:14.471630041 +0000
+@@ -14,7 +14,9 @@
+                 eligibility; r6 one setup per sweep group (one candidate per group by construction).
+   CK-18         an opposite-direction CHoCH or BOS before entry invalidates the pending candidate (INVALIDATED).
+   Same-candle order (implementation, conservative): structure events at close k are applied first, so an opposite
+-  CHoCH / BOS at k ends the eligibility before sweep groups at k are considered.
++  CHoCH / BOS at k ends the eligibility before sweep groups at k are considered. When an opposite BOS and an opposite
++  CHoCH occur at the same close, the terminator (closed_by / ended_by) is chosen in canonical D5 order: the BOS
++  (D5 step 1) before the CHoCH (D5 step 2); see terminating_events().
+ Only sweep GROUPS qualify (LQ-14 / OQ-5 speak of sweep groups). Whether REPEAT_SWEEP or TAKEN belong to a group is OPEN
+ (OQ-12), so they never start a candidate.
+ NOT here (later modules): pattern window, EXPIRED (CK-18 needs patterns), confirmation, entry, NO_TRADE. Those modules
+@@ -46,6 +48,14 @@
+ REQUIRED_SWEEP_SIDE = {BUY: SSL, SELL: BSL}                           # Section 3, CK-16
+ 
+ 
++def terminating_events(direction: Direction, bos_now, sev) -> list:
++    """Opposite-direction events at one close that end a BOS's eligibility (17.S MB-3), in canonical D5 order
++    (PHASE1_2_DECISIONS D5: (1) BOS evaluation, (2) CHoCH evaluation, (3) state update). Opposite BOS first, in the
++    order the BOS stream emitted them, then opposite CHoCHBreaks in emission order. The first one is the terminator."""
++    return [b for b in bos_now if b.direction is not direction] + \
++           [e for e in sev if isinstance(e, CHoCHBreak) and e.direction is not direction]
++
++
+ @dataclass(frozen=True)
+ class SweepCandidate:
+     bos_id: str
+@@ -143,8 +153,7 @@
+         bos_now = [b for b in self.structure.bos_events if b.index == c.index]
+         cur = self.current
+         if cur is not None:                                           # OQ-5 r5 / CK-18 / 17.S termination events
+-            opp = [e for e in sev if isinstance(e, CHoCHBreak) and e.direction is not cur.direction] + \
+-                  [b for b in bos_now if b.direction is not cur.direction]
++            opp = terminating_events(cur.direction, bos_now, sev)
+             if opp:
+                 cur.eligible, cur.ended_index, cur.ended_by = False, c.index, opp[0].id
+                 p = self.pending_for(cur.bos_id)
+diff -ruN a/tests/scanner_v6/test_liquidity.py b/tests/scanner_v6/test_liquidity.py
+--- a/tests/scanner_v6/test_liquidity.py	2026-11-23 15:19:14.479434054 +0000
++++ b/tests/scanner_v6/test_liquidity.py	2026-11-23 15:19:14.481034523 +0000
+@@ -519,6 +519,64 @@
+         assert all(c.index > 21 for c in st.candidates)
+ 
+ 
++# ---------------------------------------------------------------- D5 terminator order (23 Nov 2026)
++# PHASE1_2 D5: at close k, (1) BOS evaluation, (2) CHoCH evaluation, (3) state update. An opposite BOS and an opposite
++# CHoCH on the same candle: the BOS is the terminating event (closed_by / ended_by).
++def _run_collect(rows):
++    from scanner_v6.structure.choch import CHoCHBreak
++    st = SetupSweepStream()
++    chochs = {}
++    for c in series(rows):
++        sev, _, _ = st.on_candle(c)
++        chochs[c.index] = [e for e in sev if isinstance(e, CHoCHBreak)]
++    return st, chochs
++
++
++def test_same_candle_opposite_bos_and_choch_terminator_follows_d5_mirrored():
++    for rows, setup, opp in ((SR3 + AFTER, SELL, "bullish"), (mirror(SR3 + AFTER), BUY, "bearish")):
++        st, chochs = _run_collect(rows)
++        bos28 = [b for b in st.structure.bos_events if b.index == 28]
++        assert [b.direction.value for b in bos28] == [opp] and [e.direction.value for e in chochs[28]] == [opp]
++        c = st.candidates[0]
++        assert (c.setup_side, c.index, c.status, c.closed_index) == (setup, 24, INVALIDATED, 28)
++        assert c.closed_by == bos28[0].id and c.closed_by.startswith("bos:%s:" % opp)       # BOS (D5 step 1) first
++        assert c.closed_by != chochs[28][0].id
++        s = st.bos_states[c.bos_id]
++        assert (s.eligible, s.ended_index, s.ended_by) == (False, 28, bos28[0].id) and st.current is None
++        ended = [d for d in st.diagnostics if d.code == "BOS_ELIGIBILITY_ENDED"]
++        assert [(d.index, d.bos_id) for d in ended] == [(28, c.bos_id)] and ended[0].detail.startswith(bos28[0].id)
++        assert len([x for x in st.candidates if x.status == PENDING]) == 0                 # one-pending invariant kept
++
++
++def test_terminating_events_order_is_d5_regardless_of_input_order():
++    from scanner_v6.liquidity.setup_sweep import terminating_events
++    st, chochs = _run_collect(SR3 + AFTER)
++    bos28 = [b for b in st.structure.bos_events if b.index == 28]
++    ch28 = chochs[28]
++    bear = st.bos_states[st.candidates[0].bos_id].direction
++    sev_choch_first = list(ch28) + [object()]                                        # CHoCH listed first on purpose
++    assert [e.id for e in terminating_events(bear, bos28, sev_choch_first)] == [bos28[0].id, ch28[0].id]
++    assert [e.id for e in terminating_events(bear, [], ch28)] == [ch28[0].id]        # CHoCH alone
++    assert [e.id for e in terminating_events(bear, bos28, [])] == [bos28[0].id]      # BOS alone
++    assert terminating_events(bos28[0].direction, bos28, ch28) == []                 # same direction: nothing
++
++
++def test_terminator_alone_cases_and_continuation_exact_ids_mirrored():
++    for rows_ch, rows_bos, rows_cont, opp in ((CHOCH_END, BOS_END, CONT, "bullish"),
++                                              (mirror(CHOCH_END), mirror(BOS_END), mirror(CONT), "bearish")):
++        st, chochs = _run_collect(rows_ch)                                           # opposite CHoCH alone at k28
++        assert not [b for b in st.structure.bos_events if b.index == 28] and len(chochs[28]) == 1
++        assert st.candidates[0].closed_by == chochs[28][0].id == st.bos_states[st.candidates[0].bos_id].ended_by
++        st, chochs = _run_collect(rows_bos)                                          # opposite BOS alone at k30
++        k30 = [b for b in st.structure.bos_events if b.index == 30]
++        assert chochs[30] == [] and [b.direction.value for b in k30] == [opp]
++        assert st.candidates[0].closed_by == k30[0].id == st.bos_states[st.candidates[0].bos_id].ended_by
++        st, chochs = _run_collect(rows_cont)                                         # continuation BOS at k25
++        assert [b.direction.value for b in st.structure.bos_events if b.index == 25] != [opp]
++        assert st.current is not None and st.current.ended_by is None
++        assert [(c.index, c.status) for c in st.candidates] == [(26, PENDING)]
++
++
+ def test_new_lifecycle_prefix_replay_and_stream_batch_parity():
+     for rows in (CONT, CHOCH_END, BOS_END):
+         for r in (rows, mirror(rows)):

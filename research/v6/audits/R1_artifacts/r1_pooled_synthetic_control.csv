@@ -1,0 +1,4 @@
+timeframe,label,series,S_clean,unprotected_pct,s1_legs_affected_pct_mean
+5m,SYNTHETIC CONTROL (not market data),18,56910,39.27,1.0
+15m,SYNTHETIC CONTROL (not market data),18,18811,43.69,0.38
+1h,SYNTHETIC CONTROL (not market data),18,3663,49.41,0.16
