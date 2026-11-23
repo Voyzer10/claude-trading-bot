@@ -1,0 +1,44 @@
+{
+ "dataset": "v6_volume1_swing_oracle_addendum",
+ "status": "DRAFT, pending approval. Additions only: no expectation in synthetic_volume1.draft.json is changed.",
+ "profile": "APPROVED baseline: fixed window L2/R2, strict comparison, equal levels unresolved (no cluster), dual pivots allowed",
+ "why": "The draft listed SP-A swing expectations only for the SW / MS cases (and BOS14). The BOS cases listed breaks only. These are the hand-derived SP-A swings for those cases (from the zig-zag pivot design points and the appended bars), so every one of the 39 cases has a swing oracle. Plus one new dual-pivot fixture.",
+ "swing_expected": {
+  "BOS01": [["low", 2, 4, 98.8], ["high", 6, 8, 107.2], ["low", 10, 12, 101.8], ["high", 14, 16, 110.2], ["low", 18, 20, 103.8]],
+  "BOS02": [["high", 2, 4, 111.2], ["low", 6, 8, 102.8], ["high", 10, 12, 108.2], ["low", 14, 16, 99.8], ["high", 18, 20, 106.2]],
+  "BOS03": [["low", 2, 4, 98.8], ["high", 6, 8, 107.2], ["low", 10, 12, 101.8], ["high", 14, 16, 110.2], ["low", 18, 20, 103.8], ["high", 21, 23, 110.6]],
+  "BOS04": [["low", 2, 4, 98.8], ["high", 6, 8, 107.2], ["low", 10, 12, 101.8], ["high", 14, 16, 110.2], ["low", 18, 20, 103.8]],
+  "BOS05": [["low", 2, 4, 98.8], ["high", 6, 8, 107.2], ["low", 10, 12, 101.8], ["high", 14, 16, 110.2], ["low", 18, 20, 103.8], ["high", 21, 23, 110.5]],
+  "BOS06": [["low", 2, 4, 98.8], ["high", 6, 8, 107.2], ["low", 10, 12, 101.8], ["high", 14, 16, 110.2], ["low", 18, 20, 103.8], ["high", 21, 23, 110.5]],
+  "BOS07": [["low", 2, 4, 98.8], ["high", 6, 8, 107.2], ["low", 10, 12, 101.8], ["high", 14, 16, 110.2], ["low", 18, 20, 103.8]],
+  "BOS08": [["low", 2, 4, 98.8], ["high", 6, 8, 107.2], ["low", 10, 12, 101.8], ["high", 14, 16, 110.2], ["low", 18, 20, 103.8]],
+  "BOS09": [["low", 2, 4, 98.8], ["high", 6, 8, 107.2], ["low", 10, 12, 101.8]],
+  "BOS10": [["low", 2, 4, 98.8], ["high", 6, 8, 107.2], ["low", 10, 12, 101.8], ["high", 14, 16, 110.2], ["low", 18, 20, 103.8], ["high", 20, 22, 108.2]],
+  "BOS11": [["low", 2, 4, 98.8], ["high", 6, 8, 107.2], ["low", 10, 12, 101.8], ["high", 14, 16, 110.2], ["low", 18, 20, 103.8], ["high", 24, 26, 113.2], ["low", 28, 30, 107.3]],
+  "BOS12": [["high", 2, 4, 110.7], ["low", 6, 8, 100.8], ["high", 10, 12, 106.7], ["low", 14, 16, 98.8], ["high", 18, 20, 109.2]],
+  "BOS13": [["low", 2, 4, 98.8], ["high", 6, 8, 107.2], ["low", 10, 12, 101.8], ["high", 14, 16, 110.2], ["low", 18, 20, 103.8]],
+  "BOS15": [["high", 2, 4, 0.30000000000000004]]
+ },
+ "equal_level_expected": {
+  "SW04": [["high", 2, [3]], ["high", 3, [2]]],
+  "SW06": [["low", 2, [3]], ["low", 3, [2]]],
+  "SW13": [["high", 2, [3, 4]], ["high", 3, [2, 4]], ["high", 4, [2, 3]]],
+  "SW14": [["high", 2, [4]], ["high", 4, [2]]],
+  "BOS13": [["high", 21, [22]], ["high", 22, [21]]]
+ },
+ "new_cases": [
+  {"case_id": "SW16", "group": "swing_outside",
+   "description": "Outside candle at i=2 that is a swing HIGH only (bar 3 makes a lower low), and bar 3 is an independent swing LOW. SW-005: each kind is judged independently.",
+   "tick_size": 0.01,
+   "candles": [
+    {"i": 0, "t": "2026-01-05T09:00:00Z", "o": 10, "h": 11, "l": 9, "c": 10.5},
+    {"i": 1, "t": "2026-01-05T09:05:00Z", "o": 10.5, "h": 11.5, "l": 9.5, "c": 11},
+    {"i": 2, "t": "2026-01-05T09:10:00Z", "o": 11, "h": 13, "l": 8, "c": 9},
+    {"i": 3, "t": "2026-01-05T09:15:00Z", "o": 9, "h": 12, "l": 7.5, "c": 11.5},
+    {"i": 4, "t": "2026-01-05T09:20:00Z", "o": 11.5, "h": 12.5, "l": 9, "c": 10},
+    {"i": 5, "t": "2026-01-05T09:25:00Z", "o": 10, "h": 11, "l": 9.5, "c": 10.5}],
+   "expected_swings": [["high", 2, 4, 13], ["low", 3, 5, 7.5]],
+   "expected_non_events": ["no swing low at 2 (bar 3's low 7.5 is lower)", "no swing high at 3 (bar 2's high 13 is higher)"],
+   "rationale": "Hand check: bar 2 high 13 > 11, 11.5 (left) and 12, 12.5 (right); bar 2 low 8 is NOT below bar 3's 7.5. Bar 3 low 7.5 < 9.5, 8 (left) and 9, 9.5 (right)."}
+ ]
+}

@@ -3,7 +3,7 @@
 Branch: `research/v6-smc-scanner` (the only V6 branch). Research only: **PAPER ONLY, no orders, no broker, not wired
 to the live runner.**
 
-Status: **foundation only.** The data models, candle handling and the no-look-ahead harness exist. **No trading rule
+Status (22 Nov 2026): swings, BOS, protected swings and CHoCH are implemented **for the approved rules only** (see research/v6/specs/choch_v0_9/PHASE1_2_DECISIONS.md). Earlier status: **foundation only.** The data models, candle handling and the no-look-ahead harness exist. **No trading rule
 is implemented**: no swing, BOS, CHoCH, pool, sweep, reclaim, pattern, confirmation, stop, target or trade-management
 logic.
 
@@ -38,11 +38,11 @@ The engine's `no_lookahead_violations(detector, series)` replays a detector cand
 | `config.py` | Neutral run settings; `PAPER_ONLY = True`, `PLACES_ORDERS = False` (constants) | done |
 | `models.py` | `EventStamp`, `Event`, `SwingPoint`, `StructureEvent`, `BOSEvent`, `CHoCHEvent`, `LiquidityPool`, `SweepEvent`, `ReclaimEvent`; integrity checks only | done |
 | `data/candle_models.py` | `Candle`, `CandleSeries`, loading from the repo's row and chart-JSON shapes, UTC timestamps | done |
-| `engine.py` | Detector contract, `run()`, the no-look-ahead harness | done (no detectors) |
-| `structure/swings.py` | Swing highs / lows | not started |
-| `structure/protected_levels.py` | Protected highs / lows | not started |
-| `structure/bos.py` | Break of structure | not started |
-| `structure/choch.py` | Change of character | not started |
+| `engine.py` | Detector contract, `run()`, the one-way `no_lookahead_violations()`, and the G12 oracle `replay_audit()` (batch + streaming: premature / early / late / missing / duplicate / unexpected / repaint / parity) | done |
+| `structure/swings.py` | Swing highs / lows, **approved baseline only**: fixed window L2/R2 (configurable), strict, equal levels unresolved (diagnostic only), dual pivots allowed; batch `detect_swings` + streaming `SwingStream` | done (21 Nov 2026) |
+| `structure/protected_levels.py` | Protected swings, **D2 P-B**: the BOS-origin swing becomes protected only after its own L2/R2 confirmation; until then the previous one is kept; A5 HL / LH qualification | done (22 Nov 2026) |
+| `structure/bos.py` | BOS, **approved rules only**: BOS-001…005, Option A, D4 latest-confirmed reference (no latest-unbroken fallback), D5 order; batch `detect_bos` + streaming `BOSStream` | done (22 Nov 2026) |
+| `structure/choch.py` | Structure state + CHoCH: A1–A10, D1 (CHoCH → TRANSITION → a separate later BOS confirms), D3 (X1 / COMPLEX guard), D5. **Not final:** O4, O7, O8, O9, CHU04, CHU05 are diagnostics only. Batch `analyze_structure` / `detect_structure` + streaming `StructureStream` | done for the approved rules (22 Nov 2026) |
 | `liquidity/liquidity_pools.py` | Where resting liquidity sits | not started |
 | `liquidity/sweep.py` | A pool taken out | not started |
 | `liquidity/reclaim.py` | Back across a swept level | not started |
@@ -94,5 +94,13 @@ Connecting V6 to paper trading is a separate decision, after the research eviden
 ```
 python tests/scanner_v6/test_models.py
 python tests/scanner_v6/test_no_lookahead.py
+python tests/scanner_v6/test_replay_audit.py      # G12 harness
+python tests/scanner_v6/test_swings.py            # swing unit tests
+python tests/scanner_v6/test_swing_fixtures.py    # all Volume-1 fixtures (-v for per-case lines)
+python tests/scanner_v6/test_swing_mutants.py     # faulty detectors must fail
+python tests/scanner_v6/test_regression_medium_bos.py   # permanent regression: the exam-chart BOS mistakes (MED01/MED02 = Easy charts 1/2)
+python tests/scanner_v6/test_bos.py               # BOS module vs Volume-1 drafts, regression, parity
+python tests/scanner_v6/test_choch.py             # CHoCH / structure vs CHD01-CHD16 (approved D1-D5)
+python research/v6/experiments/medium_bos_retest.py grade   # blind visual retest (reads PNG pixels only)
 python -m pytest -q tests/scanner_v6          # same tests under pytest
 ```

@@ -1,0 +1,16 @@
+{
+ "retest_1.png": {
+  "price_a": 98.0,
+  "pixel_row_a": 868.3048023897063,
+  "price_b": 114.0,
+  "pixel_row_b": 102.87792330473985,
+  "price_tick": 0.5
+ },
+ "retest_2.png": {
+  "price_a": 114.0,
+  "pixel_row_a": 815.9806993272578,
+  "price_b": 128.0,
+  "pixel_row_b": 104.3728976779521,
+  "price_tick": 0.5
+ }
+}
