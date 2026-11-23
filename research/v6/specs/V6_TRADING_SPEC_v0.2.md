@@ -363,8 +363,8 @@ asserts that text. These labels are **not fixed**; changing them needs a separat
 | Decisions CK-1…CK-10 (Section 16.L) | **OWNER APPROVED — CONVERSATION-LEVEL — 23 NOVEMBER 2026** |
 | Decisions CK-11…CK-13 (Section 16.M) | **OWNER APPROVED — DOCUMENTED, NOT IMPLEMENTED** (conversation-level, 23 Nov 2026) |
 | CK-11 overlap clarification (16.M) and decision CK-14 (Section 16.N) | **OWNER APPROVED — DOCUMENTED, NOT IMPLEMENTED** (conversation-level, 23 Nov 2026) |
-| Implementation | **NOT IMPLEMENTED** (`scanner_v6/entry/candlesticks.py`, `scanner_v6/entry/confirmation.py` are stubs) |
-| Tests | **NOT TESTED** (no candlestick test exists in `tests/scanner_v6/`) |
+| Implementation | Detection (16.A–16.E, 16.H DETECTED events) **IMPLEMENTED** 24 Nov 2026 in `scanner_v6/entry/candlesticks.py` (17.T). Confirmation, expiry and invalidation (16.F, 16.G) **NOT IMPLEMENTED** (`scanner_v6/entry/confirmation.py` is a stub) |
+| Tests | Detection **TESTED** (`tests/scanner_v6/test_candlesticks.py`, 17.T). Confirmation rows of 16.I **NOT TESTED** |
 | Authorization to implement | **None.** Approval of these rules does not authorize implementation (Section 15) |
 
 The thresholds below are the approved **initial configurable V6 baseline**. They are not claimed to be universally
@@ -1804,3 +1804,70 @@ and the liquidity register, CK-15…CK-18, OQ-4, OQ-5, SR-4, MB-1…MB-4) and th
 **Tests:** `tests/scanner_v6/test_liquidity.py`.
 **Status:** IMPLEMENTED; TESTED (23 Nov 2026). MB-1…MB-4 recorded and implemented on the same day, with the setup
 lifecycle made per-BOS and per-candidate. Not committed.
+
+### 17.T Module C — candlestick formation detection — IMPLEMENTED FROM APPROVED RULES (24 Nov 2026)
+
+Scope: detection only (16.A–16.E, 16.H with status `DETECTED`). Not implemented here: confirmation, expiry and
+invalidation (16.F, 16.G; Module D), setup lifecycle (CK-10), sweep-to-pattern window (CS-9, CK-6, CK-7, CK-11),
+entry, stop, target, risk, broker. No rule, threshold, bias or id format was changed.
+
+| Rule | Implementation |
+|---|---|
+| 16.B geometry | `geometry()`: R, B, UW, LW and the four ratios; zero range is **R == 0 exactly** → `UNSCORABLE` / `ZERO_RANGE`, ratios `None`, no division. A positive R smaller than the epsilon is a valid, scored candle |
+| 16.C / 16.D | the 10 families with the baseline thresholds in `CandlestickConfig` (configurable per instrument) |
+| CS-1, CK-4 | Inverted Hammer, Shooting Star, Hammer, Hanging Man need the preceding trend; otherwise label `UNCLASSIFIED_SHAPE`, `context_qualified = False` |
+| CS-2 | every valid family is emitted; no priority or suppression (Dragonfly Doji + Hammer + Classic Doji can share a candle) |
+| CS-3, CK-5 | `bias` BULLISH_BIAS / BEARISH_BIAS / NEUTRAL; `direction` is the CK-3 term of the bias; neither is a trade instruction |
+| CS-4 | a wick is present only when **wick > 0, compared exactly** (no epsilon: the tolerance never creates or removes a wick) |
+| CS-5, CK-1, CK-3 | context from the 5 + 5 candles before the pattern's first candle (pattern candles excluded); threshold 2 × TickSize; < 10 candles or no tick size → `UNKNOWN` |
+| CS-6, CS-8 | Engulfing with inclusive body boundaries, Doji neither bullish nor bearish, no trend condition; `pattern_high` / `pattern_low` = full pattern range |
+| CK-1, CK-8, IR-3 | epsilon = TickSize × 0.000001 from the instrument's `MarketDataConfig`, applied to the threshold, candle-colour, Engulfing body-boundary, Star midpoint and (UQ-C3) trend-threshold comparisons; **not** to wick presence or zero range; missing tick size → every candle `UNSCORABLE` (`MISSING_TICK_SIZE`), no fallback |
+| CK-2, OQ-14 | `pattern:<instrument>:<timeframe>:<start_candle>:<pattern_type>`, family token only, zero-based; duplicates raise |
+| CS-10 | events carry status `DETECTED` only; `stamp.index` = start candle, `stamp.confirmed_index` = end (detection) candle |
+
+API: `CandlestickStream(instrument, timeframe, market: MarketDataConfig, config=CandlestickConfig()).on_candle(c)` returns
+the `PatternEvent`s whose last candle is `c`; `detect_candlestick_patterns(series, …)` is the same stream run in batch.
+`EvaluationRecord`s list every family that could not be evaluated (`ZERO_RANGE`, `ZERO_RANGE_IN_WINDOW`,
+`MISSING_TICK_SIZE`). Within one candle the events follow the 16.A family order. `<instrument>` and `<timeframe>` are
+passed by the caller (canonical identifier set still OPEN, B-7); a `:` is rejected.
+
+Delegated decisions UQ-C1…UQ-C4 — **OWNER APPROVED — DELEGATED DECISION — IMPLEMENTED (24 Nov 2026)**. They fill
+gaps in 16.D / CK-4 / CK-5 / CK-8; no approved pattern definition or threshold changes.
+- **UQ-C1 — Inverted Hammer / Shooting Star share one shape.** DOWNTREND → `INVERTED_HAMMER`; UPTREND → `SHOOTING_STAR`;
+  SIDEWAYS / UNKNOWN → **both** upper-shape family candidates are retained, each with label `UNCLASSIFIED_SHAPE` and its
+  own family bias (CK-4 "bias preserved"; OQ-14 rule 4 covered only `HAMMER_HANGING_MAN`).
+- **UQ-C2 — Hammer / Hanging Man unclassified bias.** `HAMMER_HANGING_MAN` with `UNCLASSIFIED_SHAPE` has bias
+  `UNDETERMINED` (the family has two approved biases).
+- **UQ-C3 — trend neutral-threshold epsilon.** The CK-1 epsilon applies to the CS-5 comparison: D > threshold + eps →
+  UPTREND, D < −threshold − eps → DOWNTREND, else SIDEWAYS. (Without it a decimal D exactly equal to 2 × TickSize is
+  classified by floating-point noise; 34 such windows in the randomized oracle test.)
+- **UQ-C4 — Engulfing bias.** Bullish Engulfing → BULLISH_BIAS, Bearish Engulfing → BEARISH_BIAS (direction from 16.D.7;
+  CK-5 has no Engulfing row).
+
+Implementation choice (not a trading rule): thresholds are compared in price units (e.g. B ≤ 0.10 × R + eps), which
+equals BodyRatio ≤ 0.10 without dividing.
+
+Correction (24 Nov 2026, owner review): the first implementation compared wick presence and zero range with the
+epsilon (wick > eps, R > eps). Corrected to the exact CS-4 / 16.B conditions (wick > 0, R == 0); every other epsilon
+comparison is unchanged. Consequence noted, not changed: a positive range below the epsilon is scored, and every
+inclusive ratio threshold is then satisfied within the tolerance (such candles do not occur on a real tick grid).
+
+Final review (24 Nov 2026): code unchanged; three tests added that assert the EXACT event sets (type, label, bias,
+status, context, qualification), not containment: (1) sub-epsilon upper / lower wick present, exact-zero upper / lower
+wick absent, exact zero range `UNSCORABLE` / `ZERO_RANGE` for every single-candle family (and `ZERO_RANGE_IN_WINDOW`
+for Engulfing), positive sub-epsilon range scored; (2) normal tick-grid range and wicks in both directions; (3) CK-1 /
+CK-8 epsilon still applied, inside (5e-9) vs outside (2e-8) the tolerance, to the Doji threshold, both candle colours,
+the Engulfing body boundary and the Star midpoint. The exact set pins the noted consequence: a positive range of
+5e-9 at tick 0.01 yields Gravestone, Long-legged and Dragonfly Doji plus the unclassified upper and lower shapes (no
+Classic Doji, one wick is exactly 0). Mutation check for these tests: 10 of 10 mutants caught (epsilon on wick presence,
+epsilon on zero range, zero wick counted as present, epsilon removed, epsilon removed from each candle colour /
+Engulfing boundary / Star midpoint / Doji threshold, unclassified Hammer bias changed).
+
+Tests: `tests/scanner_v6/test_candlesticks.py` (24 tests): hand-derived positive / negative / boundary fixtures for all
+10 families with mirrored variants, context UPTREND / DOWNTREND / SIDEWAYS / UNKNOWN, exact-binary and decimal
+threshold boundaries, pattern-candle exclusion, zero range / zero body / zero wick, missing tick size, invalid OHLC,
+configurable thresholds, overlap and ids, DETECTED-only, determinism, stream / batch parity, prefix replay,
+future-perturbation no-look-ahead, OHLC unchanged, adversarial sub-epsilon wick / range and exact zero wick /
+range cases, and a randomized exact-rational oracle (Fractions, written from the
+spec text) over 40 × 250 candles (9 765 expected patterns, every family). Mutation check: 14 of 14 mutants caught (including epsilon on wick presence and on zero range).
+**Status:** IMPLEMENTED; TESTED (24 Nov 2026). Not committed.
