@@ -3,16 +3,36 @@
  "book_id": "US",
  "starting_equity": "1000",
  "timeframe": "5m",
- "session": {"calendar": "NYSE"},
+ "session": {
+  "calendar": "NYSE"
+ },
  "tick_size": 0.01,
  "half_spread_ticks": 1,
  "gap_policy": "interrupt",
  "execution": {
-  "entry_ticks": 1, "stop_exit_ticks": 1, "target_exit_ticks": 0, "max_gap_ticks": 50,
-  "sl_buffer_ticks": 2, "tp_offset_ticks": 1,
-  "contract_multiplier": "1", "lot_size": "1", "quantity_step": "1", "min_quantity": "1",
-  "fee_schedule": {"rate": "0.0001", "per_unit": "0", "per_order": "0", "rounding_places": 2,
-                   "rounding_mode": "ROUND_HALF_UP", "source": "SYNTHETIC test assumption"},
-  "price_rounding_mode": "ROUND_HALF_UP", "initial_margin_rate": "1", "mtm_exit_slippage_ticks": 2
- }
+  "entry_ticks": 1,
+  "stop_exit_ticks": 1,
+  "target_exit_ticks": 0,
+  "max_gap_ticks": 50,
+  "sl_buffer_ticks": 2,
+  "tp_offset_ticks": 1,
+  "contract_multiplier": "1",
+  "lot_size": "0.01",
+  "quantity_step": "0.01",
+  "min_quantity": "0.01",
+  "fee_schedule": {
+   "model": "us_equity_sell_side_v1",
+   "commission_per_order": "0",
+   "commission_source": "SYNTHETIC test assumption (Alpaca publishes $0 commission for API stock trades)"
+  },
+  "price_rounding_mode": "ROUND_HALF_UP",
+  "initial_margin_rate": "1",
+  "mtm_exit_slippage_ticks": 2,
+  "eod_flatten_buffer": 5,
+  "entry_cutoff_buffer": 15,
+  "short_margin_rate": "1",
+  "short_quantity_step": "0.01",
+  "short_min_quantity": "0.01"
+ },
+ "shorts_enabled": true
 }

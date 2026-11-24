@@ -2,7 +2,7 @@
 
 // V6 dashboard (PAPER TRADING). Fully independent of V4: it imports no V4 component, reads only /api/py/v6/*,
 // and shows NOT CONNECTED / NOT ACTIVE / NOT READY states instead of numbers whenever the backend has none.
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { errText, v6Get } from "@/lib/v6/api";
 import type { BookDetail, BookStatus, DataHealth, Performance, Signal, Status, Trade } from "@/lib/v6/types";
 import VersionSwitch from "@/components/v6/VersionSwitch";
@@ -67,6 +67,12 @@ function BookCard({ b }: { b: BookStatus }) {
             <div>Fees</div><div>{m(s.fees_total, b.currency)}</div>
             <div>Open / closed</div><div className="mono">{s.open_positions} / {s.closed_trades}</div>
             <div>Win rate</div><div>{s.win_rate_pct === null ? NA : m(`${s.win_rate_pct}%`)}</div>
+            <div>Open position</div><div>{s.open_position_side ?? NA}</div>
+            {Object.entries(s.by_side ?? {}).map(([k, v]) => (
+              <Fragment key={k}>
+                <div>{k} realized ({v.closed_trades} trades, {v.eod_flatten} EOD)</div><div>{m(v.realized_pnl, b.currency)}</div>
+              </Fragment>
+            ))}
             <div>Max drawdown</div><div>{m(`${s.max_drawdown_pct}%`)}</div>
           </>
         ) : (
@@ -148,6 +154,12 @@ export default function V6Dashboard() {
                     <div key={r.book_id} className={`notice ${r.ready ? "ok" : "bad"}`}>
                       <b>{r.book_id}: {r.ready ? "READY" : "NOT READY"}</b>
                       {!r.ready && <ul className="small">{r.blockers.map((x) => <li key={x}>{x}</li>)}</ul>}
+                      {r.short_blockers && r.short_blockers.length > 0 && (
+                        <>
+                          <div className="small"><b>Short side: NOT READY</b> (SELL entries refused; the long side is unaffected)</div>
+                          <ul className="small">{r.short_blockers.map((x) => <li key={x}>{x}</li>)}</ul>
+                        </>
+                      )}
                     </div>
                   ))}
                   <p className="small muted">NYSE calendar: {status.calendar.verified ? "verified" : "NOT VERIFIED"}</p>
@@ -159,12 +171,12 @@ export default function V6Dashboard() {
           {tab === "Accounts" && <div className="grid-2">{books.map((b) => <BookCard key={b.book_id} b={b} />)}</div>}
           {tab === "Positions" && (
             detail?.state !== "LOADED" ? <p className="muted">{book}: {detail?.state ?? "NOT CONNECTED"} · no positions shown.</p>
-              : <Table rows={open} cols={["setup_id", "instrument", "side", "quantity", "entry_fill", "sl", "tp", "entry_fee", "entry_ts"]} />
+              : <Table rows={open} cols={["setup_id", "instrument", "position_side", "quantity", "entry_fill", "sl", "tp", "entry_fee", "entry_fee_components", "entry_ts", "data_source"]} />
           )}
           {tab === "Trades" && (
             detail?.state !== "LOADED" ? <p className="muted">{book}: {detail?.state ?? "NOT CONNECTED"} · no trades shown.</p>
               : <>
-                <Table rows={closed} cols={["setup_id", "instrument", "side", "quantity", "entry_fill", "exit_fill", "status", "gross_pnl", "entry_fee", "exit_fee", "realized_pnl"]} />
+                <Table rows={closed} cols={["setup_id", "instrument", "position_side", "quantity", "entry_fill", "exit_fill", "exit_reason", "exit_detail", "gross_pnl", "entry_fee", "exit_fee", "exit_fee_components", "realized_pnl"]} />
                 <h4>Rejected by book gates</h4>
                 <Table rows={detail.rejections ?? []} cols={["setup_id", "instrument", "code", "detail", "at"]} />
               </>

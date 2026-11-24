@@ -20,6 +20,8 @@ export interface Summary {
   fees_total: string; slippage_total: string; open_positions: number; closed_trades: number;
   win_rate_pct: string | null; max_drawdown_pct: string; current_drawdown_pct: string | null;
   mtm_status: string; mtm_reason: string | null; rejections: number; seq: number; created_at: string;
+  by_side?: Record<string, { closed_trades: number; wins: number; realized_pnl: string; eod_flatten: number }>;
+  open_position_side?: string | null;
 }
 
 export interface BookStatus {
@@ -27,7 +29,10 @@ export interface BookStatus {
   state: "NOT_INITIALISED" | "NOT_READY" | "LOADED"; summary: Summary | null; reason: string | null;
 }
 
-export interface Readiness { book_id: string; ready: boolean; blockers: string[]; status?: string }
+export interface Readiness {
+  book_id: string; ready: boolean; blockers: string[]; status?: string;
+  shorts_ready?: boolean; short_blockers?: string[];
+}
 
 export interface Status {
   scanner: Scanner;

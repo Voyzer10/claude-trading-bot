@@ -13,10 +13,12 @@ const KEYS: [string, string][] = [
   ["average_loss", "Average loss"], ["profit_factor", "Profit factor"], ["max_drawdown", "Max drawdown"],
   ["max_drawdown_pct", "Max drawdown %"], ["average_planned_net_rr", "Avg planned net R:R"],
   ["average_realized_r", "Avg realized R"], ["fees_total", "Fees"], ["slippage_total", "Slippage (incl. spread)"],
-  ["open_trades_at_end", "Open at end"],
+  ["open_trades_at_end", "Open at end"], ["by_side", "By side (LONG / SHORT)"], ["exit_reasons", "Exit reasons"],
+  ["fee_components", "Fees by component"],
 ];
-const TRADE_COLS = ["setup_id", "instrument", "side", "entry_ts", "entry_fill", "sl", "tp", "quantity", "exit_ts",
-  "exit_fill", "status", "gross_pnl", "entry_fee", "exit_fee", "realized_pnl", "realized_r"];
+const TRADE_COLS = ["setup_id", "instrument", "position_side", "entry_ts", "entry_fill", "sl", "tp", "quantity",
+  "exit_ts", "exit_fill", "status", "exit_detail", "gross_pnl", "entry_fee", "exit_fee", "entry_fee_components",
+  "exit_fee_components", "realized_pnl", "realized_r", "data_source"];
 
 function val(v: unknown) {
   if (v === null || v === undefined) return "—";

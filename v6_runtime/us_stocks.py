@@ -15,8 +15,9 @@ from zoneinfo import ZoneInfo
 
 from scanner_v6.data.market_config import (ConfigOrigin, MarketDataConfig, SessionCalendar, SessionKind,
                                            require_instrument_config, validate_timeframe)
-from scanner_v6.exit.execution_config import ExecutionConfig, LinearFeeSchedule
+from scanner_v6.exit.execution_config import ExecutionConfig
 
+from . import fees_us
 from .books import spec as book_spec
 from .paths import DataRoot
 from .portfolio import InstrumentSpec
@@ -29,7 +30,12 @@ TEMPLATE_FILE = os.path.join(HERE, "config", "us_stocks.template.json")
 EXECUTION_KEYS = ("entry_ticks", "stop_exit_ticks", "target_exit_ticks", "max_gap_ticks", "sl_buffer_ticks",
                   "tp_offset_ticks", "contract_multiplier", "lot_size", "quantity_step", "min_quantity",
                   "fee_schedule", "price_rounding_mode", "initial_margin_rate", "mtm_exit_slippage_ticks")
+EOD_KEYS = ("eod_flatten_buffer_minutes", "entry_cutoff_minutes")          # ME-6 (owner: EOD flat is mandatory)
 FEED_KEYS = ("bar_settle_seconds", "stale_after_bars", "alignment_rule")
+# Short side (owner 2026-11-24: long AND short paper trades). Every short assumption must be APPROVED, otherwise SELL
+# entries are refused at the book (BOOK_SHORT_NOT_READY) while the long side may still trade.
+SHORT_KEYS = ("short_margin_rate", "short_quantity_step", "short_min_quantity", "short_borrow_assumption")
+REQUIRED_KEYS = ("tick_size",) + EXECUTION_KEYS + EOD_KEYS + FEED_KEYS
 
 
 # Owner 2026-11-24 (initial allowlist): the only symbols whose IEX real-time regular-session 5-minute coverage was
@@ -70,6 +76,14 @@ def trading_sessions(cal: Dict[str, Any], start: date, end: date) -> Tuple[Tuple
     return tuple(out)
 
 
+def calendar_range(cal: Dict[str, Any]) -> Tuple[date, date]:
+    """The full supported range of the calendar file (1 Jan of the first covered year .. 31 Dec of the last)."""
+    years = sorted(cal["covered_years"])
+    if years != list(range(years[0], years[-1] + 1)):
+        raise USConfigError("covered_years must be contiguous, got %s" % years)
+    return date(years[0], 1, 1), date(years[-1], 12, 31)
+
+
 def session_calendar(cal: Dict[str, Any], start: date, end: date) -> SessionCalendar:
     return SessionCalendar(SessionKind.EXCHANGE, cal["timezone"], trading_sessions(cal, start, end))
 
@@ -84,6 +98,8 @@ class USStocksConfig:
     not_approved: Tuple[str, ...]     # keys whose value is missing or not approved
     feed: Optional[str]
     feed_approved: bool
+    short_approved: Dict[str, Any] = None          # type: ignore[assignment]
+    short_not_approved: Tuple[str, ...] = ()
 
 
 def load_config(root: DataRoot) -> Optional[USStocksConfig]:
@@ -100,16 +116,28 @@ def parse_config(raw: Dict[str, Any]) -> USStocksConfig:
     vals = raw.get("values")
     if not isinstance(vals, dict):
         raise USConfigError("us_stocks.json: values must be a mapping")
-    approved, missing = {}, []
-    for k in ("tick_size",) + EXECUTION_KEYS + FEED_KEYS:
+    approved, missing, s_ok, s_missing = {}, [], {}, []
+    for k in REQUIRED_KEYS + SHORT_KEYS:
         item = vals.get(k)
         if not isinstance(item, dict):
             raise USConfigError("us_stocks.json: values.%s must be {value, approval, decision}" % k)
-        if item.get("approval") == APPROVED and item.get("value") is not None:
+        ok = item.get("approval") == APPROVED and item.get("value") is not None
+        if k in SHORT_KEYS:
+            (s_ok.__setitem__(k, item["value"]) if ok else s_missing.append(k))
+        elif ok:
             approved[k] = item["value"]
         else:
             missing.append(k)
-    unknown = sorted(set(vals) - set(("tick_size",) + EXECUTION_KEYS + FEED_KEYS + ("exchange_day_rule",)))
+    if "fee_schedule" in approved:
+        try:
+            fees_us.from_config(approved["fee_schedule"])
+        except ValueError as e:
+            raise USConfigError("us_stocks.json: values.fee_schedule: %s" % e) from None
+    for k in EOD_KEYS:
+        v = approved.get(k)
+        if v is not None and (isinstance(v, bool) or not isinstance(v, int) or v <= 0):
+            raise USConfigError("us_stocks.json: values.%s must be a positive whole number of minutes" % k)
+    unknown = sorted(set(vals) - set(REQUIRED_KEYS + SHORT_KEYS + ("exchange_day_rule",)))
     if unknown:
         raise USConfigError("us_stocks.json: unknown values %s" % unknown)
     edr = vals.get("exchange_day_rule") or {}
@@ -130,7 +158,7 @@ def parse_config(raw: Dict[str, Any]) -> USStocksConfig:
     if dp.get("name") != "alpaca":
         raise USConfigError("the US Stocks data provider is Alpaca (owner decision)")
     return USStocksConfig(raw, tuple(insts), tf, approved, tuple(missing), dp.get("feed"),
-                          dp.get("approval") == APPROVED and dp.get("feed") in ("iex", "sip"))
+                          dp.get("approval") == APPROVED and dp.get("feed") in ("iex", "sip"), s_ok, tuple(s_missing))
 
 
 def _tf_delta(tf: Any) -> timedelta:
@@ -140,12 +168,23 @@ def _tf_delta(tf: Any) -> timedelta:
     return timedelta(minutes=table[tf])
 
 
-def instrument_specs(cfg: USStocksConfig, cal: Dict[str, Any], start: date, end: date) -> List[InstrumentSpec]:
-    """Module A / E configuration per instrument. Only APPROVED values are passed; the rest stay None."""
+def instrument_specs(cfg: USStocksConfig, cal: Dict[str, Any], start: Optional[date] = None,
+                     end: Optional[date] = None) -> List[InstrumentSpec]:
+    """Module A / E configuration per instrument. Only APPROVED values are passed; the rest stay None. The session
+    calendar spans the calendar file's full supported range unless a narrower range is given (tests)."""
     a = cfg.approved
     fee = a.get("fee_schedule")
-    fee_schedule = LinearFeeSchedule(**fee) if isinstance(fee, dict) else None
-    session = session_calendar(cal, start, end)
+    fee_schedule = fees_us.from_config(fee) if isinstance(fee, dict) else None
+    lo, hi = calendar_range(cal)
+    session = session_calendar(cal, start or lo, end or hi)
+    eod = {"eod_flatten_buffer": timedelta(minutes=a["eod_flatten_buffer_minutes"]) if "eod_flatten_buffer_minutes" in a else None,
+           "entry_cutoff_buffer": timedelta(minutes=a["entry_cutoff_minutes"]) if "entry_cutoff_minutes" in a else None}
+    if (eod["eod_flatten_buffer"] is None) != (eod["entry_cutoff_buffer"] is None):
+        eod = {"eod_flatten_buffer": None, "entry_cutoff_buffer": None}       # both or neither (readiness blocks)
+    short = cfg.short_approved or {}
+    shorts_ready = not cfg.short_not_approved
+    short_kw = {k: short.get(k) for k in ("short_margin_rate", "short_quantity_step", "short_min_quantity")} \
+        if shorts_ready else {}
     out = []
     for sym in cfg.instruments:
         market = require_instrument_config(MarketDataConfig(
@@ -153,8 +192,10 @@ def instrument_specs(cfg: USStocksConfig, cal: Dict[str, Any], start: date, end:
             tick_size=a.get("tick_size"), session=session))
         exe = ExecutionConfig(
             origin=ConfigOrigin.INSTRUMENT_CONFIG, starting_equity=book_spec("US").starting_budget,
-            fee_schedule=fee_schedule, **{k: a.get(k) for k in EXECUTION_KEYS if k != "fee_schedule"})
-        out.append(InstrumentSpec(sym, "US", cfg.timeframe, market, exe, data_source=feed_label(cfg.feed)))
+            fee_schedule=fee_schedule, **{k: a.get(k) for k in EXECUTION_KEYS if k != "fee_schedule"}, **eod,
+            **short_kw, shorts_enabled=shorts_ready)
+        out.append(InstrumentSpec(sym, "US", cfg.timeframe, market, exe, data_source=feed_label(cfg.feed),
+                                  shorts_enabled=shorts_ready))
     return out
 
 
@@ -169,10 +210,13 @@ def feed_label(feed: Optional[str]) -> Optional[str]:
     return FEED_LABELS.get(feed) if feed else None
 
 
-def readiness(cfg: Optional[USStocksConfig], cal: Dict[str, Any], credentials_present: bool) -> Dict[str, Any]:
+def readiness(cfg: Optional[USStocksConfig], cal: Dict[str, Any], credentials_present: bool,
+              today: Optional[date] = None) -> Dict[str, Any]:
     """Why the US Stocks book cannot trade yet. Empty `blockers` = configuration complete (activation still needs the
-    owner)."""
+    owner). `short_blockers` lists why SELL (short) entries are refused; they do not block the long side."""
+    today = today or datetime.now(ZoneInfo("America/New_York")).date()
     blockers: List[str] = []
+    short_blockers: List[str] = []
     if cfg is None:
         blockers.append("no us_stocks.json in the V6 data root (owner configuration missing)")
     else:
@@ -185,8 +229,27 @@ def readiness(cfg: Optional[USStocksConfig], cal: Dict[str, Any], credentials_pr
         elif cfg.feed != SELECTED_FEED:
             blockers.append("Alpaca feed %r is not the selected feed: owner 2026-11-24 selected IEX real-time; delayed "
                             "SIP is never used and real-time SIP is a future upgrade (needs a paid subscription)" % cfg.feed)
+        short_blockers += ["%s: NOT APPROVED" % k for k in cfg.short_not_approved]
     if not cal.get("verified"):
         blockers.append("NYSE holiday calendar: NOT VERIFIED")
+    lo, hi = calendar_range(cal)
+    if not lo <= today <= hi:
+        blockers.append("NYSE calendar covers %s..%s only; today %s is not covered" % (lo, hi, today))
+    if cfg is not None and not blockers and cfg.instruments:
+        # build exactly what the runner builds: a value that Module E refuses (e.g. an invalid EOD pair) is a readiness
+        # blocker here, never a crash-looping runner
+        try:
+            for sp in instrument_specs(cfg, cal):
+                miss = sp.execution.missing(sp.market)
+                if miss:
+                    blockers.append("%s: Module E configuration incomplete: %s" % (sp.instrument_id, ", ".join(miss)))
+                    break
+        except (ValueError, TypeError) as e:
+            blockers.append("configuration rejected by Module E: %s" % e)
+    due = fees_us.reverify_due(today)
+    if due:
+        blockers.append(due)
     if not credentials_present:
         blockers.append("V6 Alpaca DATA-ONLY credential: not supplied")
-    return {"book_id": "US", "ready": not blockers, "blockers": blockers}
+    return {"book_id": "US", "ready": not blockers, "blockers": blockers,
+            "shorts_ready": not blockers and not short_blockers, "short_blockers": short_blockers}

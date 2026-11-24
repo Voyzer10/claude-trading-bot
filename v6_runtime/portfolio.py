@@ -45,6 +45,7 @@ BOOK_DAILY_LOSS = "BOOK_DAILY_LOSS"
 BOOK_RISK_EXCEEDED = "BOOK_RISK_EXCEEDED"
 BOOK_INSUFFICIENT_CASH = "BOOK_INSUFFICIENT_CASH"
 BOOK_MTM_UNSCORABLE = "BOOK_MTM_UNSCORABLE"
+BOOK_SHORT_NOT_READY = "BOOK_SHORT_NOT_READY"
 
 
 class PortfolioError(RuntimeError):
@@ -64,6 +65,7 @@ class InstrumentSpec:
     execution: ExecutionConfig
     candlestick: Optional[CandlestickConfig] = None
     data_source: Optional[str] = None      # e.g. "alpaca iex real-time (single venue, not consolidated)"
+    shorts_enabled: bool = True            # False: SELL (short) entries are refused at the book (BOOK_SHORT_NOT_READY)
 
 
 def _ser_candle(c: Candle) -> Dict[str, Any]:
@@ -186,7 +188,7 @@ class Portfolio:
         decision, detail = None, None
         if r.status == E.ENTERED and c is not None and r.entry_index == c.index:
             decision, detail = self._entry(iid, r)
-        elif r.status in (E.STOPPED_OUT, E.TARGET_HIT):
+        elif r.status in E.EXIT_STATUSES:
             decision, detail = self._exit(iid, c, r)
         return self._signal(iid, c, r, decision, detail)
 
@@ -211,7 +213,10 @@ class Portfolio:
         day = self._day(iid, r.history[-1].ts)
         st, equity = self._equity_now()
         code = None
-        if led.open_trade is not None:
+        spec = self.specs[iid]
+        if r.side == "SELL" and not spec.shorts_enabled:
+            code, why = BOOK_SHORT_NOT_READY, "short-side assumptions are not all approved for book %s" % led.book_id
+        elif led.open_trade is not None:
             code, why = BOOK_POSITION_LIMIT, "book %s already holds %s" % (led.book_id, led.open_trade["setup_id"])
         elif day in led.state["latched_days"]:
             code, why = BOOK_DAILY_LOSS, "daily loss latch for %s" % day
@@ -225,7 +230,6 @@ class Portfolio:
             self.shadow.add(r.setup_id)
             led.record_rejection(r.setup_id, iid, code, why)
             return "REJECTED", "%s: %s" % (code, why)
-        spec = self.specs[iid]
         M = spec.execution.contract_multiplier
         led.book_entry({
             "setup_id": r.setup_id, "instrument": iid, "market": led.state["market"], "data_source": spec.data_source,
@@ -235,6 +239,9 @@ class Portfolio:
             "tp_pool_id": r.tp_pool_id, "entry_fee": _s(r.entry_fee), "loss_estimate": _s(r.loss_estimate),
             "net_rr": _s(r.net_rr), "required_margin": _s(r.required_margin), "risk_budget": _s(r.risk_budget),
             "entry_slippage": _s(abs(r.entry_fill - r.entry_open) * r.quantity * M),
+            "position_side": "LONG" if r.side == "BUY" else "SHORT",
+            "entry_fee_components": self._fee_parts(spec, r.entry_fill, r.quantity, r.side, r.history[-1].ts,
+                                                    r.entry_fee),
         })
         return "BOOKED", None
 
@@ -253,16 +260,34 @@ class Portfolio:
         M = D(ot["contract_multiplier"])
         if r.status == E.TARGET_HIT:
             ref = r.tp
+        elif r.status == E.EOD_FLATTEN:                               # market exit at the close (or next open)
+            ref = D(repr(c.open)) if r.exit_gap else D(repr(c.close))
         else:
             ref = D(repr(c.open)) if r.exit_gap and c is not None else r.sl
+        exit_side = "SELL" if r.side == "BUY" else "BUY"
         led.book_exit(r.setup_id, {
             "status": r.status, "exit_index": r.exit_index, "exit_ts": r.history[-1].ts.isoformat(),
             "exit_fill": _s(r.exit_fill), "exit_gap": r.exit_gap, "exit_fee": _s(r.exit_fee),
             "gross_pnl": _s(r.gross_pnl), "realized_pnl": _s(r.realized_pnl),
             "exit_reference": _s(ref), "exit_slippage": _s(abs(r.exit_fill - ref) * r.quantity * M),
+            "exit_reason": r.status, "exit_detail": r.detail if r.status == E.EOD_FLATTEN else None,
+            "exit_fee_components": self._fee_parts(self.specs[iid], r.exit_fill, r.quantity, exit_side,
+                                                   r.history[-1].ts, r.exit_fee),
         })
         self.mtm = None
         return "BOOKED", None
+
+    @staticmethod
+    def _fee_parts(spec: InstrumentSpec, price, qty, fill_side: str, at, total) -> Optional[Dict[str, str]]:
+        """Fee components of one fill for the audit trail (only for schedules that expose them). They must add up to
+        Module E's fee for that fill, otherwise the booking stops (LedgerCorrupt)."""
+        fs = spec.execution.fee_schedule
+        if not hasattr(fs, "components"):
+            return None
+        parts = fs.components(price, qty, spec.execution.contract_multiplier, fill_side=fill_side, at=at)
+        if sum(parts.values(), D(0)) != total:
+            raise LedgerCorrupt("fee components %s do not add up to Module E's fee %s" % (parts, total))
+        return {k: str(v) for k, v in parts.items()}
 
     # ------------------------------------------------------------ MTM, days, daily loss
     def _tz(self, iid: str) -> ZoneInfo:
@@ -289,7 +314,7 @@ class Portfolio:
         except KeyError:
             raise LedgerCorrupt("book %s holds %s, unknown to the %s stream" % (self.ledger.book_id, ot["setup_id"],
                                                                                 iid)) from None
-        status, est, why = st.estimate_exit(rec, D(repr(c.close)))
+        status, est, why = st.estimate_exit(rec, D(repr(c.close)), at=c.ts)
         if status != "OK":
             self.mtm = {"status": E.UNSCORABLE, "reason": why}
         else:

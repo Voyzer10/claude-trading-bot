@@ -16,6 +16,8 @@ Implementation choices (documented in 17.V, not trading rules):
     |target - entry| of Section 7.
   * the CK-13 #4 net R:R check is evaluated at the risk-sized quantity; when no permitted quantity fits the budget it is
     evaluated at `min_quantity` (fees may contain a per-order part, so R:R depends on q).
+ME-5 (owner 24 Nov 2026): fees are computed per FILL with the fill's own side (entry = trade side, stop / target exit
+= the opposite side) and the decision time, so a side-aware schedule charges sell-side fees only on SELL fills.
 All arithmetic is exact Decimal (net_rr itself is a reported Decimal quotient; the 1:1 check compares exact
 products). Nothing here touches an order path.
 """
@@ -23,10 +25,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+from datetime import datetime
 from typing import Optional
 
-from .execution_config import LinearFeeSchedule
-from .stop_loss import BUY
+from .execution_config import FeeSchedule
+from .stop_loss import BUY, SELL
 
 RISK_FRACTION = Decimal("0.01")       # Section 7 / CK-23: 1% of paper equity (OWNER APPROVED)
 MIN_NET_RR = Decimal("1")             # Section 7 / CK-21: 1:1 after fees and slippage (OWNER APPROVED)
@@ -39,7 +42,12 @@ class Costs:
     stop_fill: Decimal
     target_fill: Decimal
     multiplier: Decimal
-    fees: LinearFeeSchedule
+    fees: FeeSchedule
+    at: Optional[datetime] = None          # decision time, passed to the fee schedule (ME-5)
+
+    def _fee(self, price: Decimal, q: Decimal, entry: bool) -> Decimal:
+        exit_side = SELL if self.side == BUY else BUY
+        return self.fees.fee(price, q, self.multiplier, fill_side=self.side if entry else exit_side, at=self.at)
 
     def stop_distance(self) -> Decimal:
         return self.entry_fill - self.stop_fill if self.side == BUY else self.stop_fill - self.entry_fill
@@ -48,12 +56,12 @@ class Costs:
         return self.target_fill - self.entry_fill if self.side == BUY else self.entry_fill - self.target_fill
 
     def loss(self, q: Decimal) -> Decimal:
-        return (q * self.stop_distance() * self.multiplier + self.fees.fee(self.entry_fill, q, self.multiplier)
-                + self.fees.fee(self.stop_fill, q, self.multiplier))
+        return (q * self.stop_distance() * self.multiplier + self._fee(self.entry_fill, q, True)
+                + self._fee(self.stop_fill, q, False))
 
     def net_reward(self, q: Decimal) -> Decimal:
-        return (q * self.reward_distance() * self.multiplier - self.fees.fee(self.entry_fill, q, self.multiplier)
-                - self.fees.fee(self.target_fill, q, self.multiplier))
+        return (q * self.reward_distance() * self.multiplier - self._fee(self.entry_fill, q, True)
+                - self._fee(self.target_fill, q, False))
 
     def net_rr(self, q: Decimal) -> Optional[Decimal]:
         lo = self.loss(q)

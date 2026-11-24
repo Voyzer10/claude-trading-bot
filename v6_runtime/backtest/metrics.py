@@ -61,7 +61,7 @@ def compute(ledger_state: Dict[str, Any], summary: Dict[str, Any], curve: List[D
     spread = Decimal(0)
     for t in trades:
         q, m = _d(t["quantity"]), _d(t["contract_multiplier"])
-        legs = 1 + (1 if t["status"] == "STOPPED_OUT" else 0)
+        legs = 1 + (1 if t["status"] in ("STOPPED_OUT", "EOD_FLATTEN") else 0)     # market exits cross the spread
         spread += half_spread_ticks * tick * q * m * legs
     rr = [_d(t["net_rr"]) for t in trades if t.get("net_rr") is not None]
     r_mult = [_d(t["realized_pnl"]) / _d(t["loss_estimate"]) for t in closed
@@ -99,4 +99,20 @@ def compute(ledger_state: Dict[str, Any], summary: Dict[str, Any], curve: List[D
         "unscorable_equity_points": sum(1 for p in curve if p["equity"] is None),
     }
     out.update(drawdown([None if p["equity"] is None else _d(p["equity"]) for p in curve], start))
+    sides: Dict[str, Dict[str, Any]] = {}
+    for t in closed:
+        k = "SHORT" if t["side"] == "SELL" else "LONG"
+        b = sides.setdefault(k, {"trades": 0, "wins": 0, "net_pnl": Decimal(0), "eod_flatten_exits": 0})
+        b["trades"] += 1
+        b["wins"] += 1 if _d(t["realized_pnl"]) > 0 else 0
+        b["net_pnl"] += _d(t["realized_pnl"])
+        b["eod_flatten_exits"] += 1 if t["status"] == "EOD_FLATTEN" else 0
+    out["by_side"] = {k: dict(v, net_pnl=str(v["net_pnl"])) for k, v in sorted(sides.items())}
+    out["exit_reasons"] = {s: sum(1 for t in closed if t["status"] == s) for s in sorted({t["status"] for t in closed})}
+    fee_parts: Dict[str, Decimal] = {}
+    for t in trades:
+        for key in ("entry_fee_components", "exit_fee_components"):
+            for name, v in (t.get(key) or {}).items():
+                fee_parts[name] = fee_parts.get(name, Decimal(0)) + _d(v)
+    out["fee_components"] = {k: str(v) for k, v in sorted(fee_parts.items())} or None
     return out

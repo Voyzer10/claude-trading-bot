@@ -7,7 +7,7 @@ import csv
 import json
 import os
 from datetime import date, datetime, timedelta, timezone
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_UP, Decimal
 
 import pytest
 
@@ -205,13 +205,19 @@ def test_fees_spread_and_slippage(base, tmp_path):
     slip = Decimal(0)
     for t in res["trades"]:
         q = Decimal(t["quantity"])
-        for px, fee in ((t["entry_fill"], t["entry_fee"]), (t["exit_fill"], t["exit_fee"])):
-            exp = (Decimal("0.0001") * Decimal(px) * q).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            assert Decimal(fee) == exp
+        sell_px = t["exit_fill"] if t["side"] == "BUY" else t["entry_fill"]      # the SELL fill of the round trip
+        buy_fee = t["entry_fee"] if t["side"] == "BUY" else t["exit_fee"]
+        sell_fee = t["exit_fee"] if t["side"] == "BUY" else t["entry_fee"]
+        assert Decimal(buy_fee) == 0                                             # no SEC / TAF on a buy, $0 commission
+        sec = (Decimal(sell_px) * q * Decimal("20.60") / 1000000).quantize(Decimal("0.01"), rounding=ROUND_UP)
+        taf = min(q * Decimal("0.000195"), Decimal("9.79")).quantize(Decimal("0.01"), rounding=ROUND_UP)
+        assert Decimal(sell_fee) == sec + taf
+        parts = t["exit_fee_components"] if t["side"] == "BUY" else t["entry_fee_components"]
+        assert {k: Decimal(v) for k, v in parts.items()} == {"commission": 0, "sec_fee": sec, "finra_taf": taf}
         slip += Decimal(t["entry_slippage"]) + Decimal(t["exit_slippage"])
     m = res["metrics"]
     assert Decimal(m["slippage_total"]) == slip
-    t1, t2 = res["trades"]
+    t1, t2 = res["trades"]                     # t1 stopped out (2 spread legs), t2 target (1 leg: entry only)
     spread = Decimal("0.01") * (Decimal(t1["quantity"]) * 2 + Decimal(t2["quantity"]))
     assert Decimal(m["spread_cost_included_in_slippage"]) == spread
     assert Decimal(m["fees_total"]) == sum(Decimal(t["entry_fee"]) + Decimal(t["exit_fee"]) for t in res["trades"])
@@ -226,7 +232,7 @@ def test_position_sizing_and_risk_limit(base, tmp_path):
     for t in base[1]["trades"]:
         assert Decimal(t["loss_estimate"]) <= Decimal("0.01") * eq + Decimal("0.5")   # 1% of the equity at entry
         q = Decimal(t["quantity"])
-        assert q == q.to_integral_value() and q >= 1
+        assert (q / Decimal("0.01")) == (q / Decimal("0.01")).to_integral_value() and q >= Decimal("0.01")
         eq += Decimal(t["realized_pnl"])
     _, small = run(tmp_path, cfg=raw_cfg(starting_equity="100"))
     big_q = [Decimal(t["quantity"]) for t in base[1]["trades"]]
@@ -376,6 +382,10 @@ def test_continuous_session_backtest(tmp_path):
                             .isoformat().replace("+00:00", "Z")] + r[1:] for r in body[1:]]
     p = write(tmp_path, "c.csv", shifted)
     cfg = raw_cfg(book_id="CRYPTO", session={"kind": "continuous_24_7", "timezone": "UTC", "trading_day_start": "00:00"})
+    for k in ("eod_flatten_buffer", "entry_cutoff_buffer"):                    # no session close on a 24/7 market
+        cfg["execution"].pop(k)
+    cfg["execution"]["fee_schedule"] = {"rate": "0.0001", "per_unit": "0", "per_order": "0", "rounding_places": 2,
+                                        "rounding_mode": "ROUND_HALF_UP", "source": "SYNTHETIC"}
     r = BacktestRun(DataRoot(str(tmp_path)), bcfg.parse(cfg), {"SYNTH": p})
     res = r.execute()
     assert res["metrics"]["total_trades"] == 2 and res["metrics"]["currency"] == "USD"

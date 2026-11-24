@@ -80,12 +80,12 @@ def test_stale_feed_interrupts_and_resumes_once():
 def _approved(feed_name="iex"):
     raw = json.load(open(os.path.join(os.path.dirname(us_stocks.__file__), "config", "us_stocks.template.json")))
     vals = dict(tick_size=0.01, entry_ticks=1, stop_exit_ticks=1, target_exit_ticks=0, max_gap_ticks=50,
-                sl_buffer_ticks=2, tp_offset_ticks=1, contract_multiplier="1", lot_size="1", quantity_step="1",
-                min_quantity="1", fee_schedule={"rate": "0", "per_unit": "0", "per_order": "0", "rounding_places": 2,
-                                                "rounding_mode": "ROUND_HALF_UP", "source": "TEST ONLY"},
+                sl_buffer_ticks=2, tp_offset_ticks=1, contract_multiplier="1", lot_size="0.01", quantity_step="0.01",
+                min_quantity="0.01", fee_schedule={"model": "us_equity_sell_side_v1", "commission_per_order": "0",
+                                                   "commission_source": "TEST ONLY"},
                 price_rounding_mode="ROUND_HALF_UP", initial_margin_rate="1", mtm_exit_slippage_ticks=2,
                 exchange_day_rule="exchange session date", bar_settle_seconds=10, stale_after_bars=3,
-                alignment_rule="session_grid")
+                alignment_rule="session_grid", eod_flatten_buffer_minutes=5, entry_cutoff_minutes=15)
     for k, v in vals.items():
         raw["values"][k] = {"value": v, "approval": "APPROVED", "decision": "TEST FIXTURE ONLY"}
     raw["instruments"] = ["SPY"]
@@ -95,9 +95,9 @@ def _approved(feed_name="iex"):
 
 def test_feed_policy_in_readiness():
     cal = dict(us_stocks.load_calendar(), verified=True)
-    ok = us_stocks.readiness(us_stocks.parse_config(_approved("iex")), cal, True)
+    ok = us_stocks.readiness(us_stocks.parse_config(_approved("iex")), cal, True, today=date(2026, 11, 24))
     assert ok["ready"] is True, ok["blockers"]
-    sip = us_stocks.readiness(us_stocks.parse_config(_approved("sip")), cal, True)
+    sip = us_stocks.readiness(us_stocks.parse_config(_approved("sip")), cal, True, today=date(2026, 11, 24))
     assert sip["ready"] is False and any("delayed SIP is never used" in b for b in sip["blockers"])
     raw = _approved("iex")
     raw["data_provider"]["approval"] = "NOT_APPROVED"

@@ -52,7 +52,9 @@ class USRunner:
     """One poll cycle at a time; the clock and the data source are injected (tests use fixtures)."""
 
     def __init__(self, root: DataRoot, cfg: us_stocks.USStocksConfig, cal: Dict, source: Callable[..., List[Bar]],
-                 start: date, end: date):
+                 start: Optional[date] = None, end: Optional[date] = None):
+        """start / end default to the calendar's FULL supported range (2026-2027): never a rolling window, so the
+        sessions Module E and the feed see do not run out while the process keeps running."""
         self.root, self.cfg = root, cfg
         a = cfg.approved
         self.specs = us_stocks.instrument_specs(cfg, cal, start, end)
@@ -127,8 +129,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     cal = us_stocks.load_calendar()
     cfg = us_stocks.load_config(root)
     bars = AlpacaBars(load_credential(), cfg.feed)
-    today = datetime.now(timezone.utc).date()
-    runner = USRunner(root, cfg, cal, bars.fetch, today - timedelta(days=7), today + timedelta(days=7))
+    try:
+        runner = USRunner(root, cfg, cal, bars.fetch)              # full calendar range (no rolling window)
+    except (ValueError, TypeError) as e:     # refused configuration OR unreadable journal / fee rate: NOT READY, no loop
+        print(json.dumps({"status": "NOT READY", "book": a.book,
+                          "blockers": ["runner start refused (%s): %s" % (type(e).__name__, e)]}))
+        return 2
     while True:
         if gates(root, a.book):                   # the owner switch can stop the loop at any time
             return 3

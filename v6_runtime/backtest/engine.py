@@ -89,7 +89,8 @@ class BacktestRun:
         self.home = backtests_root(root)
         self.run = DataRoot(self.home.path(self.run_id))
         self.specs = [InstrumentSpec(ds.symbol, cfg.book_id, cfg.timeframe, cfg.market_config(ds.symbol, self.session),
-                                     cfg.execution_config(self.session), data_source=ds.source)
+                                     cfg.execution_config(self.session), data_source=ds.source,
+                                     shorts_enabled=cfg.shorts_enabled)
                       for ds in self.datasets]
         for s in self.specs:
             miss = s.execution.missing(s.market)
@@ -171,6 +172,7 @@ class BacktestRun:
         trades = []
         for t in ledger.trades():
             rec = pf.streams[t["instrument"]].record(t["setup_id"])
+            t = dict(t, position_side=t.get("position_side") or ("LONG" if t["side"] == "BUY" else "SHORT"))
             trades.append(dict({k: v for k, v in t.items() if k != "identity"},
                                stage_path=[[h.status, h.index, h.ts.isoformat()] for h in rec.history],
                                realized_r=None if t["status"] == E.ENTERED or not t.get("loss_estimate") else

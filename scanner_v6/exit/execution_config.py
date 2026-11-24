@@ -25,13 +25,27 @@ Configuration SHAPE (implementation choice, documented in 17.V; the VALUES and t
   * `price_rounding_mode` rounds a computed price that is off the tick grid onto it (B-13 rule is OPEN; OQ-15 lets the
     configuration declare it). Prices built from on-grid data never change.
 
+Owner decisions 24 Nov 2026 (PR #98, US Stocks intraday), all OPTIONAL fields: when absent the behaviour is unchanged.
+  ME-5  fee schedules may be side-aware: `FeeSchedule.fee(price, qty, multiplier, fill_side=, at=)` gets the side of
+        the FILL (BUY / SELL) and the fill time, so a sell-side-only regulatory fee (SEC Section 31, FINRA TAF) is never
+        charged on a buy. `LinearFeeSchedule` ignores both (symmetric, as before).
+  ME-6  intraday end-of-day flattening on EXCHANGE calendars: `eod_flatten_buffer` (time before the actual session
+        close, early closes included, at which an open position is closed) and `entry_cutoff_buffer` (no entry whose
+        entry candle opens at or after close - cutoff). Both or neither; cutoff >= flatten buffer.
+  ME-7  side-specific short parameters: `short_margin_rate`, `short_quantity_step`, `short_min_quantity` (None = the
+        long values); `shorts_enabled=False` makes every SELL setup NO_TRADE (SHORT_SIDE_DISABLED) before it can take
+        the stream's single position.
+  ME-6 timeframe rules (missing() -> EXECUTION_CONFIG_INCOMPLETE): eod_flatten_buffer >= timeframe, so the flatten
+        candle always ends before the session close; entry_cutoff_buffer >= eod_flatten_buffer + timeframe, so an
+        entry candle is never the flatten candle.
+
 Nothing here holds a real value. Research only: no orders, no broker, no live routing.
 """
 from __future__ import annotations
 
 import decimal
 from dataclasses import dataclass, fields
-from datetime import time
+from datetime import time, timedelta
 from decimal import Decimal
 from typing import Any, Mapping, Optional, Tuple
 
@@ -93,8 +107,19 @@ def is_multiple(x: Decimal, step: Decimal) -> bool:
     return (x / step) == (x / step).to_integral_value()
 
 
+class FeeSchedule:
+    """ME-5 interface. `fee` returns the total fee of ONE fill (Decimal, already rounded). `fill_side` is the side of
+    the fill itself (a long exit is a SELL fill, a short entry is a SELL fill); `at` is the fill time (UTC)."""
+    source: str
+    side_aware: bool = False
+
+    def fee(self, price: Decimal, qty: Decimal, multiplier: Decimal, *, fill_side: Optional[str] = None,
+            at: Any = None) -> Decimal:  # pragma: no cover - interface
+        raise NotImplementedError
+
+
 @dataclass(frozen=True)
-class LinearFeeSchedule:
+class LinearFeeSchedule(FeeSchedule):
     """Fee of ONE fill: rate x price x qty x multiplier + per_unit x qty + per_order, rounded once to `rounding_places`
     decimal places with `rounding_mode`. Every field is mandatory; `source` is the declared fee source metadata."""
     rate: Any
@@ -114,7 +139,9 @@ class LinearFeeSchedule:
         if not isinstance(self.source, str) or not self.source:
             raise ConfigError("fee source must be a non-empty string")
 
-    def fee(self, price: Decimal, qty: Decimal, multiplier: Decimal) -> Decimal:
+    def fee(self, price: Decimal, qty: Decimal, multiplier: Decimal, *, fill_side: Optional[str] = None,
+            at: Any = None) -> Decimal:
+        """Symmetric: `fill_side` and `at` are accepted and ignored (ME-5)."""
         if qty <= 0:
             raise ValueError("a fee is computed for a positive quantity only")
         raw = self.rate * price * qty * multiplier + self.per_unit * qty + self.per_order
@@ -147,6 +174,12 @@ class ExecutionConfig:
     initial_margin_rate: Any = None
     trading_day_start: Optional[time] = None        # ME-2: CONTINUOUS calendars only
     mtm_exit_slippage_ticks: Optional[int] = None   # OQ-13: adverse slippage of the estimated exit at the mark
+    eod_flatten_buffer: Optional[timedelta] = None  # ME-6: flatten this long before the actual session close
+    entry_cutoff_buffer: Optional[timedelta] = None  # ME-6: no entry candle opening at/after close - this
+    short_margin_rate: Any = None                   # ME-7: SELL-side margin rate (None = initial_margin_rate)
+    short_quantity_step: Any = None                 # ME-7: SELL-side quantity grid (None = quantity_step)
+    short_min_quantity: Any = None                  # ME-7: SELL-side minimum (None = min_quantity)
+    shorts_enabled: Optional[bool] = None           # ME-7: False = SELL setups are never entered (None = allowed)
 
     def __post_init__(self) -> None:
         if not isinstance(self.origin, ConfigOrigin):
@@ -159,10 +192,23 @@ class ExecutionConfig:
                   "initial_margin_rate"):
             if getattr(self, n) is not None:
                 object.__setattr__(self, n, _positive(getattr(self, n), n))
-        if self.fee_schedule is not None and not isinstance(self.fee_schedule, LinearFeeSchedule):
-            raise ConfigError("fee_schedule must be a LinearFeeSchedule or None")
+        if self.fee_schedule is not None and not isinstance(self.fee_schedule, FeeSchedule):
+            raise ConfigError("fee_schedule must be a FeeSchedule (e.g. LinearFeeSchedule) or None")
+        for n in ("short_margin_rate", "short_quantity_step", "short_min_quantity"):
+            if getattr(self, n) is not None:
+                object.__setattr__(self, n, _positive(getattr(self, n), n))
+        for n in ("eod_flatten_buffer", "entry_cutoff_buffer"):
+            v = getattr(self, n)
+            if v is not None and (not isinstance(v, timedelta) or v <= timedelta(0)):
+                raise ConfigError("%s must be a positive timedelta, got %r" % (n, v))
+        if (self.eod_flatten_buffer is None) != (self.entry_cutoff_buffer is None):
+            raise ConfigError("eod_flatten_buffer and entry_cutoff_buffer are configured together (ME-6)")
+        if self.eod_flatten_buffer is not None and self.entry_cutoff_buffer < self.eod_flatten_buffer:
+            raise ConfigError("entry_cutoff_buffer must be >= eod_flatten_buffer (no entry after the flatten time)")
         if self.price_rounding_mode is not None:
             _mode(self.price_rounding_mode, "price_rounding_mode")
+        if self.shorts_enabled is not None and not isinstance(self.shorts_enabled, bool):
+            raise ConfigError("shorts_enabled must be True, False or None")
         if self.trading_day_start is not None and (not isinstance(self.trading_day_start, time)
                                                    or self.trading_day_start.tzinfo is not None):
             raise ConfigError("trading_day_start must be a naive datetime.time (local time of the instrument zone)")
@@ -170,6 +216,11 @@ class ExecutionConfig:
             raise ConfigError("quantity_step must be a whole multiple of lot_size")
         if self.quantity_step is not None and self.min_quantity is not None and not is_multiple(self.min_quantity, self.quantity_step):
             raise ConfigError("min_quantity must be a whole multiple of quantity_step")
+        if self.lot_size is not None and self.short_quantity_step is not None and not is_multiple(self.short_quantity_step, self.lot_size):
+            raise ConfigError("short_quantity_step must be a whole multiple of lot_size")
+        ss = self.short_quantity_step if self.short_quantity_step is not None else self.quantity_step
+        if ss is not None and self.short_min_quantity is not None and not is_multiple(self.short_min_quantity, ss):
+            raise ConfigError("short_min_quantity must be a whole multiple of the short quantity step")
 
     def missing(self, market: MarketDataConfig) -> Tuple[str, ...]:
         """Every mandatory value that is missing (or, for target_exit_ticks, not the approved explicit 0), in a fixed
@@ -185,6 +236,13 @@ class ExecutionConfig:
             out.append("session_calendar")
         elif market.session.kind is SessionKind.CONTINUOUS and self.trading_day_start is None:
             out.append("trading_day_start")
+        if market.session is not None and market.session.kind is SessionKind.CONTINUOUS and self.eod_flatten_buffer:
+            out.append("eod_flatten_needs_exchange_calendar")
+        if self.eod_flatten_buffer is not None and market.timeframe is not None:
+            if self.eod_flatten_buffer < market.timeframe:
+                out.append("eod_flatten_buffer<timeframe")
+            if self.entry_cutoff_buffer < self.eod_flatten_buffer + market.timeframe:
+                out.append("entry_cutoff_buffer<eod_flatten_buffer+timeframe")
         return tuple(out)
 
     @classmethod
@@ -207,6 +265,12 @@ class ExecutionConfig:
                 kw["fee_schedule"] = LinearFeeSchedule(**fs)
             except TypeError as e:
                 raise ConfigError("fee_schedule: %s" % e) from e
+        for n in ("eod_flatten_buffer", "entry_cutoff_buffer"):     # fixtures give whole minutes
+            v = kw.get(n)
+            if v is not None and not isinstance(v, timedelta):
+                if isinstance(v, bool) or not isinstance(v, int):
+                    raise ConfigError("%s must be whole minutes, got %r" % (n, v))
+                kw[n] = timedelta(minutes=v)
         if kw.get("trading_day_start") is not None:
             v = kw["trading_day_start"]
             try:

@@ -92,7 +92,7 @@ def test_runner_gates(tmp_path):
     os.makedirs(root.root, exist_ok=True)
     g = runner.gates(root, "US")
     assert any("ENABLED_US" in x for x in g) and any("not initialised" in x for x in g)
-    assert any("NOT VERIFIED" in x for x in g) and any("credential" in x for x in g)
+    assert any("us_stocks.json" in x for x in g) and any("credential" in x for x in g)
 
 
 def test_runner_cli_refuses_without_gates(tmp_path, monkeypatch, capsys):

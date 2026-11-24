@@ -156,21 +156,26 @@ def _template():
         return json.load(fh)
 
 
-def test_calendar_marked_not_verified_and_bounded():
+def test_calendar_verified_and_bounded():
     cal = us_stocks.load_calendar()
-    assert cal["verified"] is False
+    assert cal["verified"] is True and cal["verification_source"].startswith("https://ir.theice.com/")
     with pytest.raises(us_stocks.USConfigError):
         us_stocks.trading_sessions(cal, date(2030, 1, 2), date(2030, 1, 3))
 
 
 def test_template_is_all_not_approved_and_blocks():
     cfg = us_stocks.parse_config(_template())
-    assert cfg.approved == {} and cfg.feed_approved and cfg.feed == "iex"      # owner 2026-11-24: IEX (provisional)
-    r = us_stocks.readiness(cfg, us_stocks.load_calendar(), credentials_present=False)
-    assert r["ready"] is False
-    for k in ("fee_schedule", "quantity_step", "exchange_day_rule", "mtm_exit_slippage_ticks", "alignment_rule"):
+    # only the owner's 24 Nov 2026 decisions are pre-approved in the template: IEX feed, 0.01 fractional grid, fee model
+    assert sorted(cfg.approved) == ["fee_schedule", "lot_size", "quantity_step"]
+    assert cfg.feed_approved and cfg.feed == "iex"
+    r = us_stocks.readiness(cfg, us_stocks.load_calendar(), credentials_present=False, today=date(2026, 11, 24))
+    assert r["ready"] is False and r["shorts_ready"] is False
+    for k in ("min_quantity", "exchange_day_rule", "mtm_exit_slippage_ticks", "alignment_rule",
+              "eod_flatten_buffer_minutes", "entry_cutoff_minutes", "tick_size"):
         assert "%s: NOT APPROVED" % k in r["blockers"]
-    assert any("credential" in b for b in r["blockers"]) and any("NOT VERIFIED" in b for b in r["blockers"])
+    for k in ("short_margin_rate", "short_quantity_step", "short_min_quantity", "short_borrow_assumption"):
+        assert "%s: NOT APPROVED" % k in r["short_blockers"]
+    assert any("credential" in b for b in r["blockers"]) and not any("NOT VERIFIED" in b for b in r["blockers"])
     assert us_stocks.readiness(None, us_stocks.load_calendar(), False)["ready"] is False
 
 
@@ -179,6 +184,8 @@ def test_not_approved_values_never_reach_module_e():
     raw["instruments"] = ["AAPL"]
     raw["values"]["tick_size"] = {"value": 0.01, "approval": "APPROVED", "decision": "test"}
     raw["values"]["fee_schedule"] = {"value": {"rate": "0.001"}, "approval": "NOT_APPROVED", "decision": "IC-1"}
+    for k in ("lot_size", "quantity_step"):
+        raw["values"][k]["approval"] = "NOT_APPROVED"
     cfg = us_stocks.parse_config(raw)
     assert cfg.approved == {"tick_size": 0.01} and "fee_schedule" in cfg.not_approved
     sp = us_stocks.instrument_specs(cfg, us_stocks.load_calendar(), date(2026, 11, 23), date(2026, 11, 24))[0]

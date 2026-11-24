@@ -262,6 +262,16 @@ class BookLedger:
             "max_drawdown_pct": st["max_drawdown_pct"], "rejections": len(st["rejections"]), "seq": st["seq"],
             "created_at": st["created_at"], "identity": identity.stamp(),
         }
+        by_side: Dict[str, Dict[str, Any]] = {}
+        for t in closed:
+            k = "LONG" if t.get("side") == "BUY" else "SHORT"
+            b = by_side.setdefault(k, {"closed_trades": 0, "wins": 0, "realized_pnl": Decimal(0), "eod_flatten": 0})
+            b["closed_trades"] += 1
+            b["wins"] += 1 if D(t["realized_pnl"]) > 0 else 0
+            b["realized_pnl"] += D(t["realized_pnl"])
+            b["eod_flatten"] += 1 if t.get("status") == "EOD_FLATTEN" else 0
+        out["by_side"] = {k: dict(v, realized_pnl=str(v["realized_pnl"])) for k, v in sorted(by_side.items())}
+        out["open_position_side"] = None if not ot else ("LONG" if ot.get("side") == "BUY" else "SHORT")
         committed = D(ot["required_margin"]) if ot and ot.get("required_margin") is not None else Decimal(0)
         out["committed_capital"] = str(committed)
         out["available_balance"] = str(cash - committed)

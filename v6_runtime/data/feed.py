@@ -19,8 +19,8 @@ from scanner_v6.data.market_config import SessionCalendar, SessionKind
 
 from .alpaca import Bar
 
-ACCEPT, NOT_COMPLETE, DUPLICATE, REVISION, OUT_OF_SESSION, MISALIGNED, LATE, INVALID = (
-    "ACCEPT", "NOT_COMPLETE", "DUPLICATE", "REVISION", "OUT_OF_SESSION", "MISALIGNED", "LATE", "INVALID")
+ACCEPT, NOT_COMPLETE, DUPLICATE, REVISION, OUT_OF_SESSION, MISALIGNED, LATE, INVALID, TOO_OLD = (
+    "ACCEPT", "NOT_COMPLETE", "DUPLICATE", "REVISION", "OUT_OF_SESSION", "MISALIGNED", "LATE", "INVALID", "TOO_OLD")
 
 
 @dataclass
@@ -84,6 +84,10 @@ class BarFeed:
             return self._count(FeedOutput(OUT_OF_SESSION, detail=bar.start.isoformat()))
         if self.alignment == "session_grid" and (bar.start - sess[0]) % self.tf != timedelta(0):
             return self._count(FeedOutput(MISALIGNED, detail=bar.start.isoformat()))
+        if now - (end + self.settle) > self.tf * self.stale_after:
+            # a bar the runner could not have acted on in real time (it was down or the provider was late): never
+            # traded retroactively; the hole becomes a data interruption when fresh bars arrive (fail closed)
+            return self._count(FeedOutput(TOO_OLD, detail=bar.start.isoformat()))
         try:
             upd = CandleUpdate(bar.start, bar.open, bar.high, bar.low, bar.close, bar.volume, True)
         except CandleError as e:

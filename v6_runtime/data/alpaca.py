@@ -81,10 +81,20 @@ def check_request(method: str, url: str) -> None:
 Transport = Callable[[str, str, Dict[str, str]], Dict]
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """A redirect would send the key headers to a host check_request never saw: refuse every redirect."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D401
+        raise AlpacaDataError("redirect (%s) to %s refused: the data adapter never follows redirects" % (code, newurl))
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
 def urllib_transport(method: str, url: str, headers: Dict[str, str]) -> Dict:
     check_request(method, url)
     req = urllib.request.Request(url, headers=dict(headers, Accept="application/json"), method=method)
-    with urllib.request.urlopen(req, timeout=15) as r:  # noqa: S310 - host checked above
+    with _OPENER.open(req, timeout=15) as r:  # noqa: S310 - host checked above, redirects refused
         return json.loads(r.read().decode("utf-8"))
 
 
