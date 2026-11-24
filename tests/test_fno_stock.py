@@ -22,11 +22,13 @@ def check(name, ok, extra=""):
 
 
 class FakeKite:
-    """kite.py's interface with a RELIANCE chain: monthly 2026-11-24, strikes 1380..1440 step 20, lot 500."""
-    def __init__(self, prem):
+    """kite.py's interface with a RELIANCE chain: monthly 2026-11-24, strikes 1380..1440 step 20, lot 500.
+    `expiries` overrides the expiry dates of the chain (the expiry-rule checks below)."""
+    def __init__(self, prem, expiries=("2026-11-12", "2026-11-24")):   # a too-near expiry first: must be skipped
         import kite
         self.paper_name = kite.paper_name
         self.prem = prem
+        self.expiries = tuple(expiries)
         self.asked = []
 
     def fno_underlyings(self):
@@ -35,7 +37,7 @@ class FakeKite:
     def fno_chain(self, name, expiry=None):
         out = []
         lo, hi, step, lot = (52000, 53100, 100, 30) if name == "BANKNIFTY" else (1380, 1460, 20, 500)
-        for e in ("2026-11-12", "2026-11-24"):            # a too-near expiry first: must be skipped
+        for e in self.expiries:
             for k in range(lo, hi, step):
                 for t in ("CE", "PE"):
                     out.append({"type": t, "strike": float(k), "expiry": e, "tradingsymbol": "X", "token": 1, "lot": lot})
@@ -89,7 +91,10 @@ if __name__ == "__main__":
         cfg["accounts"]["FNO"].update({"scanner_version": "v4", "fno_stock_options": True, "trade_setups": True,
                                        "fno_underlyings": ["BANKNIFTY", "RELIANCE"]})
         P.save_json(P.CONFIG, cfg)
-        FS.plan.__defaults__ = (None, fk)
+        # paper.setup_decision calls FS.plan(symbol, setup) without `now`, so plan() would read the real clock and the
+        # fixed 2026-11-24 expiry would stop qualifying once it is < MIN_DAYS away (CI failure from 22 Nov 2026 IST).
+        # Inject the same reference clock as checks 1-4, together with the fake Zerodha.
+        FS.plan.__defaults__ = (now, fk)
         P.session = lambda m, n: "open"
         P.past_flat_by = lambda m, a, n: False
         P.fetch_price = lambda m, t: (30.0, datetime.now(timezone.utc))
@@ -164,6 +169,41 @@ if __name__ == "__main__":
         check("   the option is paid from the FNO account, not the INDIA stock account",
               P.account_of("NFO") == "FNO" and led["accounts"]["FNO"]["cash"] < 100000
               and P.account_of("NSE") == "INDIA", led["accounts"])
+
+        # 8. the expiry rule itself (fno_stock.MIN_DAYS = 3 calendar days, counted on the IST date of `now`), with a
+        # controlled clock: reference date 10 Nov 2026 IST
+        ref = datetime(2026, 11, 10, 5, 0, tzinfo=timezone.utc)                  # 10:30 IST on 10 Nov
+        check("8. the rule under test is 3+ calendar days", FS.MIN_DAYS == 3, FS.MIN_DAYS)
+
+        def first_expiry(expiries, at=ref):
+            return FS.plan("RELIANCE", setup, now=at, kite=FakeKite(prem=30.0, expiries=expiries))["expiry"]
+
+        def no_option(expiries, at=ref):
+            try:
+                FS.plan("RELIANCE", setup, now=at, kite=FakeKite(prem=30.0, expiries=expiries))
+                return False, "an option was chosen"
+            except FS.NoOption as e:
+                return "no option expiry 3+ days away" in str(e), e
+
+        ok, why = no_option(["2026-11-05"])
+        check("   an expiry in the past never qualifies", ok, why)
+        ok, why = no_option(["2026-11-10"])
+        check("   an expiry on the reference date itself (0 days) does not qualify", ok, why)
+        ok, why = no_option(["2026-11-11", "2026-11-12"])
+        check("   expiries 1 and 2 days away do not qualify", ok, why)
+        ok, why = no_option(["2026-11-05", "2026-11-10", "2026-11-12"])
+        check("   no qualifying expiry (past, same day, too near): NoOption with the reason, no guessed contract", ok, why)
+        got = first_expiry(["2026-11-12", "2026-11-13", "2026-11-17"])
+        check("   exactly 3 days away qualifies (boundary inclusive) and is the nearest chosen", got == "2026-11-13", got)
+        got = first_expiry(["2026-11-05", "2026-11-10", "2026-11-12", "2026-11-17"])
+        check("   more than 3 days away qualifies; past / same-day / too-near ones are skipped", got == "2026-11-17", got)
+        got = first_expiry(["2026-11-24", "2026-11-17", "2026-11-13"])
+        check("   the nearest qualifying expiry wins whatever the chain order", got == "2026-11-13", got)
+        late_utc = datetime(2026, 11, 9, 20, 0, tzinfo=timezone.utc)             # 01:30 IST on 10 Nov (UTC: 9 Nov)
+        ok, why = no_option(["2026-11-12"], at=late_utc)
+        check("   days are counted on the IST date (9 Nov UTC = 10 Nov IST: 12 Nov is only 2 days away)", ok, why)
+        got = first_expiry(["2026-11-12", "2026-11-13"], at=late_utc)
+        check("   ... and 13 Nov is exactly 3 IST days away from that instant", got == "2026-11-13", got)
     finally:
         os.chdir(old)
         shutil.rmtree(tmp, ignore_errors=True)

@@ -1,0 +1,342 @@
+{
+ "dataset": "v6_regression_easy_bos",
+ "status": "PERMANENT REGRESSION FIXTURE (approved profile: L2/R2 strict, equal levels not swings, close-beyond latest confirmed swing, one BOS per reference)",
+ "candle_numbering": "candle numbers are 1-based as on the exam charts; tests convert to 0-based indices (index = candle - 1)",
+ "t0": "2026-01-05T09:00:00+00:00",
+ "bar_minutes": 5,
+ "cases": [
+  {
+   "source": "Easy visual exam, Chart 1 (bullish), 21 Nov 2026 (formerly mislabelled Medium)",
+   "expected_swings": [],
+   "expected_equal_levels": [
+    [
+     "high",
+     3,
+     [
+      4
+     ]
+    ],
+    [
+     "high",
+     4,
+     [
+      3
+     ]
+    ],
+    [
+     "low",
+     5,
+     [
+      6
+     ]
+    ],
+    [
+     "low",
+     6,
+     [
+      5
+     ]
+    ]
+   ],
+   "expected_bos": [],
+   "rejected_mistake": {
+    "reported": "bullish BOS at candle 11 using level 105 (candles 3 and 4)",
+    "why_wrong": "105 is an equal high (candle 3 high 105 == candle 4 high 105): no unique strict pivot, so no swing and no BOS reference. No confirmed swing exists in this chart, so no BOS at all."
+   },
+   "case_id": "EASY01",
+   "candles": [
+    {
+     "candle": 1,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 100,
+     "h": 103,
+     "l": 99,
+     "c": 102
+    },
+    {
+     "candle": 2,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 102,
+     "h": 104,
+     "l": 101,
+     "c": 103
+    },
+    {
+     "candle": 3,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 103,
+     "h": 105,
+     "l": 102,
+     "c": 104
+    },
+    {
+     "candle": 4,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 104,
+     "h": 105,
+     "l": 101,
+     "c": 102
+    },
+    {
+     "candle": 5,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 102,
+     "h": 103,
+     "l": 99,
+     "c": 100
+    },
+    {
+     "candle": 6,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 100,
+     "h": 102,
+     "l": 99,
+     "c": 101
+    },
+    {
+     "candle": 7,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 101,
+     "h": 104,
+     "l": 100,
+     "c": 103
+    },
+    {
+     "candle": 8,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 103,
+     "h": 106,
+     "l": 102,
+     "c": 105
+    },
+    {
+     "candle": 9,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 105,
+     "h": 107,
+     "l": 103,
+     "c": 104
+    },
+    {
+     "candle": 10,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 104,
+     "h": 106,
+     "l": 103,
+     "c": 105
+    },
+    {
+     "candle": 11,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 105,
+     "h": 108,
+     "l": 104,
+     "c": 107
+    },
+    {
+     "candle": 12,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 107,
+     "h": 110,
+     "l": 106,
+     "c": 109
+    },
+    {
+     "candle": 13,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 109,
+     "h": 112,
+     "l": 108,
+     "c": 111
+    },
+    {
+     "candle": 14,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 111,
+     "h": 113,
+     "l": 110,
+     "c": 112
+    }
+   ],
+   "legacy_case_id": "MED01"
+  },
+  {
+   "source": "Easy visual exam, Chart 2 (bearish), 21 Nov 2026 (formerly mislabelled Medium)",
+   "expected_swings": [
+    [
+     "high",
+     4,
+     6,
+     127
+    ],
+    [
+     "high",
+     8,
+     10,
+     126
+    ],
+    [
+     "low",
+     10,
+     12,
+     117
+    ],
+    [
+     "high",
+     12,
+     14,
+     123
+    ]
+   ],
+   "expected_equal_levels": [
+    [
+     "low",
+     5,
+     [
+      6
+     ]
+    ],
+    [
+     "low",
+     6,
+     [
+      5
+     ]
+    ]
+   ],
+   "expected_bos": [
+    {
+     "direction": "bearish",
+     "reference_kind": "low",
+     "reference_candle": 10,
+     "reference_confirmed_candle": 12,
+     "reference_price": 117,
+     "break_candle": 13,
+     "break_close": 116,
+     "emitted_at_candle": 13
+    }
+   ],
+   "rejected_mistake": {
+    "reported": "bearish BOS at candle 9 using level 120 (candles 5 and 6)",
+    "why_wrong": "120 is an equal low (candle 5 low 120 == candle 6 low 120): not a swing, so not a BOS reference. The only valid BOS is candle 13 closing at 116 below the confirmed swing low 117 (candle 10, confirmed at candle 12)."
+   },
+   "case_id": "EASY02",
+   "candles": [
+    {
+     "candle": 1,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 120,
+     "h": 122,
+     "l": 119,
+     "c": 121
+    },
+    {
+     "candle": 2,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 121,
+     "h": 124,
+     "l": 120,
+     "c": 123
+    },
+    {
+     "candle": 3,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 123,
+     "h": 126,
+     "l": 122,
+     "c": 125
+    },
+    {
+     "candle": 4,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 125,
+     "h": 127,
+     "l": 123,
+     "c": 124
+    },
+    {
+     "candle": 5,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 124,
+     "h": 125,
+     "l": 120,
+     "c": 121
+    },
+    {
+     "candle": 6,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 121,
+     "h": 123,
+     "l": 120,
+     "c": 122
+    },
+    {
+     "candle": 7,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 122,
+     "h": 125,
+     "l": 121,
+     "c": 124
+    },
+    {
+     "candle": 8,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 124,
+     "h": 126,
+     "l": 122,
+     "c": 123
+    },
+    {
+     "candle": 9,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 123,
+     "h": 124,
+     "l": 118,
+     "c": 119
+    },
+    {
+     "candle": 10,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 119,
+     "h": 121,
+     "l": 117,
+     "c": 120
+    },
+    {
+     "candle": 11,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 120,
+     "h": 122,
+     "l": 118,
+     "c": 121
+    },
+    {
+     "candle": 12,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 121,
+     "h": 123,
+     "l": 119,
+     "c": 120
+    },
+    {
+     "candle": 13,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 120,
+     "h": 121,
+     "l": 115,
+     "c": 116
+    },
+    {
+     "candle": 14,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 116,
+     "h": 118,
+     "l": 114,
+     "c": 115
+    }
+   ],
+   "legacy_case_id": "MED02"
+  }
+ ],
+ "identity_note": "Renamed 22 Nov 2026 (audit defect D-4) from medium_bos.json / MED01, MED02. The charts were titled 'Easy Chart 1' and 'Easy Chart 2' (14 candles each); no Medium chart was ever supplied. OHLC, expected swings, equal levels, expected BOS and rejected mistakes are unchanged."
+}

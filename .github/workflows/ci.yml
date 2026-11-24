@@ -109,6 +109,35 @@ jobs:
       - name: No daily trade-count limit on any paper account; the other guards still block (offline)
         run: python tests/test_no_daily_trade_cap.py
 
+  v6:
+    # Scanner V6 (research, PAPER ONLY: no broker or order path). Standard library + pytest only; no network.
+    name: Scanner V6 tests (offline)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest
+      - name: V6 full suite (pytest)
+        run: python -B -m pytest -q -p no:cacheprovider -rs tests/scanner_v6
+      - name: V6 Module D - confirmation and setup lifecycle (focused)
+        run: python -B -m pytest -q -p no:cacheprovider -rs tests/scanner_v6/test_confirmation.py
+      - name: V6 Module E - paper execution and risk (focused)
+        run: python -B -m pytest -q -p no:cacheprovider -rs tests/scanner_v6/test_execution.py
+      - name: V6 script mode (every test file run as a script)
+        run: |
+          n=0
+          for f in tests/scanner_v6/test_*.py; do
+            python -B "$f" > /tmp/v6_script.log 2>&1 || { cat /tmp/v6_script.log; echo "FAILED: $f"; exit 1; }
+            n=$((n + 1))
+          done
+          echo "script mode: $n files, 0 failures"
+          test "$n" -ge 17
+
   shell:
     name: Shellcheck (deploy scripts)
     runs-on: ubuntu-latest

@@ -1,0 +1,6313 @@
+{
+ "dataset": "v6_volume1_swings_bos",
+ "status": "DRAFT - pending human approval; expectations are per ILLUSTRATIVE profile",
+ "timeframe": "5m",
+ "t0": "2026-01-05T09:00:00+00:00",
+ "bar_minutes": 5,
+ "profiles": {
+  "SP-A": "fixed window L2/R2, strict > on both sides (PDF illustrative, not approved)",
+  "SP-B": "L2/R2, left strict, right inclusive (first of a tie)",
+  "SP-C": "L2/R2, left inclusive, right strict (last of a tie)",
+  "SP-D": "L2/R2 inclusive both (every tied bar)",
+  "SP-E": "L5/R5 strict",
+  "SP-F": "L3/R3 strict",
+  "SP-G": "L2/R3 strict",
+  "SP-H": "L2/R1 strict",
+  "ML-A": "label vs previous confirmed swing of the same kind: >, <, == -> HH/LH/EH, HL/LL/EL; first = NONE",
+  "TS-A": "state as of close k-1: BULLISH if latest high label HH and latest low label HL; BEARISH if LH and LL; else UNKNOWN",
+  "BOS-P1": "close strictly beyond level",
+  "BOS-P2": "close at or beyond level",
+  "BOS-P3": "wick beyond level",
+  "BOS-P4": "close beyond level + 2 ticks",
+  "RL": "reference = latest confirmed swing of that kind, if unbroken",
+  "RH": "reference = highest unbroken high / lowest unbroken low",
+  "dedup": "one event per reference swing unless stated",
+  "break timing": "break candle index > reference confirmed_index; event emitted at the break candle close"
+ },
+ "cases": [
+  {
+   "case_id": "SW01",
+   "group": "swing",
+   "description": "PDF section 4 dataset verbatim: clear swing high, final low unconfirmed (end-of-series trap).",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 15
+     }
+    ]
+   },
+   "expected_non_events": [
+    "no swing low at 7 (only 0 right bars)",
+    "no swing at 0/1 (insufficient left)"
+   ],
+   "rationale": "PDF p4: 'swing high at i=2, confirmed at i=4. No confirmed swing low in this truncated sample.'",
+   "policy_dependence": [],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 9,
+     "c": 10.5
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 10.5,
+     "h": 12,
+     "l": 10,
+     "c": 11.5
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 11.5,
+     "h": 15,
+     "l": 11,
+     "c": 13
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 13,
+     "h": 14,
+     "l": 12,
+     "c": 12.5
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 12.5,
+     "h": 13,
+     "l": 10,
+     "c": 10.5
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 10.5,
+     "h": 11,
+     "l": 8,
+     "c": 9
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 9,
+     "h": 10,
+     "l": 7,
+     "c": 8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 8,
+     "h": 9,
+     "l": 6,
+     "c": 7
+    }
+   ]
+  },
+  {
+   "case_id": "SW02",
+   "group": "swing",
+   "description": "SW01 plus two bars with lows above 6.0, as the PDF instructs: the low at 7 confirms at 9.",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 15
+     },
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 7,
+      "confirmed_index": 9,
+      "price": 6
+     }
+    ]
+   },
+   "expected_non_events": [
+    "L7 not available at k=7 or k=8"
+   ],
+   "rationale": "PDF p4: 'Append two later bars with lows above 6.0 to test confirmation of i=7.'",
+   "policy_dependence": [],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 9,
+     "c": 10.5
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 10.5,
+     "h": 12,
+     "l": 10,
+     "c": 11.5
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 11.5,
+     "h": 15,
+     "l": 11,
+     "c": 13
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 13,
+     "h": 14,
+     "l": 12,
+     "c": 12.5
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 12.5,
+     "h": 13,
+     "l": 10,
+     "c": 10.5
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 10.5,
+     "h": 11,
+     "l": 8,
+     "c": 9
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 9,
+     "h": 10,
+     "l": 7,
+     "c": 8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 8,
+     "h": 9,
+     "l": 6,
+     "c": 7
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 7,
+     "h": 8.5,
+     "l": 6.5,
+     "c": 8
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 8,
+     "h": 9.5,
+     "l": 7,
+     "c": 9
+    }
+   ]
+  },
+  {
+   "case_id": "SW03",
+   "group": "swing",
+   "description": "Mirror of SW01 (price' = 20 - price): clear swing low; final high unconfirmed.",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A": [
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 5
+     }
+    ]
+   },
+   "expected_non_events": [
+    "no swing high at 7"
+   ],
+   "rationale": "High/low symmetry: same indices as SW01 with kinds swapped.",
+   "policy_dependence": [],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 9,
+     "c": 9.5
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 9.5,
+     "h": 10,
+     "l": 8,
+     "c": 8.5
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 8.5,
+     "h": 9,
+     "l": 5,
+     "c": 7
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 7,
+     "h": 8,
+     "l": 6,
+     "c": 7.5
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 7.5,
+     "h": 10,
+     "l": 7,
+     "c": 9.5
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 9.5,
+     "h": 12,
+     "l": 9,
+     "c": 11
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 11,
+     "h": 13,
+     "l": 10,
+     "c": 12
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 12,
+     "h": 14,
+     "l": 11,
+     "c": 13
+    }
+   ]
+  },
+  {
+   "case_id": "SW04",
+   "group": "swing_tie",
+   "description": "Adjacent equal highs (14 at i=2 and i=3).",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A": [],
+    "SP-B": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 14
+     }
+    ],
+    "SP-C": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 3,
+      "confirmed_index": 5,
+      "price": 14
+     }
+    ],
+    "SP-D": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 14
+     },
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 3,
+      "confirmed_index": 5,
+      "price": 14
+     }
+    ]
+   },
+   "expected_non_events": [
+    "SP-A: no unique strict pivot (PDF E3)"
+   ],
+   "rationale": "Strict > rejects ties (PDF 2.B). The outcome depends on the tie policy; cluster policy would give ONE cluster {2,3} confirmed at 5.",
+   "policy_dependence": [
+    "SW-003",
+    "SW-004"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 9,
+     "c": 10.5
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 10.5,
+     "h": 12,
+     "l": 10,
+     "c": 11.5
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 11.5,
+     "h": 14,
+     "l": 11,
+     "c": 13
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 13,
+     "h": 14,
+     "l": 12,
+     "c": 12.5
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 12.5,
+     "h": 13,
+     "l": 10,
+     "c": 10.5
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 10.5,
+     "h": 12,
+     "l": 9.5,
+     "c": 10
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 9,
+     "c": 9.5
+    }
+   ]
+  },
+  {
+   "case_id": "SW05",
+   "group": "swing_tie",
+   "description": "Double top: equal highs (14) four bars apart, separated by a swing low.",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 14,
+      "label_ML-A": "NONE"
+     },
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 4,
+      "confirmed_index": 6,
+      "price": 10.5,
+      "label_ML-A": "NONE"
+     },
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 6,
+      "confirmed_index": 8,
+      "price": 14,
+      "label_ML-A": "EH"
+     }
+    ]
+   },
+   "expected_non_events": [],
+   "rationale": "Each peak is a strict pivot in its own window. The second high equals the first: HH/LH label undefined (EH).",
+   "policy_dependence": [
+    "SW-004",
+    "MS-001"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 9,
+     "c": 10.5
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 10.5,
+     "h": 12,
+     "l": 10,
+     "c": 11.5
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 11.5,
+     "h": 14,
+     "l": 11,
+     "c": 13
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 13,
+     "h": 13.5,
+     "l": 11.5,
+     "c": 12
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 12,
+     "h": 12.5,
+     "l": 10.5,
+     "c": 11
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 11,
+     "h": 13,
+     "l": 10.8,
+     "c": 12.5
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 12.5,
+     "h": 14,
+     "l": 12,
+     "c": 13.5
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 13.5,
+     "h": 13.8,
+     "l": 12,
+     "c": 12.5
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 12.5,
+     "h": 13,
+     "l": 11,
+     "c": 11.5
+    }
+   ]
+  },
+  {
+   "case_id": "SW06",
+   "group": "swing_tie",
+   "description": "Adjacent equal lows (mirror of SW04).",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A": [],
+    "SP-B": [
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 6
+     }
+    ],
+    "SP-C": [
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 3,
+      "confirmed_index": 5,
+      "price": 6
+     }
+    ],
+    "SP-D": [
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 6
+     },
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 3,
+      "confirmed_index": 5,
+      "price": 6
+     }
+    ]
+   },
+   "expected_non_events": [
+    "SP-A: no strict pivot low"
+   ],
+   "rationale": "Mirror of SW04.",
+   "policy_dependence": [
+    "SW-003",
+    "SW-004"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 9,
+     "c": 9.5
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 9.5,
+     "h": 10,
+     "l": 8,
+     "c": 8.5
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 8.5,
+     "h": 9,
+     "l": 6,
+     "c": 7
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 7,
+     "h": 8,
+     "l": 6,
+     "c": 7.5
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 7.5,
+     "h": 10,
+     "l": 7,
+     "c": 9.5
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 9.5,
+     "h": 10.5,
+     "l": 8,
+     "c": 10
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 9,
+     "c": 10.5
+    }
+   ]
+  },
+  {
+   "case_id": "SW07",
+   "group": "swing_tie",
+   "description": "Near-equal highs: 14.00 at i=2 and 13.99 at i=3 (one tick apart).",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 14
+     }
+    ],
+    "SP-A + tolerance >= 1 tick": "same as SW04 (treated as equal)"
+   },
+   "expected_non_events": [],
+   "rationale": "Under raw-price strict comparison the 1-tick-higher bar is the pivot. A tolerance of >=1 tick turns this into a tie case.",
+   "policy_dependence": [
+    "SW-004"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 9,
+     "c": 10.5
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 10.5,
+     "h": 12,
+     "l": 10,
+     "c": 11.5
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 11.5,
+     "h": 14,
+     "l": 11,
+     "c": 13
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 13,
+     "h": 13.99,
+     "l": 12,
+     "c": 12.5
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 12.5,
+     "h": 13,
+     "l": 10,
+     "c": 10.5
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 10.5,
+     "h": 12,
+     "l": 9.5,
+     "c": 10
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 9,
+     "c": 9.5
+    }
+   ]
+  },
+  {
+   "case_id": "SW08",
+   "group": "swing",
+   "description": "Candidate high at i=3 with only one right-side bar at the end of the data.",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A": [],
+    "SP-H (R=1)": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 3,
+      "confirmed_index": 4,
+      "price": 14
+     }
+    ]
+   },
+   "expected_non_events": [
+    "SP-A: H3 stays a candidate (needs i=5)"
+   ],
+   "rationale": "PDF E2 / end-of-dataset: insufficient right-side evidence -> unconfirmed. Must not be forced.",
+   "policy_dependence": [
+    "SW-002"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 9,
+     "c": 10.5
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 10.5,
+     "h": 12,
+     "l": 10,
+     "c": 11.5
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 11.5,
+     "h": 13,
+     "l": 11,
+     "c": 12.5
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 12.5,
+     "h": 14,
+     "l": 12,
+     "c": 13.5
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 13.5,
+     "h": 13.8,
+     "l": 12.5,
+     "c": 13
+    }
+   ]
+  },
+  {
+   "case_id": "SW09",
+   "group": "swing_outside",
+   "description": "Outside candle at i=2: highest high and lowest low of its window.",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A (both allowed)": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 13
+     },
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 8
+     }
+    ],
+    "alt: reject both": [],
+    "alt: tie-break": "one of H2 / L2"
+   },
+   "expected_non_events": [],
+   "rationale": "PDF 7: outside bar -> allow both, reject both, or tie-break.",
+   "policy_dependence": [
+    "SW-005"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 9,
+     "c": 10.5
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 10.5,
+     "h": 11.5,
+     "l": 9.5,
+     "c": 11
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 11,
+     "h": 13,
+     "l": 8,
+     "c": 9
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 9,
+     "h": 12,
+     "l": 8.5,
+     "c": 11.5
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 11.5,
+     "h": 12.5,
+     "l": 9,
+     "c": 10
+    }
+   ]
+  },
+  {
+   "case_id": "SW10",
+   "group": "swing_nested",
+   "description": "Small swing (H5/L7) inside the advance to a larger top at i=10.",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 5,
+      "confirmed_index": 7,
+      "price": 12,
+      "label_ML-A": "NONE"
+     },
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 7,
+      "confirmed_index": 9,
+      "price": 10,
+      "label_ML-A": "NONE"
+     },
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 10,
+      "confirmed_index": 12,
+      "price": 15,
+      "label_ML-A": "HH"
+     }
+    ],
+    "SP-F (3/3)": [
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 7,
+      "confirmed_index": 10,
+      "price": 10
+     },
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 10,
+      "confirmed_index": 13,
+      "price": 15
+     }
+    ],
+    "SP-E (5/5)": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 10,
+      "confirmed_index": 15,
+      "price": 15
+     }
+    ]
+   },
+   "expected_non_events": [],
+   "rationale": "Different windows give different structure; with 5/5 only the external top exists and it confirms 3 bars later.",
+   "policy_dependence": [
+    "SW-002",
+    "SW-006",
+    "SW-007"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 8.3,
+     "h": 9,
+     "l": 8,
+     "c": 8.7
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 8.7,
+     "h": 9.5,
+     "l": 8.5,
+     "c": 9.2
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 9.2,
+     "h": 10,
+     "l": 9,
+     "c": 9.7
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 9.7,
+     "h": 10.5,
+     "l": 9.5,
+     "c": 10.2
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 10.2,
+     "h": 11,
+     "l": 10.2,
+     "c": 10.76
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 11,
+     "h": 12,
+     "l": 11,
+     "c": 11.7
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 11.5,
+     "h": 11.5,
+     "l": 10.5,
+     "c": 10.8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 10.8,
+     "h": 11.2,
+     "l": 10,
+     "c": 10.36
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 11,
+     "h": 12.5,
+     "l": 11,
+     "c": 12.05
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 12.05,
+     "h": 13.5,
+     "l": 12,
+     "c": 13.05
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 13.5,
+     "h": 15,
+     "l": 13.5,
+     "c": 14.55
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 14.5,
+     "h": 14.5,
+     "l": 13.5,
+     "c": 13.8
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 13.8,
+     "h": 14,
+     "l": 13,
+     "c": 13.3
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 13,
+     "h": 13,
+     "l": 12,
+     "c": 12.3
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 12.3,
+     "h": 12.5,
+     "l": 11.5,
+     "c": 11.8
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 11.8,
+     "h": 12,
+     "l": 11,
+     "c": 11.3
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 11.3,
+     "h": 11.5,
+     "l": 10.5,
+     "c": 10.8
+    }
+   ]
+  },
+  {
+   "case_id": "SW11",
+   "group": "swing_replace",
+   "description": "Candidate high at 2 rejected when bar 4 makes a higher high; bar 4 becomes the pivot.",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 4,
+      "confirmed_index": 6,
+      "price": 14
+     }
+    ]
+   },
+   "expected_non_events": [
+    "H2 never emitted (rejected at close of 4)"
+   ],
+   "rationale": "A candidate is not an event: its rejection is not a repaint because it was never emitted.",
+   "policy_dependence": [
+    "SW-008"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 8.95,
+     "h": 10,
+     "l": 8.5,
+     "c": 9.55
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 9.55,
+     "h": 11,
+     "l": 9.5,
+     "c": 10.55
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 11.5,
+     "h": 13,
+     "l": 11.5,
+     "c": 12.55
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 12,
+     "h": 12,
+     "l": 10.5,
+     "c": 10.95
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 12.5,
+     "h": 14,
+     "l": 12.5,
+     "c": 13.55
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 13,
+     "h": 13,
+     "l": 11.5,
+     "c": 11.95
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 11.95,
+     "h": 12.5,
+     "l": 11.0,
+     "c": 11.45
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 11.45,
+     "h": 12,
+     "l": 10.5,
+     "c": 10.95
+    }
+   ]
+  },
+  {
+   "case_id": "SW12",
+   "group": "swing_timing",
+   "description": "Late confirmation: candidate at 3.",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 3,
+      "confirmed_index": 5,
+      "price": 15
+     }
+    ],
+    "SP-G (R=3)": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 3,
+      "confirmed_index": 6,
+      "price": 15
+     }
+    ],
+    "SP-H (R=1)": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 3,
+      "confirmed_index": 4,
+      "price": 15
+     }
+    ]
+   },
+   "expected_non_events": [
+    "SP-A: nothing at k=3 or k=4"
+   ],
+   "rationale": "PDF section 3: event_index 3, confirmed_index = 3 + R. Replay must emit at k=5.",
+   "policy_dependence": [
+    "SW-002"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 8.95,
+     "h": 10,
+     "l": 8.5,
+     "c": 9.55
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 9.55,
+     "h": 11,
+     "l": 9.5,
+     "c": 10.55
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 10.55,
+     "h": 12,
+     "l": 10.5,
+     "c": 11.55
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 13.5,
+     "h": 15,
+     "l": 13.5,
+     "c": 14.55
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 13,
+     "h": 13,
+     "l": 11.5,
+     "c": 11.95
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 11.95,
+     "h": 12,
+     "l": 10.5,
+     "c": 10.95
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 10.95,
+     "h": 11.5,
+     "l": 10.0,
+     "c": 10.45
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 10.45,
+     "h": 11,
+     "l": 9.5,
+     "c": 9.95
+    }
+   ]
+  },
+  {
+   "case_id": "SW13",
+   "group": "swing_tie",
+   "description": "Plateau: three equal highs (14) at 2, 3, 4.",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A": [],
+    "SP-B": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 14
+     }
+    ],
+    "SP-C": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 4,
+      "confirmed_index": 6,
+      "price": 14
+     }
+    ],
+    "SP-D": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 14
+     },
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 3,
+      "confirmed_index": 5,
+      "price": 14
+     },
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 4,
+      "confirmed_index": 6,
+      "price": 14
+     }
+    ]
+   },
+   "expected_non_events": [
+    "SP-A: no pivot"
+   ],
+   "rationale": "First / last / all / cluster: each tie policy gives a different answer.",
+   "policy_dependence": [
+    "SW-004"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 9.3,
+     "h": 10,
+     "l": 9,
+     "c": 9.7
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 10,
+     "c": 10.7
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 12.5,
+     "h": 14,
+     "l": 12.5,
+     "c": 13.55
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 13.55,
+     "h": 14,
+     "l": 12.8,
+     "c": 13.16
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 13.16,
+     "h": 14,
+     "l": 12.6,
+     "c": 13.02
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 12,
+     "h": 12,
+     "l": 10.5,
+     "c": 10.95
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 10.95,
+     "h": 11,
+     "l": 9.5,
+     "c": 9.95
+    }
+   ]
+  },
+  {
+   "case_id": "SW14",
+   "group": "swing_tie",
+   "description": "Equal high (14) reached again at the right-window boundary (i=4) after a lower bar.",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A": [],
+    "SP-B": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 14
+     }
+    ],
+    "SP-C": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 4,
+      "confirmed_index": 6,
+      "price": 14
+     }
+    ],
+    "SP-D": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 14
+     },
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 4,
+      "confirmed_index": 6,
+      "price": 14
+     }
+    ]
+   },
+   "expected_non_events": [
+    "SP-A: H2 rejected at close of 4, H4 rejected by equal left neighbour"
+   ],
+   "rationale": "Non-adjacent tie inside one window.",
+   "policy_dependence": [
+    "SW-004"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 9.3,
+     "h": 10,
+     "l": 9,
+     "c": 9.7
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 10,
+     "c": 10.7
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 12.5,
+     "h": 14,
+     "l": 12.5,
+     "c": 13.55
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 13,
+     "h": 13,
+     "l": 11.8,
+     "c": 12.16
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 12.6,
+     "h": 14,
+     "l": 12.6,
+     "c": 13.58
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 12,
+     "h": 12,
+     "l": 10.5,
+     "c": 10.95
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 10.95,
+     "h": 11,
+     "l": 9.5,
+     "c": 9.95
+    }
+   ]
+  },
+  {
+   "case_id": "SW15",
+   "group": "swing",
+   "description": "Highest high on the very first bar (no left history).",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A": [],
+    "alt: partial left window at series start": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 0,
+      "confirmed_index": 2,
+      "price": 14
+     }
+    ]
+   },
+   "expected_non_events": [
+    "SP-A: bars 0-1 not eligible"
+   ],
+   "rationale": "Insufficient left history: either ineligible or a relaxed start rule.",
+   "policy_dependence": [
+    "SW-002"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 12.95,
+     "h": 14,
+     "l": 12.5,
+     "c": 12.95
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 12,
+     "h": 12,
+     "l": 11,
+     "c": 11.3
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 11,
+     "h": 11,
+     "l": 10,
+     "c": 10.3
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 10.3,
+     "h": 10.5,
+     "l": 9.6,
+     "c": 9.87
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 9.87,
+     "h": 10,
+     "l": 9,
+     "c": 9.3
+    }
+   ]
+  },
+  {
+   "case_id": "MS01",
+   "group": "structure",
+   "description": "Clean uptrend: L, H, HL, HH, HL.",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A + ML-A": [
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 98.8,
+      "label_ML-A": "NONE"
+     },
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 6,
+      "confirmed_index": 8,
+      "price": 107.2,
+      "label_ML-A": "NONE"
+     },
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 10,
+      "confirmed_index": 12,
+      "price": 101.8,
+      "label_ML-A": "HL"
+     },
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 14,
+      "confirmed_index": 16,
+      "price": 110.2,
+      "label_ML-A": "HH"
+     },
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 18,
+      "confirmed_index": 20,
+      "price": 103.8,
+      "label_ML-A": "HL"
+     }
+    ],
+    "TS-A state": {
+     "k<16": "UNKNOWN",
+     "16..20": "BULLISH (HH@16 + HL@12, then HL@20)"
+    },
+    "BOS-P1 (close>, RL)": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     }
+    ]
+   },
+   "expected_non_events": [
+    "no label before a comparable earlier swing exists (first H and first L = NONE)"
+   ],
+   "rationale": "Labels compare each swing with the previous confirmed swing of the same kind; labels exist from that swing's confirmation.",
+   "policy_dependence": [
+    "MS-001"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 101.2,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 102.8
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 102.2,
+     "h": 102.2,
+     "l": 99.8,
+     "c": 100.2
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 100.2,
+     "h": 101.2,
+     "l": 98.8,
+     "c": 99.2
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 100.3,
+     "h": 102.7,
+     "l": 100.3,
+     "c": 102.3
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 102.3,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 103.8
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 103.8,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 106.45,
+     "h": 106.45,
+     "l": 104.05,
+     "c": 104.45
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 104.45,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 103.7
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 103.7,
+     "h": 104.95,
+     "l": 102.55,
+     "c": 102.95
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 102.95,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 103.3,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 106.8,
+     "h": 108.7,
+     "l": 106.3,
+     "c": 108.3
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 108.3,
+     "h": 110.2,
+     "l": 107.8,
+     "c": 109.8
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 109.2,
+     "h": 109.2,
+     "l": 106.8,
+     "c": 107.2
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 107.2,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 106.2
+    },
+    {
+     "i": 17,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 106.2,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 105.2
+    },
+    {
+     "i": 18,
+     "t": "2026-01-05T10:30:00Z",
+     "o": 105.2,
+     "h": 106.2,
+     "l": 103.8,
+     "c": 104.2
+    },
+    {
+     "i": 19,
+     "t": "2026-01-05T10:35:00Z",
+     "o": 104.8,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 20,
+     "t": "2026-01-05T10:40:00Z",
+     "o": 106.8,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 107.8
+    }
+   ]
+  },
+  {
+   "case_id": "MS02",
+   "group": "structure",
+   "description": "Mirror of MS01: clean downtrend LH / LL.",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A + ML-A": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 111.2,
+      "label_ML-A": "NONE"
+     },
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 6,
+      "confirmed_index": 8,
+      "price": 102.8,
+      "label_ML-A": "NONE"
+     },
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 10,
+      "confirmed_index": 12,
+      "price": 108.2,
+      "label_ML-A": "LH"
+     },
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 14,
+      "confirmed_index": 16,
+      "price": 99.8,
+      "label_ML-A": "LL"
+     },
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 18,
+      "confirmed_index": 20,
+      "price": 106.2,
+      "label_ML-A": "LH"
+     }
+    ],
+    "BOS-P1 (close<, RL)": [
+     {
+      "type": "BREAK",
+      "direction": "bearish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SL6",
+      "reference_level": 102.8,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     }
+    ]
+   },
+   "expected_non_events": [],
+   "rationale": "Mirror symmetry.",
+   "policy_dependence": [
+    "MS-001"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 108.8,
+     "h": 109.2,
+     "l": 106.8,
+     "c": 107.2
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 107.8,
+     "h": 110.2,
+     "l": 107.8,
+     "c": 109.8
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 109.8,
+     "h": 111.2,
+     "l": 108.8,
+     "c": 110.8
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 109.7,
+     "h": 109.7,
+     "l": 107.3,
+     "c": 107.7
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 107.7,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 106.2
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 106.2,
+     "h": 106.7,
+     "l": 104.3,
+     "c": 104.7
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 104.7,
+     "h": 105.2,
+     "l": 102.8,
+     "c": 103.2
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 103.55,
+     "h": 105.95,
+     "l": 103.55,
+     "c": 105.55
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 105.55,
+     "h": 106.7,
+     "l": 104.3,
+     "c": 106.3
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 106.3,
+     "h": 107.45,
+     "l": 105.05,
+     "c": 107.05
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 107.05,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 107.8
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 106.7,
+     "h": 106.7,
+     "l": 104.3,
+     "c": 104.7
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 104.7,
+     "h": 105.2,
+     "l": 102.8,
+     "c": 103.2
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 103.2,
+     "h": 103.7,
+     "l": 101.3,
+     "c": 101.7
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 101.7,
+     "h": 102.2,
+     "l": 99.8,
+     "c": 100.2
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 100.8,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 102.8
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 102.8,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 103.8
+    },
+    {
+     "i": 17,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 103.8,
+     "h": 105.2,
+     "l": 102.8,
+     "c": 104.8
+    },
+    {
+     "i": 18,
+     "t": "2026-01-05T10:30:00Z",
+     "o": 104.8,
+     "h": 106.2,
+     "l": 103.8,
+     "c": 105.8
+    },
+    {
+     "i": 19,
+     "t": "2026-01-05T10:35:00Z",
+     "o": 105.2,
+     "h": 105.2,
+     "l": 102.8,
+     "c": 103.2
+    },
+    {
+     "i": 20,
+     "t": "2026-01-05T10:40:00Z",
+     "o": 103.2,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    }
+   ]
+  },
+  {
+   "case_id": "MS03",
+   "group": "structure",
+   "description": "Equal swing highs: H14 equals H6 (107.2).",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A + ML-A": [
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 98.8,
+      "label_ML-A": "NONE"
+     },
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 6,
+      "confirmed_index": 8,
+      "price": 107.2,
+      "label_ML-A": "NONE"
+     },
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 10,
+      "confirmed_index": 12,
+      "price": 101.8,
+      "label_ML-A": "HL"
+     },
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 14,
+      "confirmed_index": 16,
+      "price": 107.2,
+      "label_ML-A": "EH"
+     },
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 18,
+      "confirmed_index": 20,
+      "price": 102.8,
+      "label_ML-A": "HL"
+     }
+    ],
+    "TS-A state": "UNKNOWN (EH is neither HH nor LH)",
+    "BOS-P1": []
+   },
+   "expected_non_events": [
+    "no break: no close above 107.2"
+   ],
+   "rationale": "Equal-structure labelling must be decided (EH treated as HH, LH, or neutral).",
+   "policy_dependence": [
+    "SW-004",
+    "MS-001"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 101.2,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 102.8
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 102.2,
+     "h": 102.2,
+     "l": 99.8,
+     "c": 100.2
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 100.2,
+     "h": 101.2,
+     "l": 98.8,
+     "c": 99.2
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 100.3,
+     "h": 102.7,
+     "l": 100.3,
+     "c": 102.3
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 102.3,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 103.8
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 103.8,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 106.45,
+     "h": 106.45,
+     "l": 104.05,
+     "c": 104.45
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 104.45,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 103.7
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 103.7,
+     "h": 104.95,
+     "l": 102.55,
+     "c": 102.95
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 102.95,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 102.55,
+     "h": 104.95,
+     "l": 102.55,
+     "c": 104.55
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 104.55,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 105.3,
+     "h": 106.45,
+     "l": 104.05,
+     "c": 106.05
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 106.05,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 106.7,
+     "h": 106.7,
+     "l": 104.3,
+     "c": 104.7
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 104.7,
+     "h": 106.2,
+     "l": 103.8,
+     "c": 104.2
+    },
+    {
+     "i": 17,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 104.2,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 103.7
+    },
+    {
+     "i": 18,
+     "t": "2026-01-05T10:30:00Z",
+     "o": 103.7,
+     "h": 105.2,
+     "l": 102.8,
+     "c": 103.2
+    },
+    {
+     "i": 19,
+     "t": "2026-01-05T10:35:00Z",
+     "o": 103.3,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 20,
+     "t": "2026-01-05T10:40:00Z",
+     "o": 105.3,
+     "h": 106.2,
+     "l": 103.8,
+     "c": 105.8
+    }
+   ]
+  },
+  {
+   "case_id": "MS05",
+   "group": "structure",
+   "description": "Broadening: HH then LL (conflicting).",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A + ML-A": [
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 100.8,
+      "label_ML-A": "NONE"
+     },
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 6,
+      "confirmed_index": 8,
+      "price": 107.2,
+      "label_ML-A": "NONE"
+     },
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 10,
+      "confirmed_index": 12,
+      "price": 98.8,
+      "label_ML-A": "LL"
+     },
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 14,
+      "confirmed_index": 16,
+      "price": 109.2,
+      "label_ML-A": "HH"
+     },
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 18,
+      "confirmed_index": 20,
+      "price": 96.8,
+      "label_ML-A": "LL"
+     }
+    ],
+    "TS-A state": "UNKNOWN throughout",
+    "BOS-P1 (RL)": [
+     {
+      "type": "BREAK",
+      "direction": "bearish",
+      "event_index": 9,
+      "confirmed_index": 9,
+      "reference_swing": "SL2",
+      "reference_level": 100.8,
+      "reference_confirmed_index": 4,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     },
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 14,
+      "confirmed_index": 14,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     },
+     {
+      "type": "BREAK",
+      "direction": "bearish",
+      "event_index": 18,
+      "confirmed_index": 18,
+      "reference_swing": "SL10",
+      "reference_level": 98.8,
+      "reference_confirmed_index": 12,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     }
+    ]
+   },
+   "expected_non_events": [
+    "no BOS/CHoCH label: state unknown"
+   ],
+   "rationale": "Every sequence of pivots is not a trend; breaks exist but cannot be labelled.",
+   "policy_dependence": [
+    "MS-001",
+    "BOS-003"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 103.2,
+     "h": 105.2,
+     "l": 102.8,
+     "c": 104.8
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 104.2,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 102.2,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 101.2
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 101.8,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 103.8
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 103.8,
+     "h": 105.2,
+     "l": 102.8,
+     "c": 104.8
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 104.8,
+     "h": 106.2,
+     "l": 103.8,
+     "c": 105.8
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 105.8,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 105.7,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 103.7
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 103.7,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 102.2,
+     "h": 102.7,
+     "l": 100.3,
+     "c": 100.7
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 100.7,
+     "h": 101.2,
+     "l": 98.8,
+     "c": 99.2
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 100.8,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 102.8
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 102.8,
+     "h": 105.2,
+     "l": 102.8,
+     "c": 104.8
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 104.8,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 106.8,
+     "h": 109.2,
+     "l": 106.8,
+     "c": 108.8
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 106.7,
+     "h": 106.7,
+     "l": 104.3,
+     "c": 104.7
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 104.2,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    },
+    {
+     "i": 17,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 101.7,
+     "h": 101.7,
+     "l": 99.3,
+     "c": 99.7
+    },
+    {
+     "i": 18,
+     "t": "2026-01-05T10:30:00Z",
+     "o": 99.2,
+     "h": 99.2,
+     "l": 96.8,
+     "c": 97.2
+    },
+    {
+     "i": 19,
+     "t": "2026-01-05T10:35:00Z",
+     "o": 97.8,
+     "h": 100.2,
+     "l": 97.8,
+     "c": 99.8
+    },
+    {
+     "i": 20,
+     "t": "2026-01-05T10:40:00Z",
+     "o": 99.8,
+     "h": 101.2,
+     "l": 98.8,
+     "c": 100.8
+    }
+   ]
+  },
+  {
+   "case_id": "MS06",
+   "group": "structure_nested",
+   "description": "SW10 data: internal (2/2) vs external (5/5) structure.",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 5,
+      "confirmed_index": 7,
+      "price": 12,
+      "label_ML-A": "NONE"
+     },
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 7,
+      "confirmed_index": 9,
+      "price": 10,
+      "label_ML-A": "NONE"
+     },
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 10,
+      "confirmed_index": 12,
+      "price": 15,
+      "label_ML-A": "HH"
+     }
+    ],
+    "SP-E": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 10,
+      "confirmed_index": 15,
+      "price": 15,
+      "label_ML-A": "NONE"
+     }
+    ],
+    "BOS-P1 on SP-A": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 8,
+      "confirmed_index": 8,
+      "reference_swing": "SH5",
+      "reference_level": 12,
+      "reference_confirmed_index": 7,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     }
+    ],
+    "BOS-P1 on SP-E": []
+   },
+   "expected_non_events": [],
+   "rationale": "The same candles produce an internal BOS under 2/2 and none under 5/5.",
+   "policy_dependence": [
+    "SW-006",
+    "BOS-001"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 8.3,
+     "h": 9,
+     "l": 8,
+     "c": 8.7
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 8.7,
+     "h": 9.5,
+     "l": 8.5,
+     "c": 9.2
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 9.2,
+     "h": 10,
+     "l": 9,
+     "c": 9.7
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 9.7,
+     "h": 10.5,
+     "l": 9.5,
+     "c": 10.2
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 10.2,
+     "h": 11,
+     "l": 10.2,
+     "c": 10.76
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 11,
+     "h": 12,
+     "l": 11,
+     "c": 11.7
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 11.5,
+     "h": 11.5,
+     "l": 10.5,
+     "c": 10.8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 10.8,
+     "h": 11.2,
+     "l": 10,
+     "c": 10.36
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 11,
+     "h": 12.5,
+     "l": 11,
+     "c": 12.05
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 12.05,
+     "h": 13.5,
+     "l": 12,
+     "c": 13.05
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 13.5,
+     "h": 15,
+     "l": 13.5,
+     "c": 14.55
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 14.5,
+     "h": 14.5,
+     "l": 13.5,
+     "c": 13.8
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 13.8,
+     "h": 14,
+     "l": 13,
+     "c": 13.3
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 13,
+     "h": 13,
+     "l": 12,
+     "c": 12.3
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 12.3,
+     "h": 12.5,
+     "l": 11.5,
+     "c": 11.8
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 11.8,
+     "h": 12,
+     "l": 11,
+     "c": 11.3
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 11.3,
+     "h": 11.5,
+     "l": 10.5,
+     "c": 10.8
+    }
+   ]
+  },
+  {
+   "case_id": "BOS01",
+   "group": "bos",
+   "description": "Bullish continuation: MS01 then close above SH14 (110.2) at 22.",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A + BOS-P1/P2/P3/P4 (RL)": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     },
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 22,
+      "confirmed_index": 22,
+      "reference_swing": "SH14",
+      "reference_level": 110.2,
+      "reference_confirmed_index": 16,
+      "evidence": "close",
+      "class_TS-A": "BOS"
+     }
+    ]
+   },
+   "expected_non_events": [
+    "no event at 21 (close 109.3, high 109.7)"
+   ],
+   "rationale": "Bullish state (HH@14, HL@18) + close above the latest confirmed high.",
+   "policy_dependence": [
+    "BOS-001",
+    "BOS-002",
+    "BOS-003"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 101.2,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 102.8
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 102.2,
+     "h": 102.2,
+     "l": 99.8,
+     "c": 100.2
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 100.2,
+     "h": 101.2,
+     "l": 98.8,
+     "c": 99.2
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 100.3,
+     "h": 102.7,
+     "l": 100.3,
+     "c": 102.3
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 102.3,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 103.8
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 103.8,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 106.45,
+     "h": 106.45,
+     "l": 104.05,
+     "c": 104.45
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 104.45,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 103.7
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 103.7,
+     "h": 104.95,
+     "l": 102.55,
+     "c": 102.95
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 102.95,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 103.3,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 106.8,
+     "h": 108.7,
+     "l": 106.3,
+     "c": 108.3
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 108.3,
+     "h": 110.2,
+     "l": 107.8,
+     "c": 109.8
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 109.2,
+     "h": 109.2,
+     "l": 106.8,
+     "c": 107.2
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 107.2,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 106.2
+    },
+    {
+     "i": 17,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 106.2,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 105.2
+    },
+    {
+     "i": 18,
+     "t": "2026-01-05T10:30:00Z",
+     "o": 105.2,
+     "h": 106.2,
+     "l": 103.8,
+     "c": 104.2
+    },
+    {
+     "i": 19,
+     "t": "2026-01-05T10:35:00Z",
+     "o": 104.8,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 20,
+     "t": "2026-01-05T10:40:00Z",
+     "o": 106.8,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 107.8
+    },
+    {
+     "i": 21,
+     "t": "2026-01-05T10:45:00Z",
+     "o": 107.8,
+     "h": 109.7,
+     "l": 107.3,
+     "c": 109.3
+    },
+    {
+     "i": 22,
+     "t": "2026-01-05T10:50:00Z",
+     "o": 109.3,
+     "h": 111.2,
+     "l": 108.8,
+     "c": 110.8
+    },
+    {
+     "i": 23,
+     "t": "2026-01-05T10:55:00Z",
+     "o": 110.8,
+     "h": 112.2,
+     "l": 109.8,
+     "c": 111.8
+    }
+   ]
+  },
+  {
+   "case_id": "BOS02",
+   "group": "bos",
+   "description": "Bearish continuation: mirror of BOS01.",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A + BOS-P1 (RL)": [
+     {
+      "type": "BREAK",
+      "direction": "bearish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SL6",
+      "reference_level": 102.8,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     },
+     {
+      "type": "BREAK",
+      "direction": "bearish",
+      "event_index": 22,
+      "confirmed_index": 22,
+      "reference_swing": "SL14",
+      "reference_level": 99.8,
+      "reference_confirmed_index": 16,
+      "evidence": "close",
+      "class_TS-A": "BOS"
+     }
+    ]
+   },
+   "expected_non_events": [],
+   "rationale": "Mirror symmetry.",
+   "policy_dependence": [
+    "BOS-001",
+    "BOS-002",
+    "BOS-003"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 108.8,
+     "h": 109.2,
+     "l": 106.8,
+     "c": 107.2
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 107.8,
+     "h": 110.2,
+     "l": 107.8,
+     "c": 109.8
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 109.8,
+     "h": 111.2,
+     "l": 108.8,
+     "c": 110.8
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 109.7,
+     "h": 109.7,
+     "l": 107.3,
+     "c": 107.7
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 107.7,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 106.2
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 106.2,
+     "h": 106.7,
+     "l": 104.3,
+     "c": 104.7
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 104.7,
+     "h": 105.2,
+     "l": 102.8,
+     "c": 103.2
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 103.55,
+     "h": 105.95,
+     "l": 103.55,
+     "c": 105.55
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 105.55,
+     "h": 106.7,
+     "l": 104.3,
+     "c": 106.3
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 106.3,
+     "h": 107.45,
+     "l": 105.05,
+     "c": 107.05
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 107.05,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 107.8
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 106.7,
+     "h": 106.7,
+     "l": 104.3,
+     "c": 104.7
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 104.7,
+     "h": 105.2,
+     "l": 102.8,
+     "c": 103.2
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 103.2,
+     "h": 103.7,
+     "l": 101.3,
+     "c": 101.7
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 101.7,
+     "h": 102.2,
+     "l": 99.8,
+     "c": 100.2
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 100.8,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 102.8
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 102.8,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 103.8
+    },
+    {
+     "i": 17,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 103.8,
+     "h": 105.2,
+     "l": 102.8,
+     "c": 104.8
+    },
+    {
+     "i": 18,
+     "t": "2026-01-05T10:30:00Z",
+     "o": 104.8,
+     "h": 106.2,
+     "l": 103.8,
+     "c": 105.8
+    },
+    {
+     "i": 19,
+     "t": "2026-01-05T10:35:00Z",
+     "o": 105.2,
+     "h": 105.2,
+     "l": 102.8,
+     "c": 103.2
+    },
+    {
+     "i": 20,
+     "t": "2026-01-05T10:40:00Z",
+     "o": 103.2,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    },
+    {
+     "i": 21,
+     "t": "2026-01-05T10:45:00Z",
+     "o": 102.2,
+     "h": 102.7,
+     "l": 100.3,
+     "c": 100.7
+    },
+    {
+     "i": 22,
+     "t": "2026-01-05T10:50:00Z",
+     "o": 100.7,
+     "h": 101.2,
+     "l": 98.8,
+     "c": 99.2
+    },
+    {
+     "i": 23,
+     "t": "2026-01-05T10:55:00Z",
+     "o": 99.2,
+     "h": 100.2,
+     "l": 97.8,
+     "c": 98.2
+    }
+   ]
+  },
+  {
+   "case_id": "BOS03",
+   "group": "bos_false",
+   "description": "Wick-only break: high 110.6 > 110.2 at 21, closes stay below.",
+   "tick_size": 0.01,
+   "expected": {
+    "BOS-P1/P2/P4 (close)": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     }
+    ],
+    "BOS-P3 (wick)": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     },
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 21,
+      "confirmed_index": 21,
+      "reference_swing": "SH14",
+      "reference_level": 110.2,
+      "reference_confirmed_index": 16,
+      "evidence": "wick",
+      "class_TS-A": "BOS"
+     }
+    ],
+    "side effect": "new swing high H21 (110.6) confirmed at 23 under SP-A"
+   },
+   "expected_non_events": [
+    "close profiles: no break of SH14"
+   ],
+   "rationale": "PDF E4: depends on the wick/close policy.",
+   "policy_dependence": [
+    "BOS-002"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 101.2,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 102.8
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 102.2,
+     "h": 102.2,
+     "l": 99.8,
+     "c": 100.2
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 100.2,
+     "h": 101.2,
+     "l": 98.8,
+     "c": 99.2
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 100.3,
+     "h": 102.7,
+     "l": 100.3,
+     "c": 102.3
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 102.3,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 103.8
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 103.8,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 106.45,
+     "h": 106.45,
+     "l": 104.05,
+     "c": 104.45
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 104.45,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 103.7
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 103.7,
+     "h": 104.95,
+     "l": 102.55,
+     "c": 102.95
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 102.95,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 103.3,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 106.8,
+     "h": 108.7,
+     "l": 106.3,
+     "c": 108.3
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 108.3,
+     "h": 110.2,
+     "l": 107.8,
+     "c": 109.8
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 109.2,
+     "h": 109.2,
+     "l": 106.8,
+     "c": 107.2
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 107.2,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 106.2
+    },
+    {
+     "i": 17,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 106.2,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 105.2
+    },
+    {
+     "i": 18,
+     "t": "2026-01-05T10:30:00Z",
+     "o": 105.2,
+     "h": 106.2,
+     "l": 103.8,
+     "c": 104.2
+    },
+    {
+     "i": 19,
+     "t": "2026-01-05T10:35:00Z",
+     "o": 104.8,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 20,
+     "t": "2026-01-05T10:40:00Z",
+     "o": 106.8,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 107.8
+    },
+    {
+     "i": 21,
+     "t": "2026-01-05T10:45:00Z",
+     "o": 107.8,
+     "h": 110.6,
+     "l": 107.5,
+     "c": 109.8
+    },
+    {
+     "i": 22,
+     "t": "2026-01-05T10:50:00Z",
+     "o": 109.8,
+     "h": 110.1,
+     "l": 108.9,
+     "c": 109.2
+    },
+    {
+     "i": 23,
+     "t": "2026-01-05T10:55:00Z",
+     "o": 109.2,
+     "h": 109.9,
+     "l": 108.6,
+     "c": 109.5
+    }
+   ]
+  },
+  {
+   "case_id": "BOS04",
+   "group": "bos",
+   "description": "Wick at 21, then a close above at 22.",
+   "tick_size": 0.01,
+   "expected": {
+    "BOS-P1/P2/P4": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     },
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 22,
+      "confirmed_index": 22,
+      "reference_swing": "SH14",
+      "reference_level": 110.2,
+      "reference_confirmed_index": 16,
+      "evidence": "close",
+      "class_TS-A": "BOS"
+     }
+    ],
+    "BOS-P3 (wick)": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     },
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 21,
+      "confirmed_index": 21,
+      "reference_swing": "SH14",
+      "reference_level": 110.2,
+      "reference_confirmed_index": 16,
+      "evidence": "wick",
+      "class_TS-A": "BOS"
+     }
+    ]
+   },
+   "expected_non_events": [
+    "BOS-P3 dedup: no second event at 22"
+   ],
+   "rationale": "Wick and close profiles give different event candles for the same level.",
+   "policy_dependence": [
+    "BOS-002",
+    "BOS-005"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 101.2,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 102.8
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 102.2,
+     "h": 102.2,
+     "l": 99.8,
+     "c": 100.2
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 100.2,
+     "h": 101.2,
+     "l": 98.8,
+     "c": 99.2
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 100.3,
+     "h": 102.7,
+     "l": 100.3,
+     "c": 102.3
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 102.3,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 103.8
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 103.8,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 106.45,
+     "h": 106.45,
+     "l": 104.05,
+     "c": 104.45
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 104.45,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 103.7
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 103.7,
+     "h": 104.95,
+     "l": 102.55,
+     "c": 102.95
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 102.95,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 103.3,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 106.8,
+     "h": 108.7,
+     "l": 106.3,
+     "c": 108.3
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 108.3,
+     "h": 110.2,
+     "l": 107.8,
+     "c": 109.8
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 109.2,
+     "h": 109.2,
+     "l": 106.8,
+     "c": 107.2
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 107.2,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 106.2
+    },
+    {
+     "i": 17,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 106.2,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 105.2
+    },
+    {
+     "i": 18,
+     "t": "2026-01-05T10:30:00Z",
+     "o": 105.2,
+     "h": 106.2,
+     "l": 103.8,
+     "c": 104.2
+    },
+    {
+     "i": 19,
+     "t": "2026-01-05T10:35:00Z",
+     "o": 104.8,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 20,
+     "t": "2026-01-05T10:40:00Z",
+     "o": 106.8,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 107.8
+    },
+    {
+     "i": 21,
+     "t": "2026-01-05T10:45:00Z",
+     "o": 107.8,
+     "h": 110.6,
+     "l": 107.5,
+     "c": 109.8
+    },
+    {
+     "i": 22,
+     "t": "2026-01-05T10:50:00Z",
+     "o": 109.8,
+     "h": 111.4,
+     "l": 109.5,
+     "c": 111.0
+    },
+    {
+     "i": 23,
+     "t": "2026-01-05T10:55:00Z",
+     "o": 111.0,
+     "h": 111.6,
+     "l": 110.6,
+     "c": 111.3
+    }
+   ]
+  },
+  {
+   "case_id": "BOS05",
+   "group": "bos_boundary",
+   "description": "Close exactly at the level (110.2) at 21.",
+   "tick_size": 0.01,
+   "expected": {
+    "BOS-P1 (close >)": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     }
+    ],
+    "BOS-P2 (close >=)": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     },
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 21,
+      "confirmed_index": 21,
+      "reference_swing": "SH14",
+      "reference_level": 110.2,
+      "reference_confirmed_index": 16,
+      "evidence": "close",
+      "class_TS-A": "BOS"
+     }
+    ],
+    "BOS-P3 (wick)": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     },
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 21,
+      "confirmed_index": 21,
+      "reference_swing": "SH14",
+      "reference_level": 110.2,
+      "reference_confirmed_index": 16,
+      "evidence": "wick",
+      "class_TS-A": "BOS"
+     }
+    ]
+   },
+   "expected_non_events": [],
+   "rationale": "PDF section 7: strict vs inclusive comparison.",
+   "policy_dependence": [
+    "BOS-002",
+    "BOS-006"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 101.2,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 102.8
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 102.2,
+     "h": 102.2,
+     "l": 99.8,
+     "c": 100.2
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 100.2,
+     "h": 101.2,
+     "l": 98.8,
+     "c": 99.2
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 100.3,
+     "h": 102.7,
+     "l": 100.3,
+     "c": 102.3
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 102.3,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 103.8
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 103.8,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 106.45,
+     "h": 106.45,
+     "l": 104.05,
+     "c": 104.45
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 104.45,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 103.7
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 103.7,
+     "h": 104.95,
+     "l": 102.55,
+     "c": 102.95
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 102.95,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 103.3,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 106.8,
+     "h": 108.7,
+     "l": 106.3,
+     "c": 108.3
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 108.3,
+     "h": 110.2,
+     "l": 107.8,
+     "c": 109.8
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 109.2,
+     "h": 109.2,
+     "l": 106.8,
+     "c": 107.2
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 107.2,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 106.2
+    },
+    {
+     "i": 17,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 106.2,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 105.2
+    },
+    {
+     "i": 18,
+     "t": "2026-01-05T10:30:00Z",
+     "o": 105.2,
+     "h": 106.2,
+     "l": 103.8,
+     "c": 104.2
+    },
+    {
+     "i": 19,
+     "t": "2026-01-05T10:35:00Z",
+     "o": 104.8,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 20,
+     "t": "2026-01-05T10:40:00Z",
+     "o": 106.8,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 107.8
+    },
+    {
+     "i": 21,
+     "t": "2026-01-05T10:45:00Z",
+     "o": 107.8,
+     "h": 110.5,
+     "l": 107.5,
+     "c": 110.2
+    },
+    {
+     "i": 22,
+     "t": "2026-01-05T10:50:00Z",
+     "o": 110.2,
+     "h": 110.3,
+     "l": 109.2,
+     "c": 109.6
+    },
+    {
+     "i": 23,
+     "t": "2026-01-05T10:55:00Z",
+     "o": 109.6,
+     "h": 109.9,
+     "l": 108.9,
+     "c": 109.3
+    }
+   ]
+  },
+  {
+   "case_id": "BOS06",
+   "group": "bos_boundary",
+   "description": "Close one tick above the level (110.21).",
+   "tick_size": 0.01,
+   "expected": {
+    "BOS-P1/P2/P3": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     },
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 21,
+      "confirmed_index": 21,
+      "reference_swing": "SH14",
+      "reference_level": 110.2,
+      "reference_confirmed_index": 16,
+      "evidence": "close",
+      "class_TS-A": "BOS"
+     }
+    ],
+    "BOS-P4 (close > level + 2 ticks)": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     }
+    ]
+   },
+   "expected_non_events": [],
+   "rationale": "PDF E5: depends on strictness, tick size and buffer.",
+   "policy_dependence": [
+    "BOS-002",
+    "BOS-006"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 101.2,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 102.8
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 102.2,
+     "h": 102.2,
+     "l": 99.8,
+     "c": 100.2
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 100.2,
+     "h": 101.2,
+     "l": 98.8,
+     "c": 99.2
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 100.3,
+     "h": 102.7,
+     "l": 100.3,
+     "c": 102.3
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 102.3,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 103.8
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 103.8,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 106.45,
+     "h": 106.45,
+     "l": 104.05,
+     "c": 104.45
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 104.45,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 103.7
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 103.7,
+     "h": 104.95,
+     "l": 102.55,
+     "c": 102.95
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 102.95,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 103.3,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 106.8,
+     "h": 108.7,
+     "l": 106.3,
+     "c": 108.3
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 108.3,
+     "h": 110.2,
+     "l": 107.8,
+     "c": 109.8
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 109.2,
+     "h": 109.2,
+     "l": 106.8,
+     "c": 107.2
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 107.2,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 106.2
+    },
+    {
+     "i": 17,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 106.2,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 105.2
+    },
+    {
+     "i": 18,
+     "t": "2026-01-05T10:30:00Z",
+     "o": 105.2,
+     "h": 106.2,
+     "l": 103.8,
+     "c": 104.2
+    },
+    {
+     "i": 19,
+     "t": "2026-01-05T10:35:00Z",
+     "o": 104.8,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 20,
+     "t": "2026-01-05T10:40:00Z",
+     "o": 106.8,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 107.8
+    },
+    {
+     "i": 21,
+     "t": "2026-01-05T10:45:00Z",
+     "o": 107.8,
+     "h": 110.5,
+     "l": 107.5,
+     "c": 110.21
+    },
+    {
+     "i": 22,
+     "t": "2026-01-05T10:50:00Z",
+     "o": 110.21,
+     "h": 110.3,
+     "l": 109.2,
+     "c": 109.6
+    },
+    {
+     "i": 23,
+     "t": "2026-01-05T10:55:00Z",
+     "o": 109.6,
+     "h": 109.9,
+     "l": 108.9,
+     "c": 109.3
+    }
+   ]
+  },
+  {
+   "case_id": "BOS07",
+   "group": "bos_gap",
+   "description": "Gap through: bar 21 opens 110.6 above the level (previous close 107.8) and never trades below it.",
+   "tick_size": 0.01,
+   "expected": {
+    "BOS-P1..P4 (gap counts)": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     },
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 21,
+      "confirmed_index": 21,
+      "reference_swing": "SH14",
+      "reference_level": 110.2,
+      "reference_confirmed_index": 16,
+      "evidence": "close; gap",
+      "class_TS-A": "BOS"
+     }
+    ],
+    "alt: gap excluded": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     }
+    ],
+    "alt: gap flagged": "same event with evidence 'gap'"
+   },
+   "expected_non_events": [],
+   "rationale": "PDF section 7: specify whether a gap qualifies.",
+   "policy_dependence": [
+    "BOS-006"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 101.2,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 102.8
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 102.2,
+     "h": 102.2,
+     "l": 99.8,
+     "c": 100.2
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 100.2,
+     "h": 101.2,
+     "l": 98.8,
+     "c": 99.2
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 100.3,
+     "h": 102.7,
+     "l": 100.3,
+     "c": 102.3
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 102.3,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 103.8
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 103.8,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 106.45,
+     "h": 106.45,
+     "l": 104.05,
+     "c": 104.45
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 104.45,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 103.7
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 103.7,
+     "h": 104.95,
+     "l": 102.55,
+     "c": 102.95
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 102.95,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 103.3,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 106.8,
+     "h": 108.7,
+     "l": 106.3,
+     "c": 108.3
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 108.3,
+     "h": 110.2,
+     "l": 107.8,
+     "c": 109.8
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 109.2,
+     "h": 109.2,
+     "l": 106.8,
+     "c": 107.2
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 107.2,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 106.2
+    },
+    {
+     "i": 17,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 106.2,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 105.2
+    },
+    {
+     "i": 18,
+     "t": "2026-01-05T10:30:00Z",
+     "o": 105.2,
+     "h": 106.2,
+     "l": 103.8,
+     "c": 104.2
+    },
+    {
+     "i": 19,
+     "t": "2026-01-05T10:35:00Z",
+     "o": 104.8,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 20,
+     "t": "2026-01-05T10:40:00Z",
+     "o": 106.8,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 107.8
+    },
+    {
+     "i": 21,
+     "t": "2026-01-05T10:45:00Z",
+     "o": 110.6,
+     "h": 111.4,
+     "l": 110.4,
+     "c": 111.1
+    },
+    {
+     "i": 22,
+     "t": "2026-01-05T10:50:00Z",
+     "o": 111.1,
+     "h": 111.6,
+     "l": 110.8,
+     "c": 111.3
+    },
+    {
+     "i": 23,
+     "t": "2026-01-05T10:55:00Z",
+     "o": 111.3,
+     "h": 111.9,
+     "l": 111.0,
+     "c": 111.7
+    }
+   ]
+  },
+  {
+   "case_id": "BOS08",
+   "group": "bos_dup",
+   "description": "Repeated breaks of one level: closes above at 21, back below at 22, above again at 23 and 24.",
+   "tick_size": 0.01,
+   "expected": {
+    "BOS-P1 + one event per level": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     },
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 21,
+      "confirmed_index": 21,
+      "reference_swing": "SH14",
+      "reference_level": 110.2,
+      "reference_confirmed_index": 16,
+      "evidence": "close",
+      "class_TS-A": "BOS"
+     }
+    ],
+    "alt: event per new cross": "21 and 23",
+    "alt: event per close beyond": "21, 23, 24"
+   },
+   "expected_non_events": [
+    "no second SH14 event under dedup"
+   ],
+   "rationale": "PDF E7 / section 7: deduplicate by stable level ID.",
+   "policy_dependence": [
+    "BOS-005"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 101.2,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 102.8
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 102.2,
+     "h": 102.2,
+     "l": 99.8,
+     "c": 100.2
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 100.2,
+     "h": 101.2,
+     "l": 98.8,
+     "c": 99.2
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 100.3,
+     "h": 102.7,
+     "l": 100.3,
+     "c": 102.3
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 102.3,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 103.8
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 103.8,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 106.45,
+     "h": 106.45,
+     "l": 104.05,
+     "c": 104.45
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 104.45,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 103.7
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 103.7,
+     "h": 104.95,
+     "l": 102.55,
+     "c": 102.95
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 102.95,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 103.3,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 106.8,
+     "h": 108.7,
+     "l": 106.3,
+     "c": 108.3
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 108.3,
+     "h": 110.2,
+     "l": 107.8,
+     "c": 109.8
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 109.2,
+     "h": 109.2,
+     "l": 106.8,
+     "c": 107.2
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 107.2,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 106.2
+    },
+    {
+     "i": 17,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 106.2,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 105.2
+    },
+    {
+     "i": 18,
+     "t": "2026-01-05T10:30:00Z",
+     "o": 105.2,
+     "h": 106.2,
+     "l": 103.8,
+     "c": 104.2
+    },
+    {
+     "i": 19,
+     "t": "2026-01-05T10:35:00Z",
+     "o": 104.8,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 20,
+     "t": "2026-01-05T10:40:00Z",
+     "o": 106.8,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 107.8
+    },
+    {
+     "i": 21,
+     "t": "2026-01-05T10:45:00Z",
+     "o": 107.8,
+     "h": 110.7,
+     "l": 107.6,
+     "c": 110.5
+    },
+    {
+     "i": 22,
+     "t": "2026-01-05T10:50:00Z",
+     "o": 110.5,
+     "h": 110.6,
+     "l": 109.4,
+     "c": 109.8
+    },
+    {
+     "i": 23,
+     "t": "2026-01-05T10:55:00Z",
+     "o": 109.8,
+     "h": 111.0,
+     "l": 109.6,
+     "c": 110.8
+    },
+    {
+     "i": 24,
+     "t": "2026-01-05T11:00:00Z",
+     "o": 110.8,
+     "h": 111.3,
+     "l": 110.5,
+     "c": 111.1
+    }
+   ]
+  },
+  {
+   "case_id": "BOS09",
+   "group": "bos_causal",
+   "description": "Price exceeds the high of bar 14 at bar 15, before bar 14 could confirm as a swing.",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A + BOS-P1": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     }
+    ]
+   },
+   "expected_non_events": [
+    "no swing H14 (rejected by bar 15)",
+    "no break event referencing bar 14"
+   ],
+   "rationale": "PDF E6: a level cannot be used before its swing confirms. Under a fixed strict window the candidate is simply never confirmed.",
+   "policy_dependence": [
+    "BOS-001",
+    "BOS-004"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 101.2,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 102.8
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 102.2,
+     "h": 102.2,
+     "l": 99.8,
+     "c": 100.2
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 100.2,
+     "h": 101.2,
+     "l": 98.8,
+     "c": 99.2
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 100.3,
+     "h": 102.7,
+     "l": 100.3,
+     "c": 102.3
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 102.3,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 103.8
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 103.8,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 106.45,
+     "h": 106.45,
+     "l": 104.05,
+     "c": 104.45
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 104.45,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 103.7
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 103.7,
+     "h": 104.95,
+     "l": 102.55,
+     "c": 102.95
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 102.95,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 103.3,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 106.8,
+     "h": 108.7,
+     "l": 106.3,
+     "c": 108.3
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 108.3,
+     "h": 110.2,
+     "l": 107.8,
+     "c": 109.8
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 109.8,
+     "h": 110.9,
+     "l": 109.5,
+     "c": 110.7
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 110.7,
+     "h": 111.0,
+     "l": 110.1,
+     "c": 110.4
+    },
+    {
+     "i": 17,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 110.4,
+     "h": 110.6,
+     "l": 109.8,
+     "c": 110.0
+    }
+   ]
+  },
+  {
+   "case_id": "BOS10",
+   "group": "bos_counter",
+   "description": "Bullish structure, then closes below the lows: SL18 (103.8) at 22, SL10 (101.8) at 23.",
+   "tick_size": 0.01,
+   "expected": {
+    "BOS-P1 + RL (latest confirmed low)": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     },
+     {
+      "type": "BREAK",
+      "direction": "bearish",
+      "event_index": 22,
+      "confirmed_index": 22,
+      "reference_swing": "SL18",
+      "reference_level": 103.8,
+      "reference_confirmed_index": 20,
+      "evidence": "close",
+      "class_TS-A": "CHOCH_CANDIDATE"
+     }
+    ],
+    "alt: protected low = low that started the last HH leg (SL10)": "bearish counter-structure break at 23",
+    "BOS-P1 + RH (lowest unbroken low)": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     }
+    ],
+    "side effect": "new swing high H20 (LH) confirmed at 22"
+   },
+   "expected_non_events": [
+    "must NOT be labelled BOS by direction alone"
+   ],
+   "rationale": "PDF section 6: counter-structure break = potential CHoCH only with a state model.",
+   "policy_dependence": [
+    "BOS-001",
+    "BOS-003",
+    "MS-001"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 101.2,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 102.8
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 102.2,
+     "h": 102.2,
+     "l": 99.8,
+     "c": 100.2
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 100.2,
+     "h": 101.2,
+     "l": 98.8,
+     "c": 99.2
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 100.3,
+     "h": 102.7,
+     "l": 100.3,
+     "c": 102.3
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 102.3,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 103.8
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 103.8,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 106.45,
+     "h": 106.45,
+     "l": 104.05,
+     "c": 104.45
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 104.45,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 103.7
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 103.7,
+     "h": 104.95,
+     "l": 102.55,
+     "c": 102.95
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 102.95,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 103.3,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 106.8,
+     "h": 108.7,
+     "l": 106.3,
+     "c": 108.3
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 108.3,
+     "h": 110.2,
+     "l": 107.8,
+     "c": 109.8
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 109.2,
+     "h": 109.2,
+     "l": 106.8,
+     "c": 107.2
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 107.2,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 106.2
+    },
+    {
+     "i": 17,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 106.2,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 105.2
+    },
+    {
+     "i": 18,
+     "t": "2026-01-05T10:30:00Z",
+     "o": 105.2,
+     "h": 106.2,
+     "l": 103.8,
+     "c": 104.2
+    },
+    {
+     "i": 19,
+     "t": "2026-01-05T10:35:00Z",
+     "o": 104.8,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 20,
+     "t": "2026-01-05T10:40:00Z",
+     "o": 106.8,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 107.8
+    },
+    {
+     "i": 21,
+     "t": "2026-01-05T10:45:00Z",
+     "o": 106.7,
+     "h": 106.7,
+     "l": 104.3,
+     "c": 104.7
+    },
+    {
+     "i": 22,
+     "t": "2026-01-05T10:50:00Z",
+     "o": 104.7,
+     "h": 105.2,
+     "l": 102.8,
+     "c": 103.2
+    },
+    {
+     "i": 23,
+     "t": "2026-01-05T10:55:00Z",
+     "o": 103.2,
+     "h": 103.7,
+     "l": 101.3,
+     "c": 101.7
+    },
+    {
+     "i": 24,
+     "t": "2026-01-05T11:00:00Z",
+     "o": 101.7,
+     "h": 102.7,
+     "l": 100.3,
+     "c": 100.7
+    }
+   ]
+  },
+  {
+   "case_id": "BOS11",
+   "group": "bos",
+   "description": "Two continuation BOS on two different levels (SH14 at 22, SH24 at 31).",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A + BOS-P1 (RL)": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     },
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 22,
+      "confirmed_index": 22,
+      "reference_swing": "SH14",
+      "reference_level": 110.2,
+      "reference_confirmed_index": 16,
+      "evidence": "close",
+      "class_TS-A": "BOS"
+     },
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 31,
+      "confirmed_index": 31,
+      "reference_swing": "SH24",
+      "reference_level": 113.2,
+      "reference_confirmed_index": 26,
+      "evidence": "close",
+      "class_TS-A": "BOS"
+     }
+    ]
+   },
+   "expected_non_events": [],
+   "rationale": "PDF section 10: a new reference level creates a distinct event.",
+   "policy_dependence": [
+    "BOS-005"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 101.2,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 102.8
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 102.2,
+     "h": 102.2,
+     "l": 99.8,
+     "c": 100.2
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 100.2,
+     "h": 101.2,
+     "l": 98.8,
+     "c": 99.2
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 100.3,
+     "h": 102.7,
+     "l": 100.3,
+     "c": 102.3
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 102.3,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 103.8
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 103.8,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 106.45,
+     "h": 106.45,
+     "l": 104.05,
+     "c": 104.45
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 104.45,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 103.7
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 103.7,
+     "h": 104.95,
+     "l": 102.55,
+     "c": 102.95
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 102.95,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 103.3,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 106.8,
+     "h": 108.7,
+     "l": 106.3,
+     "c": 108.3
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 108.3,
+     "h": 110.2,
+     "l": 107.8,
+     "c": 109.8
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 109.2,
+     "h": 109.2,
+     "l": 106.8,
+     "c": 107.2
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 107.2,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 106.2
+    },
+    {
+     "i": 17,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 106.2,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 105.2
+    },
+    {
+     "i": 18,
+     "t": "2026-01-05T10:30:00Z",
+     "o": 105.2,
+     "h": 106.2,
+     "l": 103.8,
+     "c": 104.2
+    },
+    {
+     "i": 19,
+     "t": "2026-01-05T10:35:00Z",
+     "o": 104.8,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 20,
+     "t": "2026-01-05T10:40:00Z",
+     "o": 106.8,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 107.8
+    },
+    {
+     "i": 21,
+     "t": "2026-01-05T10:45:00Z",
+     "o": 107.8,
+     "h": 109.7,
+     "l": 107.3,
+     "c": 109.3
+    },
+    {
+     "i": 22,
+     "t": "2026-01-05T10:50:00Z",
+     "o": 109.3,
+     "h": 111.2,
+     "l": 108.8,
+     "c": 110.8
+    },
+    {
+     "i": 23,
+     "t": "2026-01-05T10:55:00Z",
+     "o": 110.8,
+     "h": 112.2,
+     "l": 109.8,
+     "c": 111.8
+    },
+    {
+     "i": 24,
+     "t": "2026-01-05T11:00:00Z",
+     "o": 111.8,
+     "h": 113.2,
+     "l": 110.8,
+     "c": 112.8
+    },
+    {
+     "i": 25,
+     "t": "2026-01-05T11:05:00Z",
+     "o": 112.325,
+     "h": 112.325,
+     "l": 109.925,
+     "c": 110.325
+    },
+    {
+     "i": 26,
+     "t": "2026-01-05T11:10:00Z",
+     "o": 110.325,
+     "h": 111.45,
+     "l": 109.05,
+     "c": 109.45
+    },
+    {
+     "i": 27,
+     "t": "2026-01-05T11:15:00Z",
+     "o": 109.45,
+     "h": 110.575,
+     "l": 108.175,
+     "c": 108.575
+    },
+    {
+     "i": 28,
+     "t": "2026-01-05T11:20:00Z",
+     "o": 108.575,
+     "h": 109.7,
+     "l": 107.3,
+     "c": 107.7
+    },
+    {
+     "i": 29,
+     "t": "2026-01-05T11:25:00Z",
+     "o": 108.675,
+     "h": 111.075,
+     "l": 108.675,
+     "c": 110.675
+    },
+    {
+     "i": 30,
+     "t": "2026-01-05T11:30:00Z",
+     "o": 110.675,
+     "h": 112.45,
+     "l": 110.05,
+     "c": 112.05
+    },
+    {
+     "i": 31,
+     "t": "2026-01-05T11:35:00Z",
+     "o": 112.05,
+     "h": 113.825,
+     "l": 111.425,
+     "c": 113.425
+    },
+    {
+     "i": 32,
+     "t": "2026-01-05T11:40:00Z",
+     "o": 113.425,
+     "h": 115.2,
+     "l": 112.8,
+     "c": 114.8
+    }
+   ]
+  },
+  {
+   "case_id": "BOS12",
+   "group": "bos_reference",
+   "description": "Bearish structure; price closes above the latest LH (106.7) but not the older high (110.7).",
+   "tick_size": 0.01,
+   "expected": {
+    "BOS-P1 + RL": [
+     {
+      "type": "BREAK",
+      "direction": "bearish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SL6",
+      "reference_level": 100.8,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     },
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 17,
+      "confirmed_index": 17,
+      "reference_swing": "SH10",
+      "reference_level": 106.7,
+      "reference_confirmed_index": 12,
+      "evidence": "close",
+      "class_TS-A": "CHOCH_CANDIDATE"
+     }
+    ],
+    "BOS-P1 + RH (highest unbroken high)": [
+     {
+      "type": "BREAK",
+      "direction": "bearish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SL6",
+      "reference_level": 100.8,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     }
+    ]
+   },
+   "expected_non_events": [],
+   "rationale": "Which confirmed swing is the reference changes the result (V4 audit B1: 52% of V4 BOS broke a lower high).",
+   "policy_dependence": [
+    "BOS-001",
+    "BOS-003"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 105.2,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 106.8,
+     "h": 108.95,
+     "l": 106.55,
+     "c": 108.55
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 108.55,
+     "h": 110.7,
+     "l": 108.3,
+     "c": 110.3
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 108.825,
+     "h": 108.825,
+     "l": 106.425,
+     "c": 106.825
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 106.825,
+     "h": 106.95,
+     "l": 104.55,
+     "c": 104.95
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 104.95,
+     "h": 105.075,
+     "l": 102.675,
+     "c": 103.075
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 103.075,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 101.2
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 101.675,
+     "h": 104.075,
+     "l": 101.675,
+     "c": 103.675
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 103.675,
+     "h": 104.95,
+     "l": 102.55,
+     "c": 104.55
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 104.55,
+     "h": 105.825,
+     "l": 103.425,
+     "c": 105.425
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 105.425,
+     "h": 106.7,
+     "l": 104.3,
+     "c": 106.3
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 105.325,
+     "h": 105.325,
+     "l": 102.925,
+     "c": 103.325
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 103.325,
+     "h": 103.95,
+     "l": 101.55,
+     "c": 101.95
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 101.95,
+     "h": 102.575,
+     "l": 100.175,
+     "c": 100.575
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 100.575,
+     "h": 101.2,
+     "l": 98.8,
+     "c": 99.2
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 100.8,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 102.8
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 102.8,
+     "h": 105.2,
+     "l": 102.8,
+     "c": 104.8
+    },
+    {
+     "i": 17,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 104.8,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 18,
+     "t": "2026-01-05T10:30:00Z",
+     "o": 106.8,
+     "h": 109.2,
+     "l": 106.8,
+     "c": 108.8
+    },
+    {
+     "i": 19,
+     "t": "2026-01-05T10:35:00Z",
+     "o": 108.2,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 106.2
+    },
+    {
+     "i": 20,
+     "t": "2026-01-05T10:40:00Z",
+     "o": 106.2,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 105.2
+    }
+   ]
+  },
+  {
+   "case_id": "BOS13",
+   "group": "bos_invalidation",
+   "description": "BOS at 21, then a close back below the level at 23.",
+   "tick_size": 0.01,
+   "expected": {
+    "BOS-P1": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 13,
+      "confirmed_index": 13,
+      "reference_swing": "SH6",
+      "reference_level": 107.2,
+      "reference_confirmed_index": 8,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     },
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 21,
+      "confirmed_index": 21,
+      "reference_swing": "SH14",
+      "reference_level": 110.2,
+      "reference_confirmed_index": 16,
+      "evidence": "close",
+      "class_TS-A": "BOS"
+     }
+    ],
+    "alt invalidation": "BOS stays (immutable); an optional separate INVALIDATION event at 23 referencing it"
+   },
+   "expected_non_events": [
+    "the BOS at 21 must NOT disappear or move"
+   ],
+   "rationale": "PDF section 3 replay contract + BOS-007.",
+   "policy_dependence": [
+    "BOS-007"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 101.2,
+     "h": 103.2,
+     "l": 100.8,
+     "c": 102.8
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 102.2,
+     "h": 102.2,
+     "l": 99.8,
+     "c": 100.2
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 100.2,
+     "h": 101.2,
+     "l": 98.8,
+     "c": 99.2
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 100.3,
+     "h": 102.7,
+     "l": 100.3,
+     "c": 102.3
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 102.3,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 103.8
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 103.8,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 7,
+     "t": "2026-01-05T09:35:00Z",
+     "o": 106.45,
+     "h": 106.45,
+     "l": 104.05,
+     "c": 104.45
+    },
+    {
+     "i": 8,
+     "t": "2026-01-05T09:40:00Z",
+     "o": 104.45,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 103.7
+    },
+    {
+     "i": 9,
+     "t": "2026-01-05T09:45:00Z",
+     "o": 103.7,
+     "h": 104.95,
+     "l": 102.55,
+     "c": 102.95
+    },
+    {
+     "i": 10,
+     "t": "2026-01-05T09:50:00Z",
+     "o": 102.95,
+     "h": 104.2,
+     "l": 101.8,
+     "c": 102.2
+    },
+    {
+     "i": 11,
+     "t": "2026-01-05T09:55:00Z",
+     "o": 103.3,
+     "h": 105.7,
+     "l": 103.3,
+     "c": 105.3
+    },
+    {
+     "i": 12,
+     "t": "2026-01-05T10:00:00Z",
+     "o": 105.3,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 13,
+     "t": "2026-01-05T10:05:00Z",
+     "o": 106.8,
+     "h": 108.7,
+     "l": 106.3,
+     "c": 108.3
+    },
+    {
+     "i": 14,
+     "t": "2026-01-05T10:10:00Z",
+     "o": 108.3,
+     "h": 110.2,
+     "l": 107.8,
+     "c": 109.8
+    },
+    {
+     "i": 15,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 109.2,
+     "h": 109.2,
+     "l": 106.8,
+     "c": 107.2
+    },
+    {
+     "i": 16,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 107.2,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 106.2
+    },
+    {
+     "i": 17,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 106.2,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 105.2
+    },
+    {
+     "i": 18,
+     "t": "2026-01-05T10:30:00Z",
+     "o": 105.2,
+     "h": 106.2,
+     "l": 103.8,
+     "c": 104.2
+    },
+    {
+     "i": 19,
+     "t": "2026-01-05T10:35:00Z",
+     "o": 104.8,
+     "h": 107.2,
+     "l": 104.8,
+     "c": 106.8
+    },
+    {
+     "i": 20,
+     "t": "2026-01-05T10:40:00Z",
+     "o": 106.8,
+     "h": 108.2,
+     "l": 105.8,
+     "c": 107.8
+    },
+    {
+     "i": 21,
+     "t": "2026-01-05T10:45:00Z",
+     "o": 107.8,
+     "h": 110.9,
+     "l": 107.6,
+     "c": 110.7
+    },
+    {
+     "i": 22,
+     "t": "2026-01-05T10:50:00Z",
+     "o": 110.7,
+     "h": 110.9,
+     "l": 110.0,
+     "c": 110.3
+    },
+    {
+     "i": 23,
+     "t": "2026-01-05T10:55:00Z",
+     "o": 110.3,
+     "h": 110.5,
+     "l": 109.4,
+     "c": 109.7
+    },
+    {
+     "i": 24,
+     "t": "2026-01-05T11:00:00Z",
+     "o": 109.7,
+     "h": 110.0,
+     "l": 109.0,
+     "c": 109.3
+    }
+   ]
+  },
+  {
+   "case_id": "BOS14",
+   "group": "bos_context",
+   "description": "One confirmed swing high only, then a close above it (no structure state).",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 2,
+      "confirmed_index": 4,
+      "price": 15,
+      "label_ML-A": "NONE"
+     },
+     {
+      "type": "SWING",
+      "kind": "low",
+      "event_index": 4,
+      "confirmed_index": 6,
+      "price": 10,
+      "label_ML-A": "NONE"
+     }
+    ],
+    "BOS-P1": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 5,
+      "confirmed_index": 5,
+      "reference_swing": "SH2",
+      "reference_level": 15,
+      "reference_confirmed_index": 4,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     }
+    ]
+   },
+   "expected_non_events": [
+    "must not be labelled BOS or CHoCH: insufficient context"
+   ],
+   "rationale": "PDF section 6: return insufficient-context/unknown.",
+   "policy_dependence": [
+    "BOS-003"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 9,
+     "c": 10.5
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 10.5,
+     "h": 12,
+     "l": 10,
+     "c": 11.5
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 11.5,
+     "h": 15,
+     "l": 11,
+     "c": 13
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 13,
+     "h": 14,
+     "l": 12,
+     "c": 12.5
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 12.5,
+     "h": 13,
+     "l": 10,
+     "c": 10.5
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 10.5,
+     "h": 15.5,
+     "l": 10.4,
+     "c": 15.4
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 15.4,
+     "h": 15.8,
+     "l": 15.0,
+     "c": 15.6
+    }
+   ]
+  },
+  {
+   "case_id": "BOS15",
+   "group": "bos_precision",
+   "description": "Floating point: reference high stored as 0.30000000000000004, close 0.3.",
+   "tick_size": 0.01,
+   "expected": {
+    "raw float, any profile": [],
+    "tick-rounded (0.01), BOS-P2 (>=)": [
+     {
+      "type": "BREAK",
+      "direction": "bullish",
+      "event_index": 5,
+      "confirmed_index": 5,
+      "reference_swing": "SH2",
+      "reference_level": 0.3,
+      "reference_confirmed_index": 4,
+      "evidence": "close",
+      "class_TS-A": "UNCLASSIFIED"
+     }
+    ],
+    "tick-rounded, BOS-P1 (>)": []
+   },
+   "expected_non_events": [],
+   "rationale": "PDF section 7 'Precision': tick-aware boundary tests.",
+   "policy_dependence": [
+    "BOS-006",
+    "INV-PRECISION"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 0.2,
+     "h": 0.22,
+     "l": 0.18,
+     "c": 0.21
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 0.21,
+     "h": 0.25,
+     "l": 0.2,
+     "c": 0.24
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 0.24,
+     "h": 0.30000000000000004,
+     "l": 0.23,
+     "c": 0.27
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 0.27,
+     "h": 0.28,
+     "l": 0.25,
+     "c": 0.26
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T09:20:00Z",
+     "o": 0.26,
+     "h": 0.27,
+     "l": 0.24,
+     "c": 0.25
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T09:25:00Z",
+     "o": 0.25,
+     "h": 0.3,
+     "l": 0.25,
+     "c": 0.3
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T09:30:00Z",
+     "o": 0.3,
+     "h": 0.3,
+     "l": 0.27,
+     "c": 0.28
+    }
+   ]
+  },
+  {
+   "case_id": "RB01",
+   "group": "robustness",
+   "description": "Duplicate timestamp at bar 2.",
+   "tick_size": 0.01,
+   "expected": {
+    "loader": "REJECT (CandleError: timestamps must strictly increase)"
+   },
+   "expected_non_events": [],
+   "rationale": "PDF section 1: timestamps strictly increasing.",
+   "policy_dependence": [],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 9,
+     "c": 10.5
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 10.5,
+     "h": 12,
+     "l": 10,
+     "c": 11.5
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 11.5,
+     "h": 13,
+     "l": 11,
+     "c": 12.5
+    }
+   ]
+  },
+  {
+   "case_id": "RB02",
+   "group": "robustness",
+   "description": "Invalid OHLC: high below close at bar 1.",
+   "tick_size": 0.01,
+   "expected": {
+    "loader": "REJECT (CandleError: inconsistent OHLC)"
+   },
+   "expected_non_events": [],
+   "rationale": "PDF section 1: H >= max(O,C).",
+   "policy_dependence": [],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 9,
+     "c": 10.5
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 10.5,
+     "h": 11.0,
+     "l": 10,
+     "c": 11.5
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 11.5,
+     "h": 13,
+     "l": 11,
+     "c": 12.5
+    }
+   ]
+  },
+  {
+   "case_id": "RB03",
+   "group": "robustness",
+   "description": "A 60-minute time gap between bars 3 and 4 inside a 2/2 window around a pivot at 3.",
+   "tick_size": 0.01,
+   "expected": {
+    "SP-A (window counts bars)": [
+     {
+      "type": "SWING",
+      "kind": "high",
+      "event_index": 3,
+      "confirmed_index": 5,
+      "price": 15
+     }
+    ],
+    "alt: window counts time / gap breaks window": "no swing or later confirmation"
+   },
+   "expected_non_events": [],
+   "rationale": "Missing bars: the window definition (bars vs time) must be declared.",
+   "policy_dependence": [
+    "SW-002",
+    "INV-GAPS"
+   ],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 8.95,
+     "h": 10,
+     "l": 8.5,
+     "c": 9.55
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 9.55,
+     "h": 11,
+     "l": 9.5,
+     "c": 10.55
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 10.55,
+     "h": 12,
+     "l": 10.5,
+     "c": 11.55
+    },
+    {
+     "i": 3,
+     "t": "2026-01-05T09:15:00Z",
+     "o": 13.5,
+     "h": 15,
+     "l": 13.5,
+     "c": 14.55
+    },
+    {
+     "i": 4,
+     "t": "2026-01-05T10:15:00Z",
+     "o": 13,
+     "h": 13,
+     "l": 11.5,
+     "c": 11.95
+    },
+    {
+     "i": 5,
+     "t": "2026-01-05T10:20:00Z",
+     "o": 11.95,
+     "h": 12,
+     "l": 10.5,
+     "c": 10.95
+    },
+    {
+     "i": 6,
+     "t": "2026-01-05T10:25:00Z",
+     "o": 10.95,
+     "h": 11.5,
+     "l": 10.0,
+     "c": 10.45
+    }
+   ]
+  },
+  {
+   "case_id": "RB04",
+   "group": "robustness",
+   "description": "Unsorted input (bar 1 earlier than bar 0).",
+   "tick_size": 0.01,
+   "expected": {
+    "loader": "REJECT"
+   },
+   "expected_non_events": [],
+   "rationale": "Ordering invariant.",
+   "policy_dependence": [],
+   "candles": [
+    {
+     "i": 0,
+     "t": "2026-01-05T09:05:00Z",
+     "o": 10,
+     "h": 11,
+     "l": 9,
+     "c": 10.5
+    },
+    {
+     "i": 1,
+     "t": "2026-01-05T09:00:00Z",
+     "o": 10.5,
+     "h": 12,
+     "l": 10,
+     "c": 11.5
+    },
+    {
+     "i": 2,
+     "t": "2026-01-05T09:10:00Z",
+     "o": 11.5,
+     "h": 13,
+     "l": 11,
+     "c": 12.5
+    }
+   ]
+  }
+ ]
+}
