@@ -15,7 +15,7 @@ from typing import Dict, List, Optional, Tuple
 
 from scanner_v6.data.candle_models import Candle, CandleError
 from scanner_v6.data.integrity import CandleUpdate, CompletedCandleGate
-from scanner_v6.data.market_config import SessionCalendar
+from scanner_v6.data.market_config import SessionCalendar, SessionKind
 
 from .alpaca import Bar
 
@@ -36,6 +36,10 @@ class BarFeed:
                  stale_after_bars: int, alignment_rule: Optional[str]):
         if settle_seconds is None or stale_after_bars is None:
             raise ValueError("settle_seconds and stale_after_bars must be configured (owner-approved)")
+        if isinstance(settle_seconds, bool) or not isinstance(settle_seconds, int) or settle_seconds < 0:
+            raise ValueError("settle_seconds must be a non-negative integer, got %r" % (settle_seconds,))
+        if isinstance(stale_after_bars, bool) or not isinstance(stale_after_bars, int) or stale_after_bars < 1:
+            raise ValueError("stale_after_bars must be an integer >= 1, got %r" % (stale_after_bars,))
         if alignment_rule not in (None, "session_grid"):
             raise ValueError("unknown alignment rule %r" % alignment_rule)
         self.symbol, self.tf, self.session = symbol, timeframe, session
@@ -48,6 +52,12 @@ class BarFeed:
         self.interrupted = False
         self.counts: Counter = Counter()
         self.last_poll: Optional[datetime] = None
+        self.gaps = 0                        # in-session holes between accepted bars
+        self.missing_bars = 0
+        self.max_consecutive_missing = 0
+        self.last_gap: Optional[Dict[str, object]] = None
+        self.fetch_errors = 0
+        self.last_fetch_error: Optional[str] = None
 
     # ------------------------------------------------------------ session helpers
     def _session_of(self, t: datetime) -> Optional[Tuple[datetime, datetime]]:
@@ -79,6 +89,18 @@ class BarFeed:
         except CandleError as e:
             return self._count(FeedOutput(INVALID, detail=str(e)))
         events = []
+        missing = self._missing_between(bar.start)
+        if missing:
+            # a bar the session grid expected never arrived (IEX publishes no bar for an interval without IEX trades):
+            # nothing is filled in; the hole becomes a data interruption, so a pending entry that needed the missing
+            # candle expires and no candle is invented (fail closed)
+            self.gaps += 1
+            self.missing_bars += missing
+            self.max_consecutive_missing = max(self.max_consecutive_missing, missing)
+            self.last_gap = {"after": self.last.start.isoformat(), "resumed": bar.start.isoformat(), "missing": missing}
+            if not self.interrupted:
+                events.append(("DATA_INTERRUPTED", self.last.start + self.tf))
+                self.interrupted = True
         if self.interrupted:
             events.append(("DATA_RESUMED", bar.start))
             self.interrupted = False
@@ -86,6 +108,23 @@ class BarFeed:
         c = self.gate.feed(upd)
         self.last = bar
         return self._count(FeedOutput(ACCEPT, candle=c, events=events))
+
+    def _missing_between(self, start: datetime) -> int:
+        """Session-grid bar starts strictly between the last accepted bar and `start` (0 for the first bar)."""
+        if self.last is None:
+            return 0
+        if self.session.kind is SessionKind.CONTINUOUS:
+            return max(0, (start - self.last.start) // self.tf - 1)
+        n = 0
+        for o, c in self.session.sessions:
+            if c <= self.last.start or o >= start:
+                continue
+            t = o
+            while t + self.tf <= c and t < start:
+                if t > self.last.start:
+                    n += 1
+                t += self.tf
+        return n
 
     def check_stale(self, now: datetime) -> Optional[Tuple[str, datetime]]:
         """DATA_INTERRUPTED (stamped `now`) when, inside a session, more than `stale_after` bars are overdue."""
@@ -110,4 +149,12 @@ class BarFeed:
     def health(self) -> Dict[str, object]:
         return {"symbol": self.symbol, "state": "INTERRUPTED" if self.interrupted else "NORMAL",
                 "last_bar_start": self.last.start.isoformat() if self.last else None,
-                "last_poll": self.last_poll.isoformat() if self.last_poll else None, "counts": dict(self.counts)}
+                "last_poll": self.last_poll.isoformat() if self.last_poll else None, "counts": dict(self.counts),
+                "gaps": self.gaps, "missing_bars": self.missing_bars,
+                "max_consecutive_missing": self.max_consecutive_missing, "last_gap": self.last_gap,
+                "fetch_errors": self.fetch_errors, "last_fetch_error": self.last_fetch_error}
+
+    def fetch_failed(self, err: BaseException) -> None:
+        """A poll that could not fetch: nothing is accepted; staleness (check_stale) then interrupts the stream."""
+        self.fetch_errors += 1
+        self.last_fetch_error = "%s: %s" % (type(err).__name__, str(err)[:160])

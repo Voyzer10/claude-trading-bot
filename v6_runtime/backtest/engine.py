@@ -89,7 +89,8 @@ class BacktestRun:
         self.home = backtests_root(root)
         self.run = DataRoot(self.home.path(self.run_id))
         self.specs = [InstrumentSpec(ds.symbol, cfg.book_id, cfg.timeframe, cfg.market_config(ds.symbol, self.session),
-                                     cfg.execution_config(self.session)) for ds in self.datasets]
+                                     cfg.execution_config(self.session), data_source=ds.source)
+                      for ds in self.datasets]
         for s in self.specs:
             miss = s.execution.missing(s.market)
             if miss:

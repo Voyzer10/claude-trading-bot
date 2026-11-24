@@ -3,7 +3,7 @@
  "book_id": "US",
  "timeframe": "5m",
  "instruments": [],
- "data_provider": {"name": "alpaca", "feed": null, "approval": "NOT_APPROVED", "decision": "feed (iex / sip) not chosen"},
+ "data_provider": {"name": "alpaca", "feed": "iex", "approval": "APPROVED", "decision": "owner 2026-11-24 (provisional): Alpaca IEX REAL-TIME 5-minute bars, V6 data-only credential; delayed SIP is never used or a fallback; real-time SIP is a future upgrade. IEX is a single venue, not the consolidated tape."},
  "values": {
   "tick_size":               {"value": null, "approval": "NOT_APPROVED", "decision": "B-7"},
   "entry_ticks":             {"value": null, "approval": "NOT_APPROVED", "decision": "B-10 slippage"},

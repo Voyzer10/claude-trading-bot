@@ -186,12 +186,13 @@ export default function V6Dashboard() {
             </section>
           )}
           {tab === "Signals" && (signals && signals.length
-            ? <Table rows={signals} cols={["ts_utc", "instrument", "timeframe", "stage", "direction", "entry_reference", "stop_loss", "target", "result", "rejection_reason", "data_quality", "book_decision", "shadow"]} />
+            ? <Table rows={signals} cols={["ts_utc", "instrument", "timeframe", "stage", "direction", "entry_reference", "stop_loss", "target", "result", "rejection_reason", "data_quality", "data_source", "book_decision", "shadow"]} />
             : <p className="muted">No V6 signals recorded for {book}.</p>)}
           {tab === "Data health" && (
             <section className="panel">
               <p>Runner: <b>{health?.runner ?? "NOT CONNECTED"}</b>{health?.reason ? ` · ${health.reason}` : ""}</p>
-              <Table rows={Object.values(health?.feeds ?? {}).map((f) => ({ ...f, counts: f.counts }))} cols={["symbol", "state", "last_bar_start", "last_poll", "counts"]} />
+              <p className="small">Data source: <span className="mono">{health?.data_source ?? "—"}</span>. IEX is a single venue, not the consolidated tape; a missing bar is never filled in, it interrupts the stream.</p>
+              <Table rows={Object.values(health?.feeds ?? {}).map((f) => ({ ...f, counts: f.counts }))} cols={["symbol", "state", "last_bar_start", "last_poll", "gaps", "missing_bars", "max_consecutive_missing", "fetch_errors", "last_fetch_error", "counts"]} />
             </section>
           )}
           {tab === "Performance" && (perf?.state === "LOADED" && perf.instruments

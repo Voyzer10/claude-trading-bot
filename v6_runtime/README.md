@@ -16,11 +16,23 @@ Wraps the V6 scanner (`scanner_v6`, Modules A–E) in a five-book paper portfoli
 | `status.py`, `runner.py` | aggregated status; gated runner (`status`, `init-book`, `run`) |
 | `backtest/` | historical backtesting over the same pipeline (dataset validation, engine, metrics, CLI) |
 
+## US Stocks data feed (owner 2026-11-24, provisional)
+
+Alpaca **IEX real-time** 5-minute bars through the separate V6 DATA-ONLY credential. IEX is one venue, not the
+consolidated tape, and is never described as consolidated. Delayed SIP is never used and never a fallback; real-time
+SIP is an optional future upgrade (paid subscription). Fail closed: a fetch error accepts nothing and tries no other
+feed; an in-session missing bar (IEX prints no bar for an interval without IEX trades) becomes DATA_INTERRUPTED /
+DATA_RESUMED and is never filled in or interpolated (a pending entry that needed it expires); a stale feed interrupts
+the stream, so no new entry can fill. `data_source` is recorded on every signal, booked trade, heartbeat and backtest
+trade; gaps, missing bars and the longest run of consecutive missing bars are reported per symbol. Initial symbol
+allowlist (owner 2026-11-24): SPY, QQQ, AAPL, MSFT (IEX coverage checked 18-24 Nov 2026: 0 missing bars); any other
+symbol is refused. `bar_settle_seconds` and `stale_after_bars` are config values that stay NOT APPROVED until approved.
+
 ## NOT APPROVED (must be decided by the owner before the US book can run)
 
 IC-1 fee schedule · IC-2 quantity grid / lot / min quantity · IC-3 price rounding · IC-6 exchange-day rule ·
 IC-7 MTM exit slippage · O-1 bar alignment rule · tick sizes and entry/exit slippage ticks · margin rate ·
-bar settle seconds / stale threshold · data feed (IEX vs SIP) · symbol list · NYSE calendar verification.
+bar settle seconds / stale threshold · symbol list · NYSE calendar verification.
 Design points also NOT APPROVED: Module E sizes on the stream's own equity (the book's 1% risk gate rejects anything
 larger); same-timestamp entries across instruments resolve in instrument-id order.
 

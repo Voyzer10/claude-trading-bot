@@ -165,7 +165,7 @@ def test_calendar_marked_not_verified_and_bounded():
 
 def test_template_is_all_not_approved_and_blocks():
     cfg = us_stocks.parse_config(_template())
-    assert cfg.approved == {} and not cfg.feed_approved
+    assert cfg.approved == {} and cfg.feed_approved and cfg.feed == "iex"      # owner 2026-11-24: IEX (provisional)
     r = us_stocks.readiness(cfg, us_stocks.load_calendar(), credentials_present=False)
     assert r["ready"] is False
     for k in ("fee_schedule", "quantity_step", "exchange_day_rule", "mtm_exit_slippage_ticks", "alignment_rule"):

@@ -92,9 +92,10 @@ def test_no_lookahead_prefix_and_future_mutation(tmp_path, base):
     _, b = run(tmp_path / "b", data={"SYNTH": p_mut})
     curve_full = full["equity_curve"][:k]
     assert a["equity_curve"][:k] == curve_full == b["equity_curve"][:k]
-    t_full = [t for t in full["trades"] if t["exit_index"] is not None and t["exit_index"] < k]
-    assert t_full and [t for t in a["trades"] if t["status"] != "ENTERED"] == t_full
-    assert [t for t in b["trades"] if t.get("exit_index") is not None and t["exit_index"] < k] == t_full
+    strip = lambda ts: [{k2: v for k2, v in t.items() if k2 != "data_source"} for t in ts]   # noqa: E731 (file label)
+    t_full = strip([t for t in full["trades"] if t["exit_index"] is not None and t["exit_index"] < k])
+    assert t_full and strip([t for t in a["trades"] if t["status"] != "ENTERED"]) == t_full
+    assert strip([t for t in b["trades"] if t.get("exit_index") is not None and t["exit_index"] < k]) == t_full
 
 
 # ------------------------------------------------------------------ 3 / 4 duplicates, missing and invalid data
@@ -149,6 +150,7 @@ def test_gaps_reported_and_handled_by_policy(tmp_path):
         load_dataset(p, "SYNTH", timedelta(minutes=5), _sess(), DAY, DAY, gap_policy="fail")
     ds = load_dataset(p, "SYNTH", timedelta(minutes=5), _sess(), DAY, DAY)
     assert ds.integrity["gaps"] == 1 and ds.integrity["missing_bars"] == 2 and ds.integrity["rows_used"] == 75
+    assert ds.integrity["max_consecutive_missing"] == 2
     r, res = run(tmp_path / "g", data={"SYNTH": p})
     kinds = [e["kind"] for e in r.run.read_jsonl("journal", "US.jsonl")]
     assert kinds.count("DATA_INTERRUPTED") == 1 and kinds.count("DATA_RESUMED") == 1
@@ -416,7 +418,7 @@ def test_fetch_to_csv_with_injected_client(tmp_path):
             return [Bar(symbol, datetime(2026, 11, 23, 14, 30, tzinfo=UTC), 10.0, 10.5, 9.9, 10.2, 100.0),
                     Bar(symbol, datetime(2026, 11, 23, 14, 35, tzinfo=UTC), 10.2, 10.4, 10.1, 10.3, 90.0)]
     out = fetch_to_csv(Fake(), "AAPL", "5m", DAY, DAY, str(tmp_path / "aapl.csv"), "iex")
-    assert out["rows"] == 2
+    assert out["rows"] == 2 and "NOT the consolidated tape" in out["source"]
     ds = load_dataset(str(tmp_path / "aapl.csv"), "AAPL", timedelta(minutes=5), _sess(), DAY, DAY)
     assert ds.source.startswith("alpaca") and ds.integrity["rows_used"] == 2
 
@@ -441,3 +443,21 @@ def test_api_backtest_views(tmp_path, monkeypatch):
     c = TestClient(app)
     assert c.get("/api/py/v6/backtests/%s" % r.run_id).json()["run"]["run_id"] == r.run_id
     assert c.get("/api/py/v6/backtests/bt-0000000000000000").status_code == 404
+
+
+def test_fetch_keeps_regular_session_only(tmp_path):
+    class Fake:
+        def fetch(self, symbol, tf, a, b):
+            return [Bar(symbol, datetime(2026, 11, 23, 13, 0, tzinfo=UTC), 10.0, 10.5, 9.9, 10.2, 1.0),   # pre-market
+                    Bar(symbol, datetime(2026, 11, 23, 14, 30, tzinfo=UTC), 10.0, 10.5, 9.9, 10.2, 1.0),
+                    Bar(symbol, datetime(2026, 11, 23, 21, 0, tzinfo=UTC), 10.0, 10.5, 9.9, 10.2, 1.0)]   # after close
+    from v6_runtime import us_stocks
+    sess = us_stocks.trading_sessions(us_stocks.load_calendar(), DAY, DAY)
+    out = fetch_to_csv(Fake(), "AAPL", "5m", DAY, DAY, str(tmp_path / "a.csv"), "iex", sess)
+    meta = json.load(open(str(tmp_path / "a.csv") + ".meta.json"))
+    assert (out["rows"], out["dropped_outside_session"]) == (1, 2) and meta["bars_received"] == 3
+    assert load_dataset(str(tmp_path / "a.csv"), "AAPL", timedelta(minutes=5), _sess(), DAY, DAY).integrity["rows_used"] == 1
+
+
+def test_backtest_trades_record_the_data_source(base):
+    assert {t["data_source"] for t in base[1]["trades"]} == {base[1]["datasets"][0]["source"]}

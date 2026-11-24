@@ -47,8 +47,11 @@ export interface BookDetail extends BookStatus { trades: Trade[] | null; rejecti
 export type Signal = Record<string, string | number | boolean | null | string[]>;
 
 export interface DataHealth {
-  runner: string; reason: string | null; at: string | null;
-  feeds: Record<string, { symbol: string; state: string; last_bar_start: string | null; last_poll: string | null; counts: Record<string, number> }>;
+  runner: string; reason: string | null; at: string | null; data_source: string | null;
+  feeds: Record<string, {
+    symbol: string; state: string; last_bar_start: string | null; last_poll: string | null; counts: Record<string, number>;
+    gaps?: number; missing_bars?: number; max_consecutive_missing?: number; fetch_errors?: number; last_fetch_error?: string | null;
+  }>;
 }
 
 export interface Performance {

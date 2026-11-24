@@ -32,6 +32,11 @@ EXECUTION_KEYS = ("entry_ticks", "stop_exit_ticks", "target_exit_ticks", "max_ga
 FEED_KEYS = ("bar_settle_seconds", "stale_after_bars", "alignment_rule")
 
 
+# Owner 2026-11-24 (initial allowlist): the only symbols whose IEX real-time regular-session 5-minute coverage was
+# checked on the VPS (18-24 Nov 2026: 0 missing bars). A symbol is added only after the same check.
+SYMBOL_ALLOWLIST = ("SPY", "QQQ", "AAPL", "MSFT")
+
+
 class USConfigError(ValueError):
     pass
 
@@ -113,6 +118,12 @@ def parse_config(raw: Dict[str, Any]) -> USStocksConfig:
     insts = raw.get("instruments")
     if not isinstance(insts, list) or not all(isinstance(s, str) and s and s.isupper() for s in insts):
         raise USConfigError("us_stocks.json: instruments must be a list of upper-case symbols")
+    outside = sorted(set(insts) - set(SYMBOL_ALLOWLIST))
+    if outside:
+        raise USConfigError("us_stocks.json: %s not in the US Stocks allowlist %s (owner 2026-11-24: only symbols whose "
+                            "IEX regular-session coverage was checked)" % (", ".join(outside), ", ".join(SYMBOL_ALLOWLIST)))
+    if len(set(insts)) != len(insts):
+        raise USConfigError("us_stocks.json: duplicate instruments")
     tf = raw.get("timeframe")
     validate_timeframe(_tf_delta(tf))
     dp = raw.get("data_provider") or {}
@@ -143,8 +154,19 @@ def instrument_specs(cfg: USStocksConfig, cal: Dict[str, Any], start: date, end:
         exe = ExecutionConfig(
             origin=ConfigOrigin.INSTRUMENT_CONFIG, starting_equity=book_spec("US").starting_budget,
             fee_schedule=fee_schedule, **{k: a.get(k) for k in EXECUTION_KEYS if k != "fee_schedule"})
-        out.append(InstrumentSpec(sym, "US", cfg.timeframe, market, exe))
+        out.append(InstrumentSpec(sym, "US", cfg.timeframe, market, exe, data_source=feed_label(cfg.feed)))
     return out
+
+
+# Owner decision 2026-11-24 (provisional): US Stocks intraday uses Alpaca IEX REAL-TIME 5-minute bars. Delayed SIP is
+# never a fallback; real-time SIP is an optional future upgrade. IEX is ONE venue: never described as consolidated.
+SELECTED_FEED = "iex"
+FEED_LABELS = {"iex": "alpaca iex real-time (single venue IEX, not consolidated tape)",
+               "sip": "alpaca sip (consolidated tape)"}
+
+
+def feed_label(feed: Optional[str]) -> Optional[str]:
+    return FEED_LABELS.get(feed) if feed else None
 
 
 def readiness(cfg: Optional[USStocksConfig], cal: Dict[str, Any], credentials_present: bool) -> Dict[str, Any]:
@@ -159,7 +181,10 @@ def readiness(cfg: Optional[USStocksConfig], cal: Dict[str, Any], credentials_pr
         for k in cfg.not_approved:
             blockers.append("%s: NOT APPROVED" % k)
         if not cfg.feed_approved:
-            blockers.append("Alpaca feed (iex / sip): NOT APPROVED")
+            blockers.append("Alpaca feed: NOT APPROVED (owner selected IEX real-time provisionally on 2026-11-24)")
+        elif cfg.feed != SELECTED_FEED:
+            blockers.append("Alpaca feed %r is not the selected feed: owner 2026-11-24 selected IEX real-time; delayed "
+                            "SIP is never used and real-time SIP is a future upgrade (needs a paid subscription)" % cfg.feed)
     if not cal.get("verified"):
         blockers.append("NYSE holiday calendar: NOT VERIFIED")
     if not credentials_present:

@@ -77,7 +77,13 @@ class USRunner:
                 self.portfolio.on_data_interrupted(iid, ev[1])
                 out["events"] += 1
             since = feed.last.start + self.tf if feed.last else now - timedelta(hours=8)
-            for bar in self.source(iid, self.cfg.timeframe, since, now):
+            try:
+                bars = self.source(iid, self.cfg.timeframe, since, now)
+            except Exception as e:  # noqa: BLE001 - provider down / 403 / timeout: no bar is accepted, nothing is
+                feed.fetch_failed(e)  # substituted (no other feed, no delayed fallback); staleness interrupts the stream
+                out["fetch_errors"] = out.get("fetch_errors", 0) + 1
+                continue
+            for bar in bars:
                 r = feed.offer(bar, now)
                 if r.status != ACCEPT:
                     continue
@@ -89,6 +95,7 @@ class USRunner:
                 out["accepted"] += 1
         self.root.write_json_atomic(self.portfolio.mtm or {}, "runtime", "mtm_US.json")
         self.root.write_json_atomic(dict(identity.stamp(), at=now.isoformat(), pid=os.getpid(), book="US",
+                                         data_source=us_stocks.feed_label(self.cfg.feed),
                                          feeds={k: f.health() for k, f in self.feeds.items()}),
                                     "runtime", "heartbeat.json")
         return out

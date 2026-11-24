@@ -212,10 +212,14 @@ def load_dataset(path: str, symbol: str, timeframe: timedelta, session: SessionC
     missing = [t for t in expected if t not in have]
     gaps: List[Tuple[datetime, datetime]] = []
     miss_set = set(missing)
+    max_run = 0
     for a, b in zip(rows, rows[1:]):
         t = a.ts + timeframe
-        if t < b.ts and any(x in miss_set for x in _expected_grid(session, timeframe, t, b.ts - timeframe)):
-            gaps.append((t, b.ts))
+        if t < b.ts:
+            run = sum(1 for x in _expected_grid(session, timeframe, t, b.ts - timeframe) if x in miss_set)
+            if run:
+                gaps.append((t, b.ts))
+                max_run = max(max_run, run)
     if gaps and gap_policy == "fail":
         raise DatasetError("dataset %s (%s) has %d gap(s) and gap_policy is 'fail'" % (path, symbol, len(gaps)),
                            ["missing bars from %s up to %s" % (a.isoformat(), b.isoformat()) for a, b in gaps])
@@ -227,6 +231,7 @@ def load_dataset(path: str, symbol: str, timeframe: timedelta, session: SessionC
                   "timezone": session.timezone},
         "timeframe_seconds": int(timeframe.total_seconds()), "duplicates": 0, "out_of_order": 0,
         "expected_bars": len(expected), "missing_bars": len(missing), "gaps": len(gaps),
+        "max_consecutive_missing": max_run,
         "gap_list": [[a.isoformat(), b.isoformat()] for a, b in gaps[:MAX_LISTED]], "gap_policy": gap_policy,
     }
     return Dataset(symbol, os.path.abspath(path), integrity["sha256"], src, rows, timeframe, integrity, gaps)

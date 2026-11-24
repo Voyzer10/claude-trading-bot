@@ -63,6 +63,7 @@ class InstrumentSpec:
     market: MarketDataConfig
     execution: ExecutionConfig
     candlestick: Optional[CandlestickConfig] = None
+    data_source: Optional[str] = None      # e.g. "alpaca iex real-time (single venue, not consolidated)"
 
 
 def _ser_candle(c: Candle) -> Dict[str, Any]:
@@ -227,7 +228,7 @@ class Portfolio:
         spec = self.specs[iid]
         M = spec.execution.contract_multiplier
         led.book_entry({
-            "setup_id": r.setup_id, "instrument": iid, "market": led.state["market"],
+            "setup_id": r.setup_id, "instrument": iid, "market": led.state["market"], "data_source": spec.data_source,
             "timeframe": spec.timeframe, "side": r.side, "entry_index": r.entry_index,
             "entry_ts": r.history[-1].ts.isoformat(), "entry_open": _s(r.entry_open), "entry_fill": _s(r.entry_fill),
             "quantity": _s(r.quantity), "contract_multiplier": _s(M), "sl": _s(r.sl), "tp": _s(r.tp),
@@ -318,7 +319,7 @@ class Portfolio:
             "entry_fill": _s(r.entry_fill), "stop_loss": _s(r.sl), "target": _s(r.tp), "quantity": _s(r.quantity),
             "confirmation_index": r.confirmation_index, "result": r.result,
             "rejection_reason": r.reason_code or r.disposition_reason, "blocked_by": list(r.blocked_by),
-            "data_quality": r.data_state, "book_decision": decision, "book_detail": detail,
+            "data_quality": r.data_state, "data_source": spec.data_source, "book_decision": decision, "book_detail": detail,
             "shadow": r.setup_id in self.shadow,
         })
         key = self._sig_key(sig)

@@ -48,17 +48,26 @@ def _print(obj: object) -> None:
     print(json.dumps(obj, indent=1, default=str))
 
 
-def fetch_to_csv(client, symbol: str, timeframe: str, start: date, end: date, out: str, feed: str) -> Dict[str, object]:
-    """Download completed bars with an AlpacaBars client (DATA host, GET only) and write a dataset + sidecar."""
+def fetch_to_csv(client, symbol: str, timeframe: str, start: date, end: date, out: str, feed: str,
+                 sessions=None) -> Dict[str, object]:
+    """Download bars with an AlpacaBars client (DATA host, GET only) and write a dataset + sidecar. With `sessions`
+    ((open, close) UTC pairs, e.g. the NYSE regular sessions) only bars lying fully inside a session are kept; the
+    extended-hours bars dropped are counted in the metadata. Nothing is filled in or adjusted."""
     t0 = datetime.combine(start, datetime.min.time(), timezone.utc)
     t1 = datetime.combine(end + timedelta(days=1), datetime.min.time(), timezone.utc)
     bars = client.fetch(symbol, timeframe, t0, t1)
-    rows = [(b.start, b.open, b.high, b.low, b.close, b.volume) for b in bars]
-    meta = {"source": "alpaca market data v2 bars, feed=%s, adjustment=raw" % feed, "symbol": symbol,
-            "timeframe": timeframe, "requested": {"start": start.isoformat(), "end": end.isoformat()},
+    tf = timedelta(minutes={"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60}[timeframe])
+    keep = [b for b in bars if sessions is None or any(o <= b.start and b.start + tf <= c for o, c in sessions)]
+    rows = [(b.start, b.open, b.high, b.low, b.close, b.volume) for b in keep]
+    label = {"iex": "IEX real-time feed (single venue IEX, NOT the consolidated tape)",
+             "sip": "SIP feed (consolidated tape)"}[feed]
+    meta = {"source": "alpaca market data v2 bars, feed=%s, adjustment=raw: %s" % (feed, label), "symbol": symbol,
+            "feed": feed, "timeframe": timeframe, "requested": {"start": start.isoformat(), "end": end.isoformat()},
+            "regular_session_only": sessions is not None, "bars_received": len(bars),
+            "bars_dropped_outside_session": len(bars) - len(keep),
             "fetched_at": datetime.now(timezone.utc).isoformat()}
     write_csv(out, rows, meta)
-    return {"file": out, "rows": len(rows), "source": meta["source"]}
+    return {"file": out, "rows": len(rows), "dropped_outside_session": len(bars) - len(keep), "source": meta["source"]}
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -133,7 +142,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print("NOT CONNECTED: the V6 DATA-ONLY Alpaca credential is not supplied (%s)"
                       % (a.credential or DEFAULT_CREDENTIAL_FILE), file=sys.stderr)
                 return 3
-            _print(fetch_to_csv(AlpacaBars(cred, a.feed), a.symbol, a.timeframe, a.start, a.end, a.out, a.feed))
+            from .. import us_stocks
+            sess = us_stocks.trading_sessions(us_stocks.load_calendar(), a.start, a.end)
+            _print(fetch_to_csv(AlpacaBars(cred, a.feed), a.symbol, a.timeframe, a.start, a.end, a.out, a.feed, sess))
             return 0
     except (bcfg.BacktestConfigError, DatasetError, BacktestError, PathGuardError) as e:
         print("INVALID: %s" % e, file=sys.stderr)

@@ -71,7 +71,8 @@ def get_data_health() -> Dict[str, Any]:
     rs = status.runner_state(r) if r.exists() else {"state": "NOT_ACTIVE", "heartbeat": None,
                                                     "reason": "V6 data root missing"}
     hb = rs.get("heartbeat") or {}
-    return {"runner": rs["state"], "reason": rs.get("reason"), "feeds": hb.get("feeds", {}), "at": hb.get("at")}
+    return {"runner": rs["state"], "reason": rs.get("reason"), "feeds": hb.get("feeds", {}), "at": hb.get("at"),
+            "data_source": hb.get("data_source")}
 
 
 def get_performance(book_id: str) -> Dict[str, Any]:
