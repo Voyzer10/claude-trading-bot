@@ -363,8 +363,8 @@ asserts that text. These labels are **not fixed**; changing them needs a separat
 | Decisions CK-1…CK-10 (Section 16.L) | **OWNER APPROVED — CONVERSATION-LEVEL — 23 NOVEMBER 2026** |
 | Decisions CK-11…CK-13 (Section 16.M) | **OWNER APPROVED — DOCUMENTED, NOT IMPLEMENTED** (conversation-level, 23 Nov 2026) |
 | CK-11 overlap clarification (16.M) and decision CK-14 (Section 16.N) | **OWNER APPROVED — DOCUMENTED, NOT IMPLEMENTED** (conversation-level, 23 Nov 2026) |
-| Implementation | Detection (16.A–16.E, 16.H DETECTED events) **IMPLEMENTED** 24 Nov 2026 in `scanner_v6/entry/candlesticks.py` (17.T). Confirmation, expiry and invalidation (16.F, 16.G) **NOT IMPLEMENTED** (`scanner_v6/entry/confirmation.py` is a stub) |
-| Tests | Detection **TESTED** (`tests/scanner_v6/test_candlesticks.py`, 17.T). Confirmation rows of 16.I **NOT TESTED** |
+| Implementation | Detection (16.A–16.E, 16.H DETECTED events) **IMPLEMENTED** 24 Nov 2026 in `scanner_v6/entry/candlesticks.py` (17.T). Confirmation, expiry and invalidation (16.F, 16.G) ~~NOT IMPLEMENTED (`scanner_v6/entry/confirmation.py` is a stub)~~ **IMPLEMENTED** 24 Nov 2026 in `scanner_v6/entry/confirmation.py` (Module D, 17.U); not committed |
+| Tests | Detection **TESTED** (`tests/scanner_v6/test_candlesticks.py`, 17.T). Confirmation rows of 16.I ~~NOT TESTED~~ **TESTED** 24 Nov 2026 (`tests/scanner_v6/test_confirmation.py`, 17.U) |
 | Authorization to implement | **None.** Approval of these rules does not authorize implementation (Section 15) |
 
 The thresholds below are the approved **initial configurable V6 baseline**. They are not claimed to be universally
@@ -1871,3 +1871,231 @@ future-perturbation no-look-ahead, OHLC unchanged, adversarial sub-epsilon wick 
 range cases, and a randomized exact-rational oracle (Fractions, written from the
 spec text) over 40 × 250 candles (9 765 expected patterns, every family). Mutation check: 14 of 14 mutants caught (including epsilon on wick presence and on zero range).
 **Status:** IMPLEMENTED; TESTED (24 Nov 2026). Not committed.
+
+### 17.U Module D — sweep-to-pattern association, confirmation and setup lifecycle — IMPLEMENTED FROM APPROVED RULES (24 Nov 2026)
+
+**Scope.** Owner authorization of 24 Nov 2026 ("V6 Module D — Confirmation & Setup Lifecycle Implementation"). PAPER
+ONLY. Implemented: the sweep-to-pattern window, pattern confirmation / expiry / invalidation and the setup lifecycle up
+to `CONFIRMED`. **Not implemented here:** entry, SL, TP, sizing, fees, slippage, NO_TRADE reasons, paper execution, end
+of data for open trades (Module E and later). No earlier rule, threshold, id format or decision is changed.
+
+**Owner decisions MD-1…MD-4 — OWNER APPROVED (24 Nov 2026).** They fill gaps found when CK-10, CK-11 and CK-18 were
+reconciled for implementation; no approved rule is changed.
+
+| ID | Decision |
+|---|---|
+| MD-1 | **Same-candle confirmation tie.** When several tracked patterns of one sweep confirm on the same candle, the setup takes the earliest end (detection) candle, then the earliest start candle, then the 16.A family order. Each of those patterns still receives its own CONFIRMED event; there is still only one setup (CK-7). |
+| MD-2 | **Setup id timing.** The setup record is keyed by Module B's candidate key (bos_id, group_id) from the sweep. The CK-2 id `setup:<sweep_group_id>:<pattern_id>` is assigned once, at `CONFIRMED`, from the confirming pattern; it stays empty for a setup that never confirms. Ids never change. |
+| MD-3 | **Mixed outcome.** No confirmation and a mix of expired and invalidated patterns → `EXPIRED`. `INVALIDATED` only when every eligible pattern was invalidated (CK-18 read literally). |
+| MD-4 | **Lifecycle record and transitions.** The record is created at the qualifying sweep (`SWEEP_DETECTED`) and also records `CHOCH_DETECTED` and `BOS_CONFIRMED` with their original candle index and timestamp. Transitions only move forward: `SWEEP_DETECTED → PATTERN_DETECTED → CONFIRMED`, or `→ EXPIRED / INVALIDATED`; a failed pattern while the 5-candle window is open does not step back from `PATTERN_DETECTED`. `ENTERED`, `STOPPED_OUT`, `TARGET_HIT` and `NO_TRADE` are reserved for the entry / execution module. |
+
+**Implemented** (`scanner_v6/entry/confirmation.py`: `ConfirmationStream`, `analyze_confirmations`, `detect_confirmations`):
+
+| Rule | Implementation |
+|---|---|
+| CS-9, CK-6, CK-17 r6 | a pattern qualifies for a sweep at candle s only if `start_candle > s` and `end_candle <= s + 5`; a pattern containing the sweep candle gets diagnostic `SWEEP_CANDLE_IN_PATTERN` |
+| Section 3, CS-9, CK-4, CK-7 | SSL sweep (BUY) → `BULLISH_BIAS` only, BSL sweep (SELL) → `BEARISH_BIAS` only (`BIAS_MISMATCH`); `NEUTRAL` / `UNDETERMINED` never qualify (`NON_DIRECTIONAL_BIAS`); `UNCLASSIFIED_SHAPE` never qualifies (`CONTEXT_LABEL_MISSING`) |
+| CK-7, CK-11 (+ overlap clarification) | every qualifying pattern is tracked concurrently with its own 3-candle confirmation window; the 5-candle window never extends; the first confirming pattern advances the setup (MD-1 on a tie); after `CONFIRMED` no other pattern of that sweep is tracked (`SETUP_ALREADY_CONFIRMED`) |
+| 16.F, CS-7, CS-8, CK-8 | bullish: close > pattern_high + eps; bearish: close < pattern_low − eps; eps = TickSize × 0.000001 (Module C's comparator); pattern range = full formation range (Engulfing: both candles) |
+| 16.G, CK-12, CS-10 | bullish invalidation close < pattern_low − eps; bearish close > pattern_high + eps; no confirmation by end + 3 → pattern `EXPIRED`; one terminal event per pattern; pattern statuses `DETECTED / CONFIRMED / EXPIRED / INVALIDATED` kept separate from setup statuses |
+| CS-10, CK-2 | `ConfirmationEvent` id `confirmation:<pattern_id>:<confirmation_candle>` with `pattern_id`, `confirmation_candle`, `direction`, `timestamp`; emitted at the confirmation candle's close only |
+| CK-10, CK-18, MD-2…MD-4 | `SetupRecord` with a `Transition` (status, zero-based index, timestamp, cause, data_state) per step; no qualifying pattern / all expired / mixed → `EXPIRED`; all invalidated → `INVALIDATED`; resolution only after the 5-candle window has closed and every tracked pattern is terminal; terminal statuses never reactivate (`LifecycleError`) |
+| CK-18, MB-3 | an opposite CHoCH / BOS ends the setup through Module B first (structure-first order of 17.S): setup `INVALIDATED`, detail `STRUCTURE_INVALIDATION`, cause = the terminating event id |
+| OQ-5 r1–r6 | through Module B: once Module D expires or invalidates a candidate, a later qualifying sweep group of the same BOS may start a new setup; after `CONFIRMED`, none (Module B `close_candidate`) |
+| OQ-2, CK-13 | `reason_code` (CK-13) and `disposition_reason` (OQ-2) are separate fields and are never set by Module D |
+| OQ-3, CK-24 | `data_state` `NORMAL` / `DATA_INTERRUPTED` / `DATA_RESUMED` is a flag on the stream and on every transition, not a lifecycle status; `mark_data_interrupted(ts)` / `mark_data_resumed(ts)` record both timestamps, each no earlier than the preceding data-state change (review correction 24 Nov 2026; earlier timestamps are rejected) and inside the event window below (F-D2, 24 Nov 2026); `DATA_RESUMED` stays the flag until the next interruption; the batch form validates every `data_events` entry before any candle is processed (input-validation correction 24 Nov 2026): only `DATA_INTERRUPTED` / `DATA_RESUMED` are accepted (no other value is read as either), `before_index` must be an int in 0 … n − 1, `ts` must be a timezone-aware datetime inside the event window, the sequence and chronology must be valid and the data must not stay interrupted when a candle is due; anything else raises `ValueError`, no event is dropped, and nothing is recorded; no candle can be processed while interrupted; nothing is fabricated; windows count completed candles (CK-9) |
+
+**Implementation choices (ordering only, not trading rules).** Order at close k: (1) Module B (structure, then
+liquidity, then new candidates), (2) Module C patterns ending at k, (3) tracked patterns: confirm, else invalidate,
+else expire at end + 3, in MD-1 order, (4) setup confirmation, (5) qualification of the patterns ending at k, (6)
+resolution of setups whose window has closed. A pattern cannot both confirm and invalidate on one candle
+(high ≥ low, eps > 0). Confirmation is evaluated for tracked patterns; a tracked pattern is followed to its own terminal
+event even if its setup ends first; untracked patterns keep Module C's `DETECTED`. Missing tick size: nothing is
+scorable (CK-1); setups stay at `SWEEP_DETECTED` with diagnostic `CONFIRMATION_UNSCORABLE` (no expiry or confirmation is
+invented). Detail codes (`NO_QUALIFYING_PATTERN`, `ALL_PATTERNS_EXPIRED`, `ALL_PATTERNS_INVALIDATED`,
+`MIXED_EXPIRED_INVALIDATED`, `STRUCTURE_INVALIDATION`) are traceability only, not CK-13 or OQ-2 codes.
+
+**Still OPEN / not in Module D:** entry and everything after it (CK-19…CK-25, OQ-1, OQ-6, OQ-7); entry suspension on
+stale data is applied by the entry module using `data_state`; OQ-10…OQ-13 unchanged. A setup still pending at the end
+of the data keeps its last status (CK-25 covers open trades only).
+
+**Tests:** `tests/scanner_v6/test_confirmation.py` (31 tests; 33 after the Phase 3 stream-validation tests): mirrored BUY / SELL fixtures for confirmation on each of
+the three candles, expiry, invalidation, epsilon boundaries of confirmation and invalidation, the CS-8 combined range,
+sweep-candle exclusion, first / last eligible candles and multi-candle window boundaries, bias / neutral / CK-4
+rejection, CK-11 retry after expiry and after invalidation, MD-1 tie, MD-3 mixed, one setup per sweep, no second setup
+after confirmation, structure invalidation, terminal immutability, data interruption / resumption, missing tick size,
+determinism, stream / batch parity, prefix replay, engine no-look-ahead, future perturbation, OHLC unchanged, and a
+randomized test (200 × BUY / SELL) against an independent exact-rational oracle. Review corrections (24 Nov 2026):
+data-state chronology (positive / negative), OQ-5 new setup after the first EXPIRED or INVALIDATED under the same BOS,
+opposite BOS invalidation with the terminating id and candle, and the same-candle opposite BOS + CHoCH case (terminator =
+the BOS, D5 order, unchanged Module B rule) through Module D; batch `data_events` validation and non-mutation on every
+rejected input. Mutation check: 30 of 31 mutants caught (one applied to a scratch copy of Module B only); the one not
+caught is equivalent (the post-replay "unapplied event" check cannot be reached once the events are validated).
+**Status:** IMPLEMENTED; TESTED (24 Nov 2026). Not committed.
+
+**Stream input-validation fixes (24 Nov 2026, Phase 3; owner-requested; F-D1, F-D2; no trading rule changed).**
+- **Candle check before any mutation (F-D1).** `ConfirmationStream.check_candle(c)` (pure) runs first in `on_candle`:
+  data not interrupted; `c` is a `Candle`; index = previous index + 1 (0 for the first candle); open time strictly
+  after the previous candle's open time; Module A's candle rules re-checked (finite numbers, consistent OHLC,
+  volume ≥ 0); the candle does not open before the last recorded data event. A rejected candle raises `ValueError` and
+  leaves the whole stream state unchanged; the stream stays usable. Batch series were already validated by
+  `CandleSeries` (strictly increasing timestamps), so no batch output changes.
+- **Data-event window (F-D2).** Candle `ts` is the candle's **open** time; a candle is complete at `ts + timeframe`
+  (its close). A data event (`DATA_INTERRUPTED` or `DATA_RESUMED`) applied before candle k must satisfy
+
+  `close(k − 1) = candles[k − 1].ts + timeframe  ≤  event ts  ≤  candles[k].ts = open(k)`
+
+  **Both bounds are inclusive.** An event can therefore never lie inside a candle. For contiguous candles
+  (open(k) = close(k − 1)) the window is the single boundary instant; across a genuine gap any instant in the gap is
+  valid. Before candle 0 there is no lower bound. Consecutive events stay chronological (equal timestamps allowed).
+  The timeframe (`MarketDataConfig.timeframe`) is required to place a close; a data event after a candle without it
+  is rejected (CK-26: missing stays missing). Batch (`validate_data_events(series, events, timeframe)`, before any
+  candle) and stream (lower bound at `mark_data_*`, upper bound when the next candle arrives) apply the same rule;
+  every rejection is free of side effects. Consistent with ME-4 ("between the confirmation candle's close and the
+  next open"), OQ-3 and CK-24; no approved decision is changed.
+- **Consequence (for the owner's attention).** An interruption that starts and ends strictly inside a candle which
+  is nevertheless delivered complete cannot be recorded with its true timestamps; the data adapter must either
+  withhold that candle (a gap) or report the event at a candle boundary.
+
+### 17.V Module E — paper execution and risk management — IMPLEMENTED FROM APPROVED RULES (24 Nov 2026)
+
+**Scope.** Owner authorization of 24 Nov 2026 ("V6 — Module E Implementation: Paper Execution & Risk Management").
+PAPER ONLY: an in-memory simulated ledger; no broker, no order path, no credentials (`PLACES_ORDERS = False` unchanged).
+Implemented: confirmed-setup intake, next-open entry, structural SL, opposing-pool TP, sizing, fees / slippage, net R:R,
+margin, daily-loss and one-position limits, FIXED_SL_TP exits, the execution part of the setup lifecycle and end of data.
+No earlier rule, threshold, id format or Module A–D code is changed.
+
+**Owner decisions ME-1…ME-4 — OWNER APPROVED (24 Nov 2026, conversation level).** They fill gaps found when OQ-6, OQ-7,
+OQ-10, CK-14 and OQ-3 were reconciled for implementation.
+
+| ID | Decision |
+|---|---|
+| ME-1 | **Outcome precedence (closes OQ-10 for Module E).** The first applicable of: `EXECUTION_CONFIG_INCOMPLETE`, `POSITION_LIMIT_REACHED`, `DAILY_LOSS_LIMIT_REACHED`, `SESSION_CLOSED`, `NEXT_CANDLE_UNAVAILABLE`, `NO_ELIGIBLE_OPPOSING_POOL`, then CK-13 #2…#6 in their approved order. CK-13's own order is unchanged; dispositions stay in `disposition_reason`, CK-13 codes in `reason_code`. |
+| ME-2 | **Daily boundary of a CONTINUOUS (24/7) calendar.** An explicit `trading_day_start` (local time in the instrument time zone) is mandatory; missing → `EXECUTION_CONFIG_INCOMPLETE`. No default. |
+| ME-3 | **Margin model (CK-14).** Required margin = entry_fill × quantity × multiplier × configured `initial_margin_rate`; available margin = current paper equity (the account is flat at every entry under the one-position limit, so equity = cash). Missing rate → `EXECUTION_CONFIG_INCOMPLETE`. |
+| ME-4 | **Interruption before the entry candle.** Any data interruption between the confirmation candle's close and the next open → `EXPIRED` with `NEXT_CANDLE_UNAVAILABLE`, even if C+1 later arrives on time (OQ-3: entries suspended; a missed deadline is never entered later). |
+
+**Implemented** (`scanner_v6/exit/`: `execution_config.py`, `stop_loss.py`, `targets.py`, `sizing.py`,
+`trade_management.py`, `execution.py` — `ExecutionStream`, `analyze_execution`, `detect_execution`):
+
+| Rule | Implementation |
+|---|---|
+| CK-10, MD-4, CK-18 | Module E takes only Module D `CONFIRMED` setups at their confirmation candle (intake diagnostics `INTAKE_NOT_CONFIRMED`, `INTAKE_MISSING_SETUP_ID`, `INTAKE_DUPLICATE_SETUP`, `INTAKE_CONFIRMATION_NOT_CURRENT`; a rejected intake changes nothing). Its `TradeRecord` keeps Module D's history (original indices / timestamps) and adds `CONFIRMED → ENTERED / NO_TRADE / EXPIRED`, `ENTERED → STOPPED_OUT / TARGET_HIT`, each with zero-based index, timestamp and `data_state`; terminal statuses never reactivate (`LifecycleError`). Module D records are never mutated. `INVALIDATED` stays with Module D: with NEXT_OPEN no candle closes between confirmation and entry. |
+| Section 4, CK-19 | entry at the open of C+1; BUY fill = open + `entry_ticks` × T, SELL fill = open − `entry_ticks` × T; no chasing, no delayed entry |
+| OQ-1 | adverse gap from the confirmation close (BUY open − close, SELL close − open); `max_adverse_gap = min(max_gap_ticks × T, 0.25 × |close − SL|)`; exceeded = strictly greater → `ENTRY_GAP_EXCEEDED` |
+| Section 4, CK-13 #2 | BUY open ≤ SL / SELL open ≥ SL → `ENTRY_AT_OR_BEYOND_SL` |
+| Section 5, CK-20 | SL = setup's sweep-candle low − `sl_buffer_ticks` × T (BUY) / high + buffer (SELL); fixed after entry |
+| Section 6, CK-16, CK-21, OQ-8 | nearest ACTIVE opposing pool strictly beyond the entry FILL, from the pools known at the close of C; ties: earliest confirmed, then pool id; TP = pool ∓ `tp_offset_ticks` × T; none → `NO_TRADE` / `NO_ELIGIBLE_OPPOSING_POOL` |
+| Section 7, CK-23, OQ-6 | B = 0.01 × current MTM equity; Loss(q) and net R:R exactly as Section 7 (planned stop fill = SL ∓ `stop_exit_ticks` × T; entry and exit fees); largest permitted q with Loss(q) ≤ B, rounded down on the grid; minimum net R:R 1:1 checked exactly (net reward ≥ Loss) |
+| CK-13, CK-14 | `NET_RR_BELOW_MINIMUM`, `MIN_QTY_EXCEEDS_RISK_BUDGET`, margin reduction with full revalidation (risk, minimum quantity, margin, 1:1), else `INSUFFICIENT_MARGIN`; one final `reason_code` per setup |
+| Section 9, 10, CK-22 | FIXED_SL_TP; per observed candle: stop gap, stop touch, target gap, target touch (STOP_FIRST, also on the entry candle after the fill); stop gap fills at open ∓ stop slippage; target fills exactly at TP (gap included); fills are never clamped, out-of-range fills get diagnostic `FILL_OUTSIDE_CANDLE_RANGE`; same-candle SL / TP gets `SL_TP_SAME_CANDLE_STOP_FIRST` |
+| OQ-2 | `POSITION_LIMIT_REACHED`, `DAILY_LOSS_LIMIT_REACHED`, `NO_ELIGIBLE_OPPOSING_POOL` → `NO_TRADE`; `SESSION_CLOSED`, `NEXT_CANDLE_UNAVAILABLE` → `EXPIRED`; all in `disposition_reason` with index and timestamp |
+| CK-23, OQ-6 | one open position; daily loss = start-of-day equity − current MTM equity; ≥ 2% → reject new setups for the rest of that trading day (latched); open positions keep SL / TP; no forced close |
+| OQ-7, ME-2 | confirmation and entry candle in the same continuous session (the entry candle must end by the session close); confirmation on the session's last candle → `SESSION_CLOSED`; calendar, time zone, (24/7) day start and calendar coverage of the entry time are mandatory |
+| OQ-3, CK-24, ME-4 | `data_state` flag only; no candle while interrupted; an open trade keeps its status and records its data gaps; exits only from observed candles (a gap through the stop after resumption fills at the observed open); data-event timestamps follow Module D's window (17.U, F-D2) |
+| CK-24 (F-E1, 24 Nov 2026) | `ExecutionStream.on_candle` first calls Module D's pure `check_candle` (one rule set, 17.U) before (A) entries, (B) exits, (C) Module D, (M) and (D); an invalid candle raises `ValueError` with no transition (`EXPIRED`, `NO_TRADE`, `ENTERED`, `STOPPED_OUT`, `TARGET_HIT`), and pending setups, the position, records, cash, candles, MTM log and data state unchanged |
+| CK-25 | `finalize_end_of_data()` reports an open position as `OPEN_UNRESOLVED` (copy; not force-closed), the last available close separately, and closed-trade figures without it; a setup confirmed on the last candle is listed as awaiting its next candle (no fill fabricated) |
+| CK-22, CK-26, Sections 6 / 8 | every value explicit (`ExecutionConfig`, origin mandatory; test fixtures `ConfigOrigin.TEST_FIXTURE`, OQ-15); missing value or `target_exit_ticks ≠ 0` → `EXECUTION_CONFIG_INCOMPLETE`; zero is a value, never a default |
+
+**OQ-13 isolation (still OPEN).** MTM equity is computed only while the account is flat (= cash; nothing to estimate).
+When a decision needs MTM equity while a position is or was open, the result is `UNSCORABLE` with `blocked_by = OQ-13`:
+no entry, no lifecycle step, never entered later. This happens when the start-of-day snapshot falls while a position is
+open, and when a position was open earlier on the same trading day and the flat daily loss is below 2% (an intraday MTM
+breach cannot be measured without OQ-13). A flat daily loss ≥ 2% is decisive. `mtm_equity()` returns `UNSCORABLE` while
+a position is open.
+
+**Implementation choices (representation / ordering only; the values and sources stay OPEN, B-7…B-13).**
+- Fee schedule shape `LinearFeeSchedule`: rate × notional + per_unit × qty + per_order per fill, rounded once per fill
+  with a configured number of places and rounding mode; all parts explicit. Fee values, sources and the B-9 component vs
+  total question stay OPEN.
+- Quantity grid: multiples of `quantity_step` ≥ `min_quantity`; `quantity_step` a multiple of `lot_size`.
+- `price_rounding_mode` puts an off-grid computed price on the tick grid (on-grid data never changes); the B-13 rule
+  itself stays OPEN.
+- Reward and stop distance are directional, so an entry at or beyond the TP fails the 1:1 check (CK-22); net R:R for
+  CK-13 #4 is evaluated at the risk-sized quantity, or at `min_quantity` when nothing fits the budget.
+- Staged evaluation in ME-1 order: phase 1 at the close of C (configuration, position limit, daily loss, session);
+  phase 2 at the open of C+1 (position limit again for a second setup on the same open, next candle, pool, CK-13
+  #2…#6). Candle order: entries at the open, exit of the open position, Modules A–D, new `CONFIRMED` setups.
+- Trading day: EXCHANGE = all sessions opening on one local date, starting at the first; CONTINUOUS = from
+  `trading_day_start`; the start-of-day snapshot is taken before any fill at that instant.
+- One `ExecutionStream` = one instrument stream and one paper account; an account spanning several calendars needs
+  OQ-11 (OPEN).
+- Records are keyed by the CK-2 `setup_id`; no new id format (the `exec:<status>:<setup_id>` keys of
+  `detect_execution` are audit-only).
+
+**Still OPEN:** OQ-11, OQ-12, OQ-13; B-7…B-10, B-12, B-13 values and sources; R-4. Not reachable / not exercised: a
+second setup pending on the same entry open (code path exists, no fixture produces it).
+
+**Tests:** `tests/scanner_v6/test_execution.py` (24 tests): mirrored BUY / SELL entry and exits, next-open entry,
+gap boundaries (ratio and tick limit, equality not exceeding, favourable gap), entry at / beyond SL, exact 1:1
+boundary, quantity rounding down and the exact budget boundary, minimum quantity, margin reduction and
+`INSUFFICIENT_MARGIN` with R:R revalidation, all six CK-13 codes and adjacent-priority pairs, every missing configuration
+value, missing tick size, target touch / gap, stop touch / gap (unclamped), same-candle and entry-candle STOP_FIRST,
+cash / realized P&L without double counting, MTM while open, position limit and ME-1 order, 2% daily loss (exact
+boundary, latch, previous-day loss, OQ-13 `UNSCORABLE` cases, 24/7 day start), sessions (final candle, coverage), next
+candle missing, ME-4, open trade across an interruption, end of data, no eligible pool, pool exactly at the fill,
+duplicate intake, terminal lifecycle, no fabricated fill, determinism, stream / batch parity, prefix replay at every
+candle, engine no-look-ahead, future perturbation, BUY / SELL symmetry, PAPER-only source audit, and 80 randomized cases
+against an independent exact-rational oracle. Mutation check: 21 of 21 mutants caught. **Status:** IMPLEMENTED; TESTED
+(24 Nov 2026). Not committed.
+
+### 17.W OQ-13 resolution — OWNER APPROVED (24 Nov 2026) — IMPLEMENTED IN MODULE E
+
+Owner decision of 24 Nov 2026 ("V6 Module E — OQ-13 Resolution and Final Review"), for the V6 PAPER-ONLY MVP.
+**OQ-13 is RESOLVED.** This supersedes the OQ-13 "OPEN" status in 17.N, 17.O (cost accounting) and 17.Q (OQ-15 rule 9),
+and the "OQ-13 isolation" paragraph of 17.V; that earlier wording is kept unchanged above for traceability.
+
+| Item | Decision |
+|---|---|
+| Mark price | The latest **completed** candle close; never a forming or future candle. At a trading-day start: the latest completed close immediately before the configured boundary. |
+| Estimated exit fill | LONG: mark − configured adverse slippage; SHORT: mark + configured adverse slippage. The slippage is inside the estimated fill and is not deducted again. |
+| Estimated exit fee | The configured fee schedule applied to the estimated exit fill notional, deducted exactly once. Entry costs already in cash or in the entry fill are not counted again. |
+| MTM | LONG unrealized = (est_exit − entry_fill) × q × M; SHORT unrealized = (entry_fill − est_exit) × q × M; MTM equity = cash + unrealized − estimated exit fee. |
+| Missing data / configuration | Missing mark, tick size, slippage or fee configuration → MTM `UNSCORABLE`. When a required daily-loss calculation is `UNSCORABLE`, new entries are suspended. Nothing is fabricated. Open positions keep their lifecycle and fixed SL / TP. |
+
+**Implementation (Module E only; `scanner_v6/exit/execution.py`, `execution_config.py`):**
+- "Configured adverse slippage" is the explicit Module E value `mtm_exit_slippage_ticks` (ticks × tick size). It is not
+  part of the CK-26 entry requirements, so a missing value does not give `EXECUTION_CONFIG_INCOMPLETE`; it makes MTM
+  `UNSCORABLE` when MTM is needed (with an open position). **Owner review requested:** whether this should instead
+  reuse `stop_exit_ticks` (see the table below).
+- `estimate_exit()` / `mtm_equity()`: the mark is the close of the latest processed (completed) candle; the estimated
+  exit fill goes through the configured price rounding (on-grid marks never change).
+- Daily loss is measured at **every completed candle close** (step (M) of the candle order), including while a position
+  is open, and at each entry decision. A measure ≥ 2% of start-of-day equity latches the rest of that trading day. An
+  `UNSCORABLE` measure (missing configuration) is recorded for the day; a later entry decision that day is `UNSCORABLE`
+  (`blocked_by` OQ-13, entry suspended, never entered later) unless a decisive flat measure ≥ 2% applies.
+- Start-of-day snapshot: cash at the boundary plus, for a position open at the boundary, its MTM at the latest candle
+  that ended at or before the boundary. If the boundary falls inside the candle in which that position was exited, its
+  state at the boundary is intrabar-ambiguous → the snapshot is `UNSCORABLE` (implementation choice, listed below).
+- The previous Module E behaviour "a position open earlier the same day → `UNSCORABLE`" is removed; the day is now
+  measured.
+
+**Fixtures (24 Nov 2026), built from OHLC only, Modules A–D unchanged:**
+- Organic two-trade day: a BUY setup confirmed at 50 is entered at 51 and stopped at 58; a bearish CHoCH (58),
+  REVERSAL_CONFIRMING bearish BOS (64), BSL sweep (68) and Bearish Engulfing (69–70) confirm a SELL setup at 71, which
+  is entered at 72 on the equity left by trade 1 and reaches its target at 76 (and the mirror).
+- Organic position limit: the same SELL setup confirms at 71 while the BUY is still open → `NO_TRADE` /
+  `POSITION_LIMIT_REACHED`; the BUY ends the data `OPEN_UNRESOLVED`.
+- **Limitation:** two setups pending on the same entry open cannot be produced by Modules A–D (one current BOS; one
+  pending candidate per BOS; a new BOS needs an opposite CHoCH / BOS, which first invalidates the pending candidate,
+  17.S / 17.U). The phase-2 re-check is covered only by a white-box test that duplicates a pending record. Earlier
+  modules were not changed.
+
+**Implementation choices still awaiting owner review (not approved; no value or default is implied):**
+
+| # | Choice (as implemented) | Consequence | Alternatives |
+|---|---|---|---|
+| IC-1 | Fee schedule shape: per fill, rate × notional + per_unit × qty + per_order, rounded once per fill (configured places and mode) | Covers percentage, per-unit and flat fees in one schedule; a broker with tiered, capped or per-component-rounded fees cannot be expressed | Per-component rounding (B-9); pluggable schedule per broker |
+| IC-2 | Quantity grid: multiples of `quantity_step`, ≥ `min_quantity`; `quantity_step` must be a multiple of `lot_size`, `min_quantity` of `quantity_step` | Rejects inconsistent configuration at load; lot size itself does not further constrain sizing | Grid = multiples of lot size; min + n × step |
+| IC-3 | Off-grid computed prices are rounded to the tick grid with the configured `price_rounding_mode` | On-grid data never changes; with off-grid data the SL / TP / fills can move by < 1 tick in the configured direction | Reject off-grid data; direction-aware rounding (always adverse) |
+| IC-4 | Reward and stop distance are directional (BUY TP − fill, SELL fill − TP) | An entry at or beyond the TP gives reward ≤ 0 → `NET_RR_BELOW_MINIMUM` (CK-22 "revalidate"); identical to Section 7's absolute value in every normal case | Absolute value (would accept a target behind the entry) |
+| IC-5 | CK-13 #4 (net R:R) is evaluated at the risk-sized quantity; when nothing fits the budget, at `min_quantity` | With a per-order fee, R:R depends on q; the reason then reflects the smallest tradable size, and #4 precedes #5 | Per-unit R:R without fixed fees; skip #4 when no quantity fits (then #5) |
+| IC-6 | EXCHANGE trading day = all configured sessions opening on one local date (instrument zone), starting at the first of them | A session crossing midnight belongs to the date it opens; a time before the first configured session → `EXECUTION_CONFIG_INCOMPLETE` (calendar coverage) | Explicit day-start per exchange (like ME-2); calendar date of the timestamp |
+| IC-7 | OQ-13 "configured adverse slippage" = new explicit `mtm_exit_slippage_ticks` | MTM is `UNSCORABLE` until it is configured; it can differ from the stop slippage | Reuse `stop_exit_ticks` (then always available when entries are) |
+| IC-8 | Day boundary inside the exit candle of a position → start-of-day `UNSCORABLE` | Only possible when the boundary is not on a candle edge; entries that day are suspended | Treat the position as closed / open at the boundary |
+
+**Tests:** `tests/scanner_v6/test_execution.py` now has 32 tests (35 after the Phase 3 F-E1 / F-D2 tests; OQ-13: LONG / SHORT MTM with independent exact values,
+adverse-slippage direction, closing fee once, flat MTM = cash, start-of-day snapshot with an open position (candle edge
+and mid-candle boundary), missing configuration → `UNSCORABLE` and suspended entries, intraday MTM latch without forced
+close; organic two-trade day; organic position limit; white-box same-open re-check). Mutation check: 27 of 27 mutants
+caught. **Status:** IMPLEMENTED; TESTED (24 Nov 2026). Not committed.
