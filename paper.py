@@ -73,6 +73,7 @@ DEFAULT_CONFIG = {
                    "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
+                   "v6_setups": ["v6_smc_long", "v6_smc_short"], "v6_sl_buffer_ticks": 2, "v6_tp_offset_ticks": 1,
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
                    "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
                    "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
@@ -87,6 +88,7 @@ DEFAULT_CONFIG = {
                    "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
+                   "v6_setups": ["v6_smc_long", "v6_smc_short"], "v6_sl_buffer_ticks": 2, "v6_tp_offset_ticks": 1,
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
                    "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
                    "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0, "fno_stock_options": False,
@@ -102,6 +104,7 @@ DEFAULT_CONFIG = {
                    "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
+                   "v6_setups": ["v6_smc_long", "v6_smc_short"], "v6_sl_buffer_ticks": 2, "v6_tp_offset_ticks": 1,
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
                    "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
                    "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0,
@@ -113,6 +116,7 @@ DEFAULT_CONFIG = {
                    "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
+                   "v6_setups": ["v6_smc_long", "v6_smc_short"], "v6_sl_buffer_ticks": 2, "v6_tp_offset_ticks": 1,
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
                    "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
                    "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
@@ -123,6 +127,7 @@ DEFAULT_CONFIG = {
                    "scanner_version": "v3", "v4_setups": ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"],
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
+                   "v6_setups": ["v6_smc_long", "v6_smc_short"], "v6_sl_buffer_ticks": 2, "v6_tp_offset_ticks": 1,
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
                    "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
                    "tm_candle_min": 15, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
@@ -164,7 +169,8 @@ DEFAULT_CONFIG = {
 
 
 # the strategy switches FNO starts with: INDIA's, so F&O keeps running the Scanner version it ran before the split
-FNO_FROM_INDIA = ("scanner_version", "v4_setups", "v5_setups", "v5_constant", "v5_move", "v5_target", "trade_setups",
+FNO_FROM_INDIA = ("scanner_version", "v4_setups", "v5_setups", "v5_constant", "v5_move", "v5_target", "v6_setups",
+                  "v6_sl_buffer_ticks", "v6_tp_offset_ticks", "trade_setups",
                   "risk_limits", "trade_manager", "tm_be_r", "tm_trail", "tm_trail_step", "tm_trail_gap", "tm_lock_at",
                   "tm_lock_keep", "tm_reversal",
                   "tm_rev_min_r", "tm_stale_min", "tm_candle_min", "max_loss_per_trade_fno", "futures_margin_pct",
@@ -1793,6 +1799,8 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
         return done("skipped", "%s is unticked in Settings (Scanner v4: setups traded)" % (s.get("name") or s["setup"]))
     if version == "v5" and s["setup"] not in acc.get("v5_setups", _PB.V5_SETUPS):
         return done("skipped", "%s is unticked in Settings (Scanner v5: setups traded)" % (s.get("name") or s["setup"]))
+    if version == "v6" and s["setup"] not in acc.get("v6_setups", _PB.V6_SETUPS):
+        return done("skipped", "%s is unticked in Settings (Scanner v6: setups traded)" % (s.get("name") or s["setup"]))
     led, v4_fields = None, {}
     if version == "v4":
         import scanner_v4 as V4

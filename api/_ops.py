@@ -124,7 +124,10 @@ RISK_FIELDS = {
     "capital": {"type": "float", "min": 100},
     "risk_limits": {"type": "bool"},
     "trade_setups": {"type": "bool"},
-    "scanner_version": {"type": "choice", "choices": ["v5", "v4", "v3", "v2", "rules"]},
+    "scanner_version": {"type": "choice", "choices": ["v6", "v5", "v4", "v3", "v2", "rules"]},
+    "v6_setups": {"type": "setups", "allow_empty": True, "choices": ["v6_smc_long", "v6_smc_short"]},
+    "v6_sl_buffer_ticks": {"type": "int", "min": 0, "max": 50},
+    "v6_tp_offset_ticks": {"type": "int", "min": 0, "max": 50},
     "v5_setups": {"type": "setups", "allow_empty": True, "choices": ["v5_level_long", "v5_level_short"]},
     "v5_constant": {"type": "float", "min": 0.01, "max": 0.95},
     "v5_move": {"type": "choice", "choices": ["swing", "day"]},
@@ -1339,7 +1342,9 @@ def agents():
     jobs = {
         1: "Every market, on each candle that closes. The rules that trade: a crypto coin's fresh close above its "
            "4-hour high (below its low for shorts), NSE / US opening-range breaks (these run ONLY when Scanner version is 'rules'). "
-           "Your setups, one scanner version per account (Settings: Scanner version), never mixed. v5 = the 0.146 "
+           "Your setups, one scanner version per account (Settings: Scanner version), never mixed. v6 = the V6 SMC "
+           "scanner (CHoCH, then a reversal BOS, a liquidity sweep, a candlestick pattern and its confirmation; stop "
+           "beyond the sweep candle, target at the opposing liquidity; the V4 agents below trade it). v5 = the 0.146 "
            "level: after a move, the level C x range short of its extreme (C = 0.146), touched and closed back on the "
            "right side, stop beyond the extreme, target the other end of the move. v4 = your 11 Nov rules only: a primary trade (a BOS by close, then a "
            "close below an old low / above an old high, then a classic / gravestone / long-legged doji or inverted hammer (BUY) / classic / dragonfly / long-legged doji or hammer (SELL), then "
