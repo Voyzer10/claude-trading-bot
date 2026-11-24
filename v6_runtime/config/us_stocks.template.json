@@ -1,0 +1,28 @@
+{
+ "_comment": "TEMPLATE for <V6 data root>/config/us_stocks.json. Every value is null and NOT_APPROVED until the owner approves it. A value is used only when its approval is APPROVED; anything else is treated as missing and Module E answers EXECUTION_CONFIG_INCOMPLETE (no trade). Never copy values from V4.",
+ "book_id": "US",
+ "timeframe": "5m",
+ "instruments": [],
+ "data_provider": {"name": "alpaca", "feed": null, "approval": "NOT_APPROVED", "decision": "feed (iex / sip) not chosen"},
+ "values": {
+  "tick_size":               {"value": null, "approval": "NOT_APPROVED", "decision": "B-7"},
+  "entry_ticks":             {"value": null, "approval": "NOT_APPROVED", "decision": "B-10 slippage"},
+  "stop_exit_ticks":         {"value": null, "approval": "NOT_APPROVED", "decision": "B-10 slippage"},
+  "target_exit_ticks":       {"value": null, "approval": "NOT_APPROVED", "decision": "OQ-2 (must be 0)"},
+  "max_gap_ticks":           {"value": null, "approval": "NOT_APPROVED", "decision": "CK-19"},
+  "sl_buffer_ticks":         {"value": null, "approval": "NOT_APPROVED", "decision": "B-12"},
+  "tp_offset_ticks":         {"value": null, "approval": "NOT_APPROVED", "decision": "B-12"},
+  "contract_multiplier":     {"value": null, "approval": "NOT_APPROVED", "decision": "B-7 (1 for shares)"},
+  "lot_size":                {"value": null, "approval": "NOT_APPROVED", "decision": "IC-2"},
+  "quantity_step":           {"value": null, "approval": "NOT_APPROVED", "decision": "IC-2"},
+  "min_quantity":            {"value": null, "approval": "NOT_APPROVED", "decision": "IC-2"},
+  "fee_schedule":            {"value": null, "approval": "NOT_APPROVED", "decision": "IC-1 (US: SEC fee / FINRA TAF are sell-side only; the linear schedule cannot express that)"},
+  "price_rounding_mode":     {"value": null, "approval": "NOT_APPROVED", "decision": "IC-3"},
+  "initial_margin_rate":     {"value": null, "approval": "NOT_APPROVED", "decision": "cash account rate"},
+  "mtm_exit_slippage_ticks": {"value": null, "approval": "NOT_APPROVED", "decision": "IC-7"},
+  "exchange_day_rule":       {"value": null, "approval": "NOT_APPROVED", "decision": "IC-6"},
+  "bar_settle_seconds":      {"value": null, "approval": "NOT_APPROVED", "decision": "feed: seconds after a bar's end before it is treated as complete"},
+  "stale_after_bars":        {"value": null, "approval": "NOT_APPROVED", "decision": "feed: missing bars before DATA_INTERRUPTED"},
+  "alignment_rule":          {"value": null, "approval": "NOT_APPROVED", "decision": "O-1 (candle spacing / timeframe alignment)"}
+ }
+}

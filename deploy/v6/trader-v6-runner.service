@@ -1,0 +1,29 @@
+# V6 PAPER-ONLY runner (US Stocks book). Installed DISABLED. Even when started it refuses to run unless every gate is
+# met: /var/lib/trader-v6/runtime/ENABLED_US (owner switch), an owner-initialised US book, an approved
+# config/us_stocks.json, a verified NYSE calendar and the V6 data-only credential /etc/trader-v6/alpaca-data.json.
+# It only reads market data (data.alpaca.markets, GET bars) and has no order path.
+[Unit]
+Description=Trader V6 paper runner (PAPER ONLY, US Stocks)
+After=network-online.target
+
+[Service]
+User=trader-v6
+Group=trader-v6
+WorkingDirectory=/opt/trader-v6/app
+Environment=V6_DATA_ROOT=/var/lib/trader-v6
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/trader-v6/venv/bin/python -m v6_runtime.runner run --book US --poll-seconds 30
+# exit 2 = NOT READY, 3 = owner switch removed: do not restart-loop on those
+Restart=on-failure
+RestartPreventExitStatus=2 3
+RestartSec=30
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/opt/trader-v6 /etc/trader-v6
+ReadWritePaths=/var/lib/trader-v6
+InaccessiblePaths=/etc/trader /opt/trader/trader
+
+[Install]
+WantedBy=multi-user.target
