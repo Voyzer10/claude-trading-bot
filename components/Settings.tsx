@@ -102,10 +102,12 @@ const RISK_LABELS: Record<string, string> = {
   tm_rev_min_r: "Reversal exit only after this many R in profit",
   tm_candle_min: "Candle size for the reversal check (minutes)",
   tm_stale_min: "Close a trade that went nowhere after (minutes; 0 = off)",
-  scanner_version: "Scanner version: only the selected one's rules run (rules = only the older rules: crypto 4h breakout / SMC / playbook hits, NSE / US / F&O opening-range breakouts; v5 = the 0.146 level; v4 = your 11 Nov rules (Final Trading Workflow + your answers): primary, then sequential OB/FVG; v3 = 5 Nov sweep reversal + FVG/OB retest; v2 = A-B-C-D, playbook, FVG / OB)",
+  scanner_version: "Scanner version: only the selected one's rules run (rules = only the older rules: crypto 4h breakout / SMC / playbook hits, NSE / US / F&O opening-range breakouts; v6 = the V6 SMC scanner: CHoCH > BOS > liquidity sweep > candlestick > confirmation, V6 stop and liquidity target, V4 agents trade it; v5 = the 0.146 level; v4 = your 11 Nov rules (Final Trading Workflow + your answers): primary, then sequential OB/FVG; v3 = 5 Nov sweep reversal + FVG/OB retest; v2 = A-B-C-D, playbook, FVG / OB)",
   v5_constant: "Scanner v5: the constant C, from the move's start (reel 0.146; Fibonacci 0.236 / 0.382 / 0.5 / 0.618 and 1 - r: 0.854 / 0.764 / 0.214 / 0.114; ICT OTE 0.38 / 0.295 / 0.21; Gann 0.125 / 0.25 / 0.375). Above 0.5 only target 2R trades",
   v5_move: "Scanner v5: the move (swing = last swing low -> high; day = today's low -> high)",
   v5_target: "Scanner v5: target (leg = the other end of the move; 2R)",
+  v6_sl_buffer_ticks: "Scanner v6: stop this many ticks beyond the sweep candle (V6 structural stop)",
+  v6_tp_offset_ticks: "Scanner v6: target this many ticks before the opposing liquidity pool",
   cooldown_losses: "Cooldown after N losses in a row (0 = off)",
   cooldown_minutes: "Cooldown length (minutes)",
   weekly_loss_x: "Weekly loss limit (x daily limit, 0 = off)",
@@ -175,6 +177,10 @@ const V5_NAMES: Record<string, string> = {
   v5_level_long: "v5 support long (after an up-move: low + C x range touched, closed back above)",
   v5_level_short: "v5 resistance short (after a down-move: high - C x range touched, closed back below)",
 };
+const V6_NAMES: Record<string, string> = {
+  v6_smc_long: "v6 SMC long (CHoCH > BOS > sell-side sweep > bullish pattern > confirmation)",
+  v6_smc_short: "v6 SMC short (CHoCH > BOS > buy-side sweep > bearish pattern > confirmation)",
+};
 const RULES_NAME: Record<MarketKey, string> = {
   CRYPTO: "4h breakout / SMC / playbook / rulebook",
   NSE: "opening-range breakouts",
@@ -192,8 +198,8 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
   const acct = ACCOUNT_OF[mkt];
   const version = String(doc.risk[acct]?.scanner_version ?? "v3");
   const v4 = version !== "rules";   // every scanner version runs only its own setups
-  const ownKey = version === "v5" ? "v5_setups" : "v4_setups";
-  const ownNames = version === "v5" ? V5_NAMES : V4_NAMES;
+  const ownKey = version === "v6" ? "v6_setups" : version === "v5" ? "v5_setups" : "v4_setups";
+  const ownNames = version === "v6" ? V6_NAMES : version === "v5" ? V5_NAMES : V4_NAMES;
   const savedV4 = (doc.risk[acct]?.[ownKey] as unknown as string[] | undefined) ?? Object.keys(ownNames);
   const [v, setV] = useState<Record<string, unknown>>(src.rules);
   const [v4set, setV4set] = useState<string[]>(savedV4);
@@ -251,9 +257,10 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
       </div>
       {v4 ? (
         <div className="notice" style={{ marginBottom: 12 }}>
-          <b>Scanner {version} is on for {acct}:</b> only the {version} setups{version === "v4" || version === "v5" ? " ticked below" : ""} are watched and traded. The {RULES_NAME[mkt]} rules
+          <b>Scanner {version} is on for {acct}:</b> only the {version} setups{version === "v4" || version === "v5" || version === "v6" ? " ticked below" : ""} are watched and traded. The {RULES_NAME[mkt]} rules
           are off for this account{mkt === "FNO" ? (version === "v4" ? " (v4 runs on the Nifty 50 and Bank Nifty charts and buys their ATM options)" : ` (${version} does not trade the indices)`) : ""}; their values below are kept for when you switch back.
           {version === "v5" && <> The 0.146 level is <b>not backtested yet</b>: run the Scanner v5 backtests first.</>}
+          {version === "v6" && <> Scanner v6 finds and confirms setups exactly as V6 does (V6 stop and liquidity target); the entry, size, fees and exits are this account&apos;s V4 agents. It is <b>not backtested on this market inside V4</b> yet.</>}
         </div>
       ) : (
         <p className="small muted" style={{ margin: "0 0 10px" }}>
@@ -266,10 +273,10 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
           <b>Rules only for {acct}:</b> the {RULES_NAME[mkt]} rules below run; no Scanner setups are traded.
         </div>
       )}
-      {(version === "v4" || version === "v5") && (
+      {(version === "v4" || version === "v5" || version === "v6") && (
         <div className="field" style={{ marginBottom: 12 }}>
-          <span className="field-label">Setups traded: Scanner {version === "v5" ? "v5" : "v4"}{v4 ? "" : " (used when Scanner version is v4)"}</span>
-          <div className="checks" role="group" aria-label={`Scanner ${version === "v5" ? "v5" : "v4"} setups traded`}>
+          <span className="field-label">Setups traded: Scanner {version}</span>
+          <div className="checks" role="group" aria-label={`Scanner ${version} setups traded`}>
             {Object.entries(ownNames).map(([c, name]) => (
               <label key={c}>
                 <input type="checkbox" checked={v4set.includes(c)}
@@ -279,7 +286,9 @@ function RulesForm({ doc, onSaved, onError }: { doc: SettingsDoc } & FormProps) 
             ))}
           </div>
           <span className="field-help">
-            {version === "v5"
+            {version === "v6"
+              ? `V6 stop ${doc.risk[acct]?.v6_sl_buffer_ticks ?? 2} ticks beyond the sweep candle, target ${doc.risk[acct]?.v6_tp_offset_ticks ?? 1} tick(s) before the opposing liquidity (change them in Risk limits). Unticked: found and logged, not traded.`
+              : version === "v5"
               ? `The 0.146 level (C = ${doc.risk[acct]?.v5_constant ?? 0.146}, move ${doc.risk[acct]?.v5_move ?? "swing"}, target ${doc.risk[acct]?.v5_target ?? "leg"}; change them in Risk limits). Unticked: found and logged, not traded.`
               : "Your 7 Nov final workflow. Secondaries only come after that chart's primary closed. Unticked: found and logged, not traded."}
             {mkt === "FNO" ? " F&O has its own account (FNO): Nifty 50 and Bank Nifty options only." : ""}

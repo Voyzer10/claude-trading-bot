@@ -379,7 +379,9 @@ SETUP_NAMES = {"abcd_long": "A-B-C-D long", "abcd_short": "A-B-C-D short",
                "v3_retest_long": "v3 FVG/OB retest long", "v3_retest_short": "v3 FVG/OB retest short",
                "v4_primary_long": "v4 primary long", "v4_primary_short": "v4 primary short",
                "v4_secondary_long": "v4 OB/FVG secondary long", "v4_secondary_short": "v4 OB/FVG secondary short",
-               "v5_level_long": "v5 0.146 support long", "v5_level_short": "v5 0.146 resistance short"}
+               "v5_level_long": "v5 0.146 support long", "v5_level_short": "v5 0.146 resistance short",
+               "v6_smc_long": "v6 SMC long (CHoCH > BOS > SSL sweep > pattern > confirmation)",
+               "v6_smc_short": "v6 SMC short (CHoCH > BOS > BSL sweep > pattern > confirmation)"}
 
 
 def _r(x):
@@ -389,18 +391,20 @@ def _r(x):
     return round(x, 2) if ax >= 100 else round(x, 4) if ax >= 1 else float("%.6g" % x)
 
 
-SCANNER_VERSIONS = ("v5", "v4", "v3", "v2", "rules")   # "rules": only the older rules (no Scanner setups)
+SCANNER_VERSIONS = ("v6", "v5", "v4", "v3", "v2", "rules")   # "rules": only the older rules (no Scanner setups)
 
 
 def setup_version(setup):
-    """Which scanner version a setup belongs to: v5_ / v4_ / v3_ prefixes, everything else is v2."""
+    """Which scanner version a setup belongs to: v6_ / v5_ / v4_ / v3_ prefixes, everything else is v2."""
     s = str(setup or "")
-    return "v5" if s.startswith("v5_") else "v4" if s.startswith("v4_") else "v3" if s.startswith("v3_") else "v2"
+    return ("v6" if s.startswith("v6_") else "v5" if s.startswith("v5_") else "v4" if s.startswith("v4_")
+            else "v3" if s.startswith("v3_") else "v2")
 
 
 V4_SETUPS = ["v4_primary_long", "v4_primary_short", "v4_secondary_long", "v4_secondary_short"]
 V5_SETUPS = ["v5_level_long", "v5_level_short"]
-OWN_ONLY = ("v5", "v4", "v3", "v2")   # every scanner version trades ONLY its own setups (owner, 10 Nov 2026)
+V6_SETUPS = ["v6_smc_long", "v6_smc_short"]
+OWN_ONLY = ("v6", "v5", "v4", "v3", "v2")   # every scanner version trades ONLY its own setups (owner, 10 Nov 2026)
 
 
 def v4_only(market):
@@ -438,6 +442,26 @@ def scanner_version(market):
         return "v3"
 
 
+def v6_params(market):
+    """Scanner v6's price settings for this market's account (paper_config.json): stop buffer and target offset, in
+    ticks (V6 spec: SL beyond the sweep candle, TP before the opposing liquidity pool)."""
+    try:
+        import paper as P
+        acc = P.load_config()["accounts"].get(P.MARKETS.get(market, {}).get("account", market), {})
+    except Exception:
+        acc = {}
+    return {"sl_buffer_ticks": int(acc.get("v6_sl_buffer_ticks", 2)), "tp_offset_ticks": int(acc.get("v6_tp_offset_ticks", 1))}
+
+
+def v6_setups(rows, i, market=None, params=None):
+    """Scanner v6 (scanner_v6 Modules A-D via scanner_v6_bridge.py): the setups V6 confirms on candle i."""
+    import scanner_v6_bridge as V6B
+    try:
+        return V6B.setups(rows, i, market, **(params or {}))
+    except Exception:
+        return []
+
+
 # the candles each chart's v4 setups came from (owner, 14 Nov 2026): paper.py's v4 time machine replays them
 LAST_ROWS = {}
 
@@ -455,7 +479,9 @@ def owner_setups(rows, day_of, ctx=None, version="v3", intraday=False, market=No
     i = len(rows) - 1
     if version == "rules":
         return []                     # "rules" selected: no Scanner setups at all
-    if version == "v5":
+    if version == "v6":
+        out = v6_setups(rows, i, market, v6_params(market) if market else {})
+    elif version == "v5":
         out = v5_setups(rows, day_of, i, intraday, v5_params(market) if market else {})
     elif version == "v4":
         out = v4_setups(rows, day_of, i, intraday, ledger, "%s:%s" % (market, symbol))
