@@ -121,9 +121,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pytest
+      - run: pip install pytest "fastapi==0.115.6" httpx
       - name: V6 full suite (pytest)
         run: python -B -m pytest -q -p no:cacheprovider -rs tests/scanner_v6
+      - name: V6 paper runtime, backtesting, ledger, data adapters, API, deploy scripts and V4 isolation (offline)
+        run: python -B -m pytest -q -p no:cacheprovider -rs tests/v6_runtime
       - name: V6 Module D - confirmation and setup lifecycle (focused)
         run: python -B -m pytest -q -p no:cacheprovider -rs tests/scanner_v6/test_confirmation.py
       - name: V6 Module E - paper execution and risk (focused)
@@ -144,4 +146,4 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - run: shellcheck deploy/*.sh
+      - run: shellcheck deploy/*.sh deploy/v6/*.sh

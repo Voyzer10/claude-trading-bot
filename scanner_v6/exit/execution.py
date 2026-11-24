@@ -56,6 +56,20 @@ Daily loss is measured at every completed candle close (the only times a mark ex
 measure >= 2% of start-of-day equity latches the rest of that trading day. If the day boundary falls inside a candle
 in which the position was exited, its state at the boundary is intrabar-ambiguous -> start-of-day UNSCORABLE.
 
+Owner decisions ME-5...ME-7 (24 Nov 2026, PR #98, US Stocks intraday; all optional configuration, absent = unchanged):
+  ME-5  side-aware fees: every fee is computed for the FILL's own side and time (entry fill = trade side; stop, target,
+        flatten and estimated MTM exits = the opposite side).
+  ME-6  intraday flattening on EXCHANGE calendars. Entry cutoff: a setup whose entry candle would open at or after
+        (actual session close - entry_cutoff_buffer) is EXPIRED with disposition AFTER_ENTRY_CUTOFF. Flatten: on the
+        first candle that ENDS at or after (actual session close - eod_flatten_buffer), early closes included, after
+        the normal SL / TP check, a still-open position exits at that candle's close moved adversely by
+        stop_exit_ticks (a market exit), status EOD_FLATTEN (detail EOD_FLATTEN_LATE when that candle started at or
+        after the flatten time because the scheduled candle was missing). If no candle of that session reached the flatten time
+        (missing / interrupted data), the position is flattened at the OPEN of the first later candle
+        (adverse stop_exit_ticks), status EOD_FLATTEN, detail EOD_DATA_MISSING: no price is invented, and the
+        overnight exposure that the missing data caused is recorded, not hidden.
+  ME-7  SELL entries use short_margin_rate / short_quantity_step / short_min_quantity when configured.
+
 Implementation choices (ordering / representation only; listed in 17.V): staged evaluation (phase 1 at the close of
 C: configuration, position limit, daily loss, session; phase 2 at the open of C+1: position limit again for a second
 setup pending on the same candle, next candle, target pool, CK-13 #2...#6); order at each candle: (A) entries of
@@ -89,8 +103,11 @@ from .trade_management import evaluate_exit
 CONFIRMED, ENTERED, STOPPED_OUT, TARGET_HIT = D.CONFIRMED, D.ENTERED, D.STOPPED_OUT, D.TARGET_HIT
 NO_TRADE, EXPIRED, INVALIDATED = D.NO_TRADE, D.EXPIRED, D.INVALIDATED
 OPEN_UNRESOLVED = "OPEN_UNRESOLVED"
-E_TRANSITIONS = {CONFIRMED: (ENTERED, NO_TRADE, EXPIRED), ENTERED: (STOPPED_OUT, TARGET_HIT)}
-E_TERMINAL = (NO_TRADE, EXPIRED, STOPPED_OUT, TARGET_HIT)
+EOD_FLATTEN = "EOD_FLATTEN"                                # ME-6
+E_TRANSITIONS = {CONFIRMED: (ENTERED, NO_TRADE, EXPIRED), ENTERED: (STOPPED_OUT, TARGET_HIT, EOD_FLATTEN)}
+E_TERMINAL = (NO_TRADE, EXPIRED, STOPPED_OUT, TARGET_HIT, EOD_FLATTEN)
+EXIT_STATUSES = (STOPPED_OUT, TARGET_HIT, EOD_FLATTEN)
+EOD_DATA_MISSING = "EOD_DATA_MISSING"
 UNSCORABLE = "UNSCORABLE"                                 # Section 13 item result: pending rule
 
 # ---------------------------------------------------------------- CK-13 reason codes, approved priority
@@ -109,12 +126,15 @@ POSITION_LIMIT_REACHED = "POSITION_LIMIT_REACHED"
 DAILY_LOSS_LIMIT_REACHED = "DAILY_LOSS_LIMIT_REACHED"
 NEXT_CANDLE_UNAVAILABLE = "NEXT_CANDLE_UNAVAILABLE"
 SESSION_CLOSED = "SESSION_CLOSED"
-DISPOSITION_STATUS = {NO_ELIGIBLE_OPPOSING_POOL: NO_TRADE, POSITION_LIMIT_REACHED: NO_TRADE,
-                      DAILY_LOSS_LIMIT_REACHED: NO_TRADE, NEXT_CANDLE_UNAVAILABLE: EXPIRED, SESSION_CLOSED: EXPIRED}
+AFTER_ENTRY_CUTOFF = "AFTER_ENTRY_CUTOFF"                  # ME-6
+SHORT_SIDE_DISABLED = "SHORT_SIDE_DISABLED"                # ME-7
+DISPOSITION_STATUS = {SHORT_SIDE_DISABLED: NO_TRADE, NO_ELIGIBLE_OPPOSING_POOL: NO_TRADE, POSITION_LIMIT_REACHED: NO_TRADE,
+                      DAILY_LOSS_LIMIT_REACHED: NO_TRADE, NEXT_CANDLE_UNAVAILABLE: EXPIRED, SESSION_CLOSED: EXPIRED,
+                      AFTER_ENTRY_CUTOFF: EXPIRED}
 
 # ME-1 (owner decision 24 Nov 2026): the full precedence; CK-13's own relative order is unchanged inside it
-ME1_ORDER = (EXECUTION_CONFIG_INCOMPLETE, POSITION_LIMIT_REACHED, DAILY_LOSS_LIMIT_REACHED, SESSION_CLOSED,
-             NEXT_CANDLE_UNAVAILABLE, NO_ELIGIBLE_OPPOSING_POOL, ENTRY_AT_OR_BEYOND_SL, ENTRY_GAP_EXCEEDED,
+ME1_ORDER = (EXECUTION_CONFIG_INCOMPLETE, SHORT_SIDE_DISABLED, POSITION_LIMIT_REACHED, DAILY_LOSS_LIMIT_REACHED, SESSION_CLOSED,
+             AFTER_ENTRY_CUTOFF, NEXT_CANDLE_UNAVAILABLE, NO_ELIGIBLE_OPPOSING_POOL, ENTRY_AT_OR_BEYOND_SL, ENTRY_GAP_EXCEEDED,
              NET_RR_BELOW_MINIMUM, MIN_QTY_EXCEEDS_RISK_BUDGET, INSUFFICIENT_MARGIN)
 
 # ---------------------------------------------------------------- approved operating values (not configuration)
@@ -240,6 +260,7 @@ class _Account:
     latched_days: Dict[str, int] = field(default_factory=dict)                       # day key -> index latched
     unscorable_days: Dict[str, Tuple[int, str]] = field(default_factory=dict)        # day key -> (index, reason)
     sod: Dict[str, Tuple[str, Optional[Decimal], Optional[str]]] = field(default_factory=dict)   # day -> snapshot
+    position_session_close: Optional[datetime] = None                                # ME-6: actual close of the entry session
 
 
 class ExecutionStream:
@@ -275,7 +296,8 @@ class ExecutionStream:
         return rec
 
     # ------------------------------------------------------------ OQ-13 mark-to-market
-    def estimate_exit(self, rec: TradeRecord, mark: Optional[Decimal]) -> Tuple[str, Optional[tuple], Optional[str]]:
+    def estimate_exit(self, rec: TradeRecord, mark: Optional[Decimal],
+                      at: Optional[datetime] = None) -> Tuple[str, Optional[tuple], Optional[str]]:
         """(OK, (mark, est_exit_fill, unrealized, est_exit_fee), None) or (UNSCORABLE, None, reason) for an open
         position at `mark` (OQ-13). Nothing is defaulted."""
         cfg = self.cfg
@@ -289,7 +311,9 @@ class ExecutionStream:
         est = to_grid(mark - slip * T if rec.side == BUY else mark + slip * T, T, cfg.price_rounding_mode)
         M, q = cfg.contract_multiplier, rec.quantity
         unreal = (est - rec.entry_fill if rec.side == BUY else rec.entry_fill - est) * q * M
-        return "OK", (mark, est, unreal, cfg.fee_schedule.fee(est, q, M)), None
+        when = at if at is not None else (self.candles[-1].ts if self.candles else None)
+        xfee = cfg.fee_schedule.fee(est, q, M, fill_side=SELL if rec.side == BUY else BUY, at=when)   # ME-5
+        return "OK", (mark, est, unreal, xfee), None
 
     def _equity(self, cash: Decimal, open_ids: Sequence[str], mark: Optional[Decimal]) -> Tuple[str, Optional[Decimal], Optional[str]]:
         eq = cash
@@ -460,6 +484,8 @@ class ExecutionStream:
         k, ts = c.index, c.ts
         if self.missing:                                                            # CK-13 #1 / CK-26
             return self._reject(rec, EXECUTION_CONFIG_INCOMPLETE, k, ts, "missing: " + ",".join(self.missing))
+        if rec.side == SELL and self.cfg.shorts_enabled is False:                    # ME-7: never takes the position
+            return self._reject(rec, SHORT_SIDE_DISABLED, k, ts, "short side disabled by configuration")
         tf = self.market.timeframe
         t_next = ts + tf
         if self._day(t_next) is None:                                               # calendar does not cover t_next
@@ -473,6 +499,12 @@ class ExecutionStream:
             return self._set(replace(rec, result=UNSCORABLE, blocked_by=(OQ13,), detail=why))   # entries suspended
         if not self._session_ok(ts, t_next, tf):                                    # OQ-7 (ME-1 #4)
             return self._reject(rec, SESSION_CLOSED, k, ts)
+        if self.cfg.entry_cutoff_buffer is not None:                                 # ME-6
+            close = self._session_close(t_next)
+            if close is not None and t_next >= close - self.cfg.entry_cutoff_buffer:
+                return self._reject(rec, AFTER_ENTRY_CUTOFF, k, ts,
+                                    "entry %s at/after cutoff %s" % (t_next.isoformat(),
+                                                                     (close - self.cfg.entry_cutoff_buffer).isoformat()))
         T, cfg = self.tick, self.cfg
         sw = self.candles[rec.sweep_index]
         sl = structural_sl(rec.side, dec(sw.low), dec(sw.high), cfg.sl_buffer_ticks, T, cfg.price_rounding_mode)
@@ -513,33 +545,39 @@ class ExecutionStream:
             return self._reject(rec, ENTRY_AT_OR_BEYOND_SL, k, ts, **base)
         if gap > rec.max_adverse_gap:                                               # CK-13 #3 (OQ-1)
             return self._reject(rec, ENTRY_GAP_EXCEEDED, k, ts, **base)
-        costs = Costs(side, fill, sfill, tp, cfg.contract_multiplier, cfg.fee_schedule)
+        costs = Costs(side, fill, sfill, tp, cfg.contract_multiplier, cfg.fee_schedule, at=ts)
+        step, min_q, rate = cfg.quantity_step, cfg.min_quantity, cfg.initial_margin_rate
+        if side == SELL:                                                            # ME-7
+            step = cfg.short_quantity_step if cfg.short_quantity_step is not None else step
+            min_q = cfg.short_min_quantity if cfg.short_min_quantity is not None else min_q
+            rate = cfg.short_margin_rate if cfg.short_margin_rate is not None else rate
         equity = self.account.cash                                                  # flat: MTM = cash (OQ-6)
         budget = RISK_FRACTION * equity
-        q_risk = largest_quantity(costs, budget, cfg.quantity_step, cfg.min_quantity)
-        q_rr = q_risk if q_risk is not None else cfg.min_quantity
+        q_risk = largest_quantity(costs, budget, step, min_q)
+        q_rr = q_risk if q_risk is not None else min_q
         base.update(equity_at_decision=equity, risk_budget=budget, risk_quantity=q_risk, net_rr=costs.net_rr(q_rr))
         if not costs.rr_ok(q_rr):                                                   # CK-13 #4
             return self._reject(rec, NET_RR_BELOW_MINIMUM, k, ts, **base)
         if q_risk is None:                                                          # CK-13 #5
-            return self._reject(rec, MIN_QTY_EXCEEDS_RISK_BUDGET, k, ts, loss_estimate=costs.loss(cfg.min_quantity), **base)
+            return self._reject(rec, MIN_QTY_EXCEEDS_RISK_BUDGET, k, ts, loss_estimate=costs.loss(min_q), **base)
         diags: Tuple[str, ...] = ()
         q = q_risk
-        if required_margin(fill, q, cfg.contract_multiplier, cfg.initial_margin_rate) > equity:   # CK-14 (ME-3)
-            q = margin_quantity(costs, q_risk, cfg.quantity_step, cfg.min_quantity, cfg.initial_margin_rate, equity)
+        if required_margin(fill, q, cfg.contract_multiplier, rate) > equity:                     # CK-14 (ME-3)
+            q = margin_quantity(costs, q_risk, step, min_q, rate, equity)
             if q is None:                                                           # CK-13 #6
                 return self._reject(rec, INSUFFICIENT_MARGIN, k, ts, **base)
             diags = ("QUANTITY_REDUCED_FOR_MARGIN",)
         if fill < dec(c.low) or fill > dec(c.high):
             diags += ("FILL_OUTSIDE_CANDLE_RANGE",)
-        fee = cfg.fee_schedule.fee(fill, q, cfg.contract_multiplier)
+        fee = cfg.fee_schedule.fee(fill, q, cfg.contract_multiplier, fill_side=side, at=ts)        # ME-5
         base.update(quantity=q, loss_estimate=costs.loss(q), net_rr=costs.net_rr(q), entry_fee=fee,
-                    required_margin=required_margin(fill, q, cfg.contract_multiplier, cfg.initial_margin_rate),
+                    required_margin=required_margin(fill, q, cfg.contract_multiplier, rate),
                     diagnostics=rec.diagnostics + diags)
         self.account.cash -= fee                                                    # entry cost enters cash once
         self.account.cash_events.append((ts, True, -fee))
         self.account.intervals.append([ts, None, sid])
         self.account.position = sid
+        self.account.position_session_close = self._session_close(ts)               # ME-6
         return self._set(_advance(rec, ENTERED, k, ts, rec.confirmation_id, None, self.d.data_state, result=ENTERED,
                                   **base))
 
@@ -552,17 +590,57 @@ class ExecutionStream:
                            cfg.price_rounding_mode, entry_candle=(c.index == rec.entry_index))
         if ex is None:
             return None
+        return self._close(rec, c, ex.status, ex.fill, ex.gap, c.ts + self.market.timeframe, None, ex.diagnostics)
+
+    def _close(self, rec: TradeRecord, c: Candle, status: str, fill: Decimal, gap: bool, end: datetime,
+               detail: Optional[str], diags: Tuple[str, ...]) -> TradeRecord:
+        cfg = self.cfg
         M, q = cfg.contract_multiplier, rec.quantity
-        fee = cfg.fee_schedule.fee(ex.fill, q, M)
-        gross = (ex.fill - rec.entry_fill if rec.side == BUY else rec.entry_fill - ex.fill) * q * M
+        fee = cfg.fee_schedule.fee(fill, q, M, fill_side=SELL if rec.side == BUY else BUY, at=c.ts)   # ME-5
+        gross = (fill - rec.entry_fill if rec.side == BUY else rec.entry_fill - fill) * q * M
         self.account.cash += gross - fee                                            # exit cost enters cash once
-        end = c.ts + self.market.timeframe
         self.account.cash_events.append((end, False, gross - fee))
         self.account.intervals[-1][1] = end
         self.account.position = None
-        return self._set(_advance(rec, ex.status, c.index, c.ts, None, None, self.d.data_state, result=ex.status,
-                                  exit_index=c.index, exit_fill=ex.fill, exit_gap=ex.gap, exit_fee=fee, gross_pnl=gross,
-                                  realized_pnl=gross - rec.entry_fee - fee, diagnostics=rec.diagnostics + ex.diagnostics))
+        self.account.position_session_close = None
+        return self._set(_advance(rec, status, c.index, c.ts, None, detail, self.d.data_state, result=status,
+                                  exit_index=c.index, exit_fill=fill, exit_gap=gap, exit_fee=fee, gross_pnl=gross,
+                                  realized_pnl=gross - rec.entry_fee - fee, diagnostics=rec.diagnostics + diags))
+
+    # ------------------------------------------------------------ ME-6 intraday flattening
+    def _session_close(self, t: datetime) -> Optional[datetime]:
+        cal = self.market.session
+        if cal is None or cal.kind is SessionKind.CONTINUOUS:
+            return None
+        j = cal.session_index(t)
+        return None if j is None else cal.sessions[j][1]
+
+    def _flat_fill(self, side: str, px: Decimal) -> Decimal:
+        T = self.tick
+        n = self.cfg.stop_exit_ticks
+        return to_grid(px - n * T if side == BUY else px + n * T, T, self.cfg.price_rounding_mode)
+
+    def _eod_missed(self, c: Candle) -> Optional[TradeRecord]:
+        """The position's session closed before any candle reached its flatten time (missing / interrupted data):
+        exit at this later candle's OPEN (adverse stop_exit_ticks), EOD_FLATTEN / EOD_DATA_MISSING."""
+        close = self.account.position_session_close
+        if self.cfg.eod_flatten_buffer is None or close is None or c.ts < close:
+            return None
+        rec = self.record(self.account.position)
+        return self._close(rec, c, EOD_FLATTEN, self._flat_fill(rec.side, dec(c.open)), True, c.ts, EOD_DATA_MISSING,
+                           ("EOD_DATA_MISSING",))
+
+    def _eod(self, c: Candle) -> Optional[TradeRecord]:
+        """First candle ending at/after (actual close - eod_flatten_buffer): exit at its close (adverse ticks)."""
+        close = self.account.position_session_close
+        buf = self.cfg.eod_flatten_buffer
+        end = c.ts + self.market.timeframe
+        if buf is None or close is None or end < close - buf:
+            return None
+        rec = self.record(self.account.position)
+        late = c.ts >= close - buf                      # starts at/after the flatten time: the scheduled candle never came
+        return self._close(rec, c, EOD_FLATTEN, self._flat_fill(rec.side, dec(c.close)), False, end,
+                           "EOD_FLATTEN_LATE" if late else None, ("EOD_FLATTEN_LATE",) if late else ())
 
     # ------------------------------------------------------------ main loop
     def on_candle(self, c: Candle) -> list:
@@ -572,7 +650,11 @@ class ExecutionStream:
             self.pending.remove(sid)
             out.append(self._phase2(sid, c))
         if self.account.position is not None:                                       # (B) exit on this candle
-            r = self._exit(c)
+            r = self._eod_missed(c)                                                 # ME-6: session already closed
+            if r is None:
+                r = self._exit(c)                                                   # SL / TP (STOP_FIRST)
+            if r is None:
+                r = self._eod(c)                                                    # ME-6: flatten time reached
             if r is not None:
                 out.append(r)
         self.d.on_candle(c)                                                         # (C) Modules A-D
@@ -597,7 +679,7 @@ class ExecutionStream:
             unresolved.append(replace(rec, status=OPEN_UNRESOLVED, result=OPEN_UNRESOLVED,
                                       history=rec.history + (D.Transition(OPEN_UNRESOLVED, last.index, last.ts, None,
                                                                           "END_OF_DATA", self.d.data_state),)))
-        closed = [r for r in self.records if r.status in (STOPPED_OUT, TARGET_HIT)]
+        closed = [r for r in self.records if r.status in EXIT_STATUSES]
         return EndOfData(last.index if last else None, last.ts if last else None, dec(last.close) if last else None,
                          tuple(unresolved), tuple(self.pending), len(closed),
                          sum(r.status == TARGET_HIT for r in closed), sum(r.status == STOPPED_OUT for r in closed),
@@ -650,7 +732,7 @@ def detect_execution(series: CandleSeries, instrument: str, timeframe: str, mark
     out = []
     for r in rep.records:
         for t in r.history:
-            if t.status in (ENTERED, NO_TRADE, EXPIRED, STOPPED_OUT, TARGET_HIT):
+            if t.status in (ENTERED, NO_TRADE, EXPIRED) + EXIT_STATUSES:
                 out.append(ExecutionEvent("exec:%s:%s" % (t.status, r.setup_id),
                                           EventStamp(t.index, series[t.index].ts, t.index, series[t.index].ts),
                                           related=(r.setup_id,), status=t.status))

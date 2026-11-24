@@ -1,0 +1,42 @@
+{
+ "exchange": "NYSE / NASDAQ regular session",
+ "timezone": "America/New_York",
+ "regular_open": "09:30",
+ "regular_close": "16:00",
+ "early_close": "13:00",
+ "verified": true,
+ "verification_note": "VERIFIED 2026-11-24 (owner-approved): every 2026 and 2027 holiday and early close compared with the official NYSE Group announcement 'NYSE Group Announces 2026, 2027 and 2028 Holiday and Early Closings Calendar' (https://ir.theice.com/press/news-details/2025/NYSE-Group-Announces-2026-2027-and-2028-Holiday-and-Early-Closings-Calendar/default.aspx): 10 holidays per year and early closes 2026-11-27, 2026-12-24, 2027-11-26 at 1:00 p.m. ET all match; no other early close is listed.",
+ "covered_years": [
+  2026,
+  2027
+ ],
+ "holidays": [
+  "2026-01-01",
+  "2026-01-19",
+  "2026-02-16",
+  "2026-04-03",
+  "2026-05-25",
+  "2026-06-19",
+  "2026-07-03",
+  "2026-09-07",
+  "2026-11-26",
+  "2026-12-25",
+  "2027-01-01",
+  "2027-01-18",
+  "2027-02-15",
+  "2027-03-26",
+  "2027-05-31",
+  "2027-06-18",
+  "2027-07-05",
+  "2027-09-06",
+  "2027-11-25",
+  "2027-12-24"
+ ],
+ "early_closes": [
+  "2026-11-27",
+  "2026-12-24",
+  "2027-11-26"
+ ],
+ "verification_source": "https://ir.theice.com/press/news-details/2025/NYSE-Group-Announces-2026-2027-and-2028-Holiday-and-Early-Closings-Calendar/default.aspx",
+ "verified_on": "2026-11-24"
+}

@@ -16,6 +16,7 @@ import PovChips from "@/components/Pov";
 import ChartView, { type ChartSource } from "@/components/ChartView";
 import { OpinionButton } from "@/components/Opinion";
 import Icon from "@/components/Icon";
+import VersionSwitch from "@/components/v6/VersionSwitch";
 import Zerodha, { ZerodhaBanner } from "@/components/Zerodha";
 import { FnoWatch, NseWatch, UsWatch } from "@/components/Watchlists";
 import { INDIA, liveFor, useLiveTicks, type LiveTicks } from "@/lib/live";
@@ -75,6 +76,7 @@ export default function Dashboard() {
           <div className="muted small">Paper trading · times in IST</div>
         </div>
         <span className={`runpill ${runState.cls}`} role="status"><span className="dot" aria-hidden="true" />{runState.label}</span>
+        <VersionSwitch current="v4" />
         <ThemeToggle />
       </header>
       <TabBar nav={nav} />

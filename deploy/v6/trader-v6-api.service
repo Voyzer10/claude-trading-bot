@@ -1,0 +1,24 @@
+# V6 PAPER-ONLY read API on 127.0.0.1:8001. Installed DISABLED by deploy/v6/install_v6.sh; never enabled by
+# deploy/update.sh (that script only copies deploy/trader-{runner,api,web,ticker,crypto-ticker,us-ticker,pov}.service).
+[Unit]
+Description=Trader V6 API (PAPER ONLY, read-only, 127.0.0.1:8001)
+After=network-online.target
+
+[Service]
+User=trader-v6
+Group=trader-v6
+WorkingDirectory=/opt/trader-v6/app
+Environment=V6_DATA_ROOT=/var/lib/trader-v6
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/trader-v6/venv/bin/python -m uvicorn api_v6.app:app --host 127.0.0.1 --port 8001
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/opt/trader-v6
+InaccessiblePaths=/etc/trader /opt/trader/trader
+
+[Install]
+WantedBy=multi-user.target

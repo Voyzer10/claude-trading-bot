@@ -1,0 +1,7 @@
+{
+ "generator": "tests/v6_runtime/fixtures/make_fixtures.py",
+ "rows": 77,
+ "sha256": "0229eb14aa8c216fd427d8d52f4f3ee0a3bca56a1eef2c5333b6090549a9dce5",
+ "source": "SYNTHETIC test fixture (tests/scanner_v6 Module E path); NOT market data",
+ "symbol": "SYNTH"
+}
