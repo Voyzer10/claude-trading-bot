@@ -13,7 +13,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _util import ROOT, run_main  # noqa: E402
+from _util import FIXTURES, run_main  # noqa: E402
 
 from scanner_v6.data.candle_models import CandleSeries  # noqa: E402
 from scanner_v6.engine import no_lookahead_violations, replay_audit  # noqa: E402
@@ -21,7 +21,7 @@ from scanner_v6.models import EventStamp, SwingKind, SwingPoint  # noqa: E402
 from scanner_v6.structure.choch import (CHoCHBreak, ComplexStructureBreak, StructureStateChange,  # noqa: E402
                                         StructureStream, analyze_structure, classify_break, detect_structure)
 
-D = json.load(open(os.path.join(ROOT, "research", "v6", "specs", "choch_v0_9", "choch_fixtures.draft.json")))
+D = json.load(open(os.path.join(FIXTURES, "choch_v0_9_fixtures.draft.json")))
 CASES = {c["case_id"]: c for c in D["decidable"]}
 UNSCORED = {c["case_id"]: c for c in D["unscored"]}
 # Fixture expectations superseded by a later owner decision. The draft fixture file is NOT edited (historical spec

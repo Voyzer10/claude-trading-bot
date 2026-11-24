@@ -11,7 +11,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _util import ROOT, run_main  # noqa: E402
+from _util import FIXTURES, run_main  # noqa: E402
 
 from scanner_v6.data.candle_models import CandleSeries  # noqa: E402
 from scanner_v6.engine import no_lookahead_violations, replay_audit  # noqa: E402
@@ -23,8 +23,7 @@ from scanner_v6.structure.choch import (BOS_ROLES, CONTINUATION, COUNTER_STRUCTU
                                         StructureStateChange, StructureStream, analyze_structure, detect_structure)
 
 T0 = datetime(2026, 1, 5, 9, 0, tzinfo=timezone.utc)
-CHD = {c["case_id"]: c for c in json.load(open(os.path.join(ROOT, "research", "v6", "specs", "choch_v0_9",
-                                                            "choch_fixtures.draft.json")))["decidable"]}
+CHD = {c["case_id"]: c for c in json.load(open(os.path.join(FIXTURES, "choch_v0_9_fixtures.draft.json")))["decidable"]}
 CHD01 = [(x["o"], x["h"], x["l"], x["c"]) for x in CHD["CHD01"]["candles"]]
 
 

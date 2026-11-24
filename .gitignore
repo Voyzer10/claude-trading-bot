@@ -12,3 +12,7 @@ trader/dashboard.json
 # the bot's live data (logs, ledger, caches) stays on your PC
 trader/
 us/trader/
+
+# V6 research artefacts (specs drafts, audits, charts, exports) stay local, outside Git (owner, 24 Nov 2026).
+# Test fixtures that V6 tests need are copied into tests/scanner_v6/fixtures/.
+/research/v6/

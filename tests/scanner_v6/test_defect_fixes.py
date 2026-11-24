@@ -23,7 +23,7 @@ from scanner_v6.engine import no_lookahead_violations, replay_audit  # noqa: E40
 from scanner_v6.structure.choch import CHoCHBreak, StructureStream, analyze_structure, detect_structure  # noqa: E402
 from test_regression_medium_bos import expected_bos  # noqa: E402
 
-D = json.load(open(os.path.join(ROOT, "research", "v6", "specs", "choch_v0_9", "choch_fixtures.draft.json")))
+D = json.load(open(os.path.join(FIXTURES, "choch_v0_9_fixtures.draft.json")))
 CASES = {c["case_id"]: c for c in D["decidable"]}
 UNSCORED = {c["case_id"]: c for c in D["unscored"]}
 T0 = datetime(2026, 1, 5, tzinfo=timezone.utc)
@@ -175,18 +175,54 @@ def test_d4_easy_fixture_identity_and_legacy_ids():
     assert not os.path.exists(os.path.join(FIXTURES, "regression", "medium_bos.json"))
 
 
+# Tracked code: both directories must exist and be scanned in full (minimum = the .py inventory of 24 Nov 2026), so a
+# missing or shrunken tree can never turn into a passing zero-file scan.
+D4_REQUIRED_DIRS = {"scanner_v6": 30, "tests": 51}
+# The two research scripts that loaded the old fixture before the D-4 rename. research/v6 is kept out of the Git
+# checkout (owner decision), so they are scanned wherever they exist and reported as an explicit skip where they don't.
+D4_RESEARCH_SCRIPTS = (os.path.join("research", "v6", "experiments", "medium_bos_retest.py"),
+                       os.path.join("research", "v6", "specs", "choch_v0_9", "build_choch_drafts.py"))
+D4_RESEARCH_SKIP_REASON = "research assets are intentionally excluded from the Git checkout"
+
+
+def _references_old_fixture(path):
+    return re.search(r"medium_bos\.json", open(path, encoding="utf-8").read()) is not None
+
+
 def test_d4_no_code_reference_to_the_old_fixture_name():
     hits = []
-    for top in ("scanner_v6", "tests", os.path.join("research", "v6", "experiments"),
-                os.path.join("research", "v6", "specs", "choch_v0_9")):
-        for dp, _, fs in os.walk(os.path.join(ROOT, top)):
+    for top, minimum in D4_REQUIRED_DIRS.items():
+        top_dir = os.path.join(ROOT, top)
+        assert os.path.isdir(top_dir), "%s/ is missing: the D-4 scan cannot run" % top
+        n = 0
+        for dp, _, fs in os.walk(top_dir):
             for f in fs:
                 if f.endswith(".py"):
+                    n += 1
                     p = os.path.join(dp, f)
                     if os.path.abspath(p) == os.path.abspath(__file__):
                         continue
-                    if re.search(r"medium_bos\.json", open(p, encoding="utf-8").read()):
+                    if _references_old_fixture(p):
                         hits.append(os.path.relpath(p, ROOT))
+        assert n >= minimum, "%s/: only %d .py files scanned, expected at least %d" % (top, n, minimum)
+    assert hits == [], hits
+
+
+def _d4_research_scan():
+    """None when the research checkout is absent (neither script exists); otherwise the scripts that still reference
+    the old fixture name. Exactly one script present fails: incomplete coverage is never a pass or a skip."""
+    present = [p for p in D4_RESEARCH_SCRIPTS if os.path.isfile(os.path.join(ROOT, p))]
+    if not present:
+        return None
+    assert len(present) == len(D4_RESEARCH_SCRIPTS), "incomplete research checkout: only %s present" % present
+    return [p for p in present if _references_old_fixture(os.path.join(ROOT, p))]
+
+
+def test_d4_research_scripts_have_no_reference_to_the_old_fixture_name():
+    hits = _d4_research_scan()
+    if hits is None:
+        import pytest
+        pytest.skip(D4_RESEARCH_SKIP_REASON)
     assert hits == [], hits
 
 
@@ -205,4 +241,9 @@ def test_new_inputs_batch_stream_parity_and_no_lookahead():
 
 
 if __name__ == "__main__":
-    run_main([v for k, v in list(globals().items()) if k.startswith("test_") and callable(v)])
+    tests = [v for k, v in list(globals().items()) if k.startswith("test_") and callable(v)]
+    if _d4_research_scan() is None:     # script mode: report the research skip explicitly, never as "ok"
+        print("SKIP  %s: %s" % (test_d4_research_scripts_have_no_reference_to_the_old_fixture_name.__name__,
+                                D4_RESEARCH_SKIP_REASON))
+        tests.remove(test_d4_research_scripts_have_no_reference_to_the_old_fixture_name)
+    run_main(tests)

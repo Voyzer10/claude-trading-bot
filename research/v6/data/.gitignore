@@ -1,4 +1,0 @@
-# market data is large and re-downloadable: keep it out of git (only this file and README.md are tracked)
-*
-!.gitignore
-!README.md

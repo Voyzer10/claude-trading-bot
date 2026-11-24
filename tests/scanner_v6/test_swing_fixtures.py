@@ -20,15 +20,14 @@ import sys
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _util import ROOT, run_main  # noqa: E402
+from _util import FIXTURES, run_main  # noqa: E402
 
 from scanner_v6.data.candle_models import CandleError, CandleSeries  # noqa: E402
 from scanner_v6.engine import no_lookahead_violations, replay_audit  # noqa: E402
 from scanner_v6.structure.swings import SwingStream, detect_swings, unresolved_equal_levels  # noqa: E402
 
-SPEC = os.path.join(ROOT, "research", "v6", "specs", "volume1")
-DRAFT = json.load(open(os.path.join(SPEC, "synthetic_volume1.draft.json")))
-ADD = json.load(open(os.path.join(SPEC, "swing_oracle_addendum.json")))
+DRAFT = json.load(open(os.path.join(FIXTURES, "volume1_synthetic.draft.json")))
+ADD = json.load(open(os.path.join(FIXTURES, "volume1_swing_oracle_addendum.json")))
 REJECT = {"RB01", "RB02", "RB04"}
 NOT_ASSERTED = {"RB03": "gap policy unresolved (D-SW-GAPS)"}
 KEY = lambda e: (e.kind.value, e.index)          # noqa: E731

@@ -11,7 +11,7 @@ import sys
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _util import FIXTURES, ROOT, run_main  # noqa: E402
+from _util import FIXTURES, run_main  # noqa: E402
 
 from scanner_v6.data.candle_models import CandleSeries  # noqa: E402
 from scanner_v6.engine import no_lookahead_violations, replay_audit  # noqa: E402
@@ -19,8 +19,8 @@ from scanner_v6.structure.bos import BOSStream, detect_bos  # noqa: E402
 from scanner_v6.structure.swings import detect_swings  # noqa: E402
 from test_regression_medium_bos import approved_bos, expected_bos  # noqa: E402
 
-VOL1 = json.load(open(os.path.join(ROOT, "research", "v6", "specs", "volume1", "synthetic_volume1.draft.json")))
-CHOCH = json.load(open(os.path.join(ROOT, "research", "v6", "specs", "choch_v0_9", "choch_fixtures.draft.json")))
+VOL1 = json.load(open(os.path.join(FIXTURES, "volume1_synthetic.draft.json")))
+CHOCH = json.load(open(os.path.join(FIXTURES, "choch_v0_9_fixtures.draft.json")))
 MED = json.load(open(os.path.join(FIXTURES, "regression", "easy_bos.json")))
 # the approved-profile expectation key of each Volume-1 BOS draft case (close strictly beyond, RL, one per level)
 APPROVED_KEY = {"BOS01": "SP-A + BOS-P1/P2/P3/P4 (RL)", "BOS02": "SP-A + BOS-P1 (RL)", "BOS03": "BOS-P1/P2/P4 (close)",

@@ -12,7 +12,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _util import ROOT, raises, run_main  # noqa: E402
+from _util import FIXTURES, raises, run_main  # noqa: E402
 
 from scanner_v6.data.candle_models import CandleSeries  # noqa: E402
 from scanner_v6.data.integrity import CandleUpdate, CompletedCandleGate, GapKind, detect_gaps  # noqa: E402
@@ -29,8 +29,7 @@ from scanner_v6.structure.choch import analyze_structure  # noqa: E402
 from scanner_v6.structure.swings import detect_swings  # noqa: E402
 
 T0 = datetime(2026, 1, 5, 9, 0, tzinfo=timezone.utc)
-CHD = {c["case_id"]: c for c in json.load(open(os.path.join(ROOT, "research", "v6", "specs", "choch_v0_9",
-                                                            "choch_fixtures.draft.json")))["decidable"]}
+CHD = {c["case_id"]: c for c in json.load(open(os.path.join(FIXTURES, "choch_v0_9_fixtures.draft.json")))["decidable"]}
 B17 = [(x["o"], x["h"], x["l"], x["c"]) for x in CHD["CHD01"]["candles"][:17]]   # register base series (zero-based)
 P98, P109, P101, P116 = ("pool:swing:%s:fixed-window-strict:L2R2" % s for s in ("low:3", "high:6", "low:9", "high:13"))
 
