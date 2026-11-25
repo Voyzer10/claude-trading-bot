@@ -50,7 +50,8 @@ def load_credential(path: str = DEFAULT_CREDENTIAL_FILE) -> Optional[DataCredent
     """The V6 data-only credential, or None if the owner has not supplied it. Refuses V4 locations and files readable
     by other users."""
     real = os.path.realpath(path)
-    if real.startswith("/etc/trader/") or os.path.basename(real) == "trader.env" or "/opt/trader" in real:
+    real_fwd = real.replace(os.sep, "/")
+    if real_fwd.startswith("/etc/trader/") or os.path.basename(real) == "trader.env" or "/opt/trader" in real_fwd:
         raise CredentialError("refusing %s: V6 never reads V4 secrets" % path)
     if not os.path.exists(real):
         return None

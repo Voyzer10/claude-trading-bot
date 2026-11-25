@@ -6,6 +6,7 @@ import json
 import os
 from datetime import date, datetime, timedelta, timezone
 
+# pyrefly: ignore[missing-import]
 import pytest
 
 import _fx
@@ -192,3 +193,98 @@ def test_invalid_and_incomplete_bars_are_never_accepted():
     bad = Bar("SPY", OPEN, 100.0, 99.0, 98.0, 100.5, 10.0)                   # high below open/close
     assert f.offer(bad, late(OPEN)).status == INVALID and f.last is None
     assert f.offer(bar(OPEN), late(OPEN)).status == ACCEPT
+
+
+# ------------------------------------------------------------------ runner restart, stale ordering, and gates
+def test_runner_restart_preserves_gate_index_and_data_state(tmp_path):
+    root = DataRoot(str(tmp_path))
+    BookLedger.create(root, "US", owner_authorised=True, created_by="test")
+    cfg = us_stocks.parse_config(_approved("iex"))
+    cal = us_stocks.load_calendar()
+    batches = [
+        [bar(OPEN), bar(OPEN + TF)],
+        [],
+        [bar(OPEN + 8 * TF)],
+    ]
+
+    def source(sym, tf, since, now):
+        return batches.pop(0)
+
+    r1 = runner.USRunner(root, cfg, cal, source, date(2026, 11, 23), date(2026, 11, 24))
+    assert r1.poll_once(late(OPEN + TF))["accepted"] == 2
+    assert r1.poll_once(OPEN + 7 * TF)["events"] == 1                    # check_stale -> DATA_INTERRUPTED
+
+    # Restart over the same DataRoot while DATA_INTERRUPTED: must resume cleanly without index=0 collision
+    r2 = runner.USRunner(root, cfg, cal, source, date(2026, 11, 23), date(2026, 11, 24))
+    assert r2.feeds["SPY"].interrupted is True
+    assert len(r2.feeds["SPY"].gate.completed) == 2
+    out = r2.poll_once(late(OPEN + 8 * TF))
+    assert out["accepted"] == 1 and out["events"] == 1                   # DATA_RESUMED + candle index 2
+    candles = r2.portfolio.streams["SPY"].candles
+    assert [c.index for c in candles] == [0, 1, 2]
+
+
+def test_runner_delayed_poll_accepts_fresh_bars_before_check_stale(tmp_path):
+    """When a poll arrives past stale_after but returns fresh bars, offer() must run before check_stale() so the
+    fresh bar is not rejected as LATE against a check_stale timestamp."""
+    root = DataRoot(str(tmp_path))
+    BookLedger.create(root, "US", owner_authorised=True, created_by="test")
+    cfg = us_stocks.parse_config(_approved("iex"))
+    cal = us_stocks.load_calendar()
+    batches = [[bar(OPEN)], [bar(OPEN + 5 * TF)]]
+
+    def source(sym, tf, since, now):
+        return batches.pop(0)
+
+    r = runner.USRunner(root, cfg, cal, source, date(2026, 11, 23), date(2026, 11, 24))
+    assert r.poll_once(late(OPEN))["accepted"] == 1
+    out = r.poll_once(late(OPEN + 5 * TF))
+    assert out["accepted"] == 1 and out["events"] == 2                   # DATA_INTERRUPTED + DATA_RESUMED for real gap
+    assert r.feeds["SPY"].health()["counts"].get("LATE", 0) == 0
+
+
+def test_runner_multi_instrument_orders_bars_by_timestamp_then_symbol(tmp_path):
+    root = DataRoot(str(tmp_path))
+    BookLedger.create(root, "US", owner_authorised=True, created_by="test")
+    raw = _approved("iex")
+    raw["instruments"] = ["SPY", "AAPL"]
+    cfg = us_stocks.parse_config(raw)
+    cal = us_stocks.load_calendar()
+
+    def source(sym, tf, since, now):
+        return [Bar(sym, OPEN, 100.0, 100.2, 99.9, 100.1, 100.0),
+                Bar(sym, OPEN + TF, 100.1, 100.3, 100.0, 100.2, 100.0)]
+
+    seen = []
+    r = runner.USRunner(root, cfg, cal, source, date(2026, 11, 23), date(2026, 11, 24))
+    orig = r.portfolio.on_candle
+
+    def spy_on_candle(iid, c):
+        seen.append((c.ts, iid))
+        return orig(iid, c)
+
+    r.portfolio.on_candle = spy_on_candle
+    assert r.poll_once(late(OPEN + TF))["accepted"] == 4
+    assert seen == [(OPEN, "AAPL"), (OPEN, "SPY"), (OPEN + TF, "AAPL"), (OPEN + TF, "SPY")]
+
+
+def test_gates_and_readiness_catch_corrupt_ledger_invalid_config_and_feed_bounds(tmp_path):
+    root = DataRoot(str(tmp_path))
+    BookLedger.create(root, "US", owner_authorised=True, created_by="test")
+    os.makedirs(root.path("runtime"), exist_ok=True)
+    open(root.path("runtime", "ENABLED_US"), "w").close()
+    os.makedirs(root.path("config"), exist_ok=True)
+    open(root.path("config", "us_stocks.json"), "w").write("{bad json")
+    assert any("invalid" in b for b in runner.gates(root, "US"))
+
+    raw = _approved("iex")
+    raw["values"]["stale_after_bars"]["value"] = 0
+    r = us_stocks.readiness(us_stocks.parse_config(raw), us_stocks.load_calendar(), True, today=date(2026, 11, 24))
+    assert r["ready"] is False and any("stale_after_bars" in b for b in r["blockers"])
+
+    p = root.path("books", "US.json")
+    d = json.load(open(p))
+    d["cash"] = "9999"
+    json.dump(d, open(p, "w"))
+    open(root.path("config", "us_stocks.json"), "w").write(json.dumps(_approved("iex")))
+    assert any("ledger error" in b for b in runner.gates(root, "US"))

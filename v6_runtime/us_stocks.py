@@ -244,6 +244,14 @@ def readiness(cfg: Optional[USStocksConfig], cal: Dict[str, Any], credentials_pr
                 if miss:
                     blockers.append("%s: Module E configuration incomplete: %s" % (sp.instrument_id, ", ".join(miss)))
                     break
+            a = cfg.approved
+            settle, stale, align = a.get("bar_settle_seconds"), a.get("stale_after_bars"), a.get("alignment_rule")
+            if isinstance(settle, bool) or not isinstance(settle, int) or settle < 0:
+                blockers.append("bar_settle_seconds must be a non-negative integer, got %r" % (settle,))
+            if isinstance(stale, bool) or not isinstance(stale, int) or stale < 1:
+                blockers.append("stale_after_bars must be an integer >= 1, got %r" % (stale,))
+            if align not in (None, "session_grid"):
+                blockers.append("unknown alignment_rule %r" % (align,))
         except (ValueError, TypeError) as e:
             blockers.append("configuration rejected by Module E: %s" % e)
     due = fees_us.reverify_due(today)

@@ -96,7 +96,9 @@ export default function ChartTesting() {
       }
       const res = await postJSON<ChartAnalysis>("/api/py/chart-test/analyze", {
         scanner_version: version,
-        candles: ext.candles.map((c) => [c.t, c.o, c.h, c.l, c.c, 1000]),
+        candle_count: ext.candles.length,
+        calibration: ext.calibration,
+        candles: ext.calibration.available ? ext.candles.map((c) => [c.t, c.o, c.h, c.l, c.c, 1000]) : [],
         options: {
           direction,
           min_rr: minRr,
@@ -106,6 +108,9 @@ export default function ChartTesting() {
         },
       });
       setAnalysis(res);
+      if (!ext.calibration.available) {
+        setErr(`Price calibration unavailable: ${ext.calibration.reason || "Could not extract >= 2 reliable axis ticks."} Trade levels refused.`);
+      }
       const outUrl = renderAnnotatedChart(im, ext, res);
       setAnnotatedUrl(outUrl);
       setViewMode("annotated");
@@ -249,10 +254,143 @@ export default function ChartTesting() {
             style={{ width: "100%", height: "auto", borderRadius: 8, border: "1px solid var(--border, #27272a)" }}
           />
           {extracted && (
-            <div className="muted small" style={{ marginTop: 6 }}>
-              Extracted {extracted.candles.length} candlesticks from uploaded image ({extracted.width}×{extracted.height}px).
+            <div className="muted small" style={{ marginTop: 6, display: "grid", gap: 4 }}>
+              <div>
+                Extracted {extracted.candles.length} candlesticks from uploaded image ({extracted.width}×{extracted.height}px).
+                {extracted.calibration.available && extracted.ohlcRange && (
+                  <>
+                    {" "}· Axis ({extracted.calibration.axisSide}): {extracted.calibration.points.length} tick(s)
+                    {" "}({extracted.calibration.points[0]?.label} … {extracted.calibration.points[extracted.calibration.points.length - 1]?.label})
+                    {extracted.calibration.anchor && ` · Anchor (${extracted.calibration.anchor.source}): ${extracted.calibration.anchor.label}`}
+                    {" "}· OHLC range: {extracted.ohlcRange.minLow} – {extracted.ohlcRange.maxHigh}
+                  </>
+                )}
+              </div>
+              {!extracted.calibration.available && (
+                <div style={{ color: "#f87171", fontWeight: 600 }}>
+                  Price calibration unavailable: {extracted.calibration.reason || "Insufficient axis labels."} Trade levels refused.
+                </div>
+              )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* V6 3-Panel Breakdown (Key Candles OHLC, Structure & Logic Summary, V6 Concepts) */}
+      {analysis && (analysis.key_candles || analysis.logic_summary || analysis.concepts) && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gap: 12,
+            marginBottom: 14,
+          }}
+        >
+          {/* Panel 1: Key Candles - OHLC */}
+          <div className="panel" style={{ margin: 0, overflowX: "auto" }}>
+            <div className="panel-head">
+              <h3>Key Candles — OHLC</h3>
+            </div>
+            {analysis.key_candles && analysis.key_candles.length > 0 ? (
+              <table className="small" style={{ width: "100%", borderCollapse: "collapse", fontVariantNumeric: "tabular-nums" }}>
+                <thead>
+                  <tr className="muted" style={{ borderBottom: "1px solid var(--line, #27272a)", textAlign: "left" }}>
+                    <th style={{ padding: "5px 4px" }}>#</th>
+                    <th style={{ padding: "5px 4px" }}>Bar</th>
+                    <th style={{ padding: "5px 4px" }}>Open</th>
+                    <th style={{ padding: "5px 4px" }}>High</th>
+                    <th style={{ padding: "5px 4px" }}>Low</th>
+                    <th style={{ padding: "5px 4px" }}>Close</th>
+                    <th style={{ padding: "5px 4px" }}>Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {analysis.key_candles.map((kc) => {
+                    const rowBg =
+                      kc.highlight === "entry" || kc.highlight === "good"
+                        ? "rgba(34, 197, 94, 0.14)"
+                        : kc.highlight === "bad"
+                          ? "rgba(239, 68, 68, 0.10)"
+                          : "transparent";
+                    const noteColor =
+                      kc.highlight === "entry" || kc.highlight === "good"
+                        ? "#4ade80"
+                        : kc.highlight === "bad"
+                          ? "#f87171"
+                          : kc.highlight === "warn"
+                            ? "#c084fc"
+                            : "#93c5fd";
+                    return (
+                      <tr key={kc.num} style={{ background: rowBg, borderBottom: "1px solid var(--line, #1f2937)" }}>
+                        <td style={{ padding: "5px 4px" }}>{kc.num}</td>
+                        <td style={{ padding: "5px 4px" }}>#{kc.index + 1}</td>
+                        <td style={{ padding: "5px 4px" }}>{kc.open}</td>
+                        <td style={{ padding: "5px 4px" }}>{kc.high}</td>
+                        <td style={{ padding: "5px 4px" }}>{kc.low}</td>
+                        <td style={{ padding: "5px 4px" }}>{kc.close}</td>
+                        <td style={{ padding: "5px 4px", color: noteColor, fontWeight: 600 }}>{kc.note}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <p className="muted small">No key setup candles flagged yet on this chart.</p>
+            )}
+          </div>
+
+          {/* Panel 2: Structure & Logic Summary */}
+          <div className="panel" style={{ margin: 0 }}>
+            <div className="panel-head">
+              <h3>Structure &amp; Logic Summary</h3>
+            </div>
+            <ol className="small" style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 6 }}>
+              {(analysis.logic_summary || []).map((item) => (
+                <li key={item.step} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                  <span
+                    style={{
+                      minWidth: 18,
+                      height: 18,
+                      borderRadius: 999,
+                      background: "#d97706",
+                      color: "#09090b",
+                      fontSize: 11,
+                      fontWeight: 800,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginTop: 1,
+                    }}
+                  >
+                    {item.step}
+                  </span>
+                  <div>
+                    <b>{item.title}:</b> <span className="muted">{item.detail}</span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          {/* Panel 3: V6 Concepts on Chart */}
+          <div className="panel" style={{ margin: 0 }}>
+            <div className="panel-head">
+              <h3>V6 Concepts on Chart</h3>
+            </div>
+            <ul className="small" style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 7 }}>
+              {(analysis.concepts || []).map((cp) => (
+                <li key={cp.name} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                  <div>
+                    <span style={{ color: cp.passed ? "#4ade80" : "#64748b", marginRight: 6, fontWeight: 700 }}>
+                      {cp.passed ? "✓" : "○"}
+                    </span>
+                    <b>{cp.name}</b> — <span className="muted">{cp.detail}</span>
+                  </div>
+                  <span className={`chip ${cp.passed ? "good" : "warn"}`}>{cp.passed ? "✓" : "—"}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       )}
 
@@ -276,19 +414,29 @@ export default function ChartTesting() {
 
           <div className="panel" style={{ margin: 0 }}>
             <div className="panel-head"><h3>Detected setups &amp; markings</h3></div>
-            {analysis.trades.length ? (
+            {analysis.trades.length && analysis.validation?.setup_valid !== false ? (
               <ul className="small" style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
                 {analysis.trades.map((t, i) => (
                   <li key={i} className="notice ok" style={{ margin: 0 }}>
-                    <b>{t.label}</b> · Status: {t.status} · Candle #{t.entry_index + 1} · R:R {t.rr}
+                    <b>{t.label}</b> · Status: {t.outcome || t.status} · Entry #{t.entry_index + 1} ({t.entry_mode || "Close"}) · R:R {t.rr}
+                    {typeof t.realized_r === "number" ? ` · Result: ${t.realized_r >= 0 ? "+" : ""}${t.realized_r}R` : ""}
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="muted small">No complete trade entry confirmed on this chart for {analysis.strategy_name} (detected structure/levels are still marked on the image).</p>
+              <div className="muted small" style={{ display: "grid", gap: 6 }}>
+                <p style={{ margin: 0 }}>
+                  No complete trade entry confirmed on this chart for {analysis.strategy_name} (detected structure/levels are still marked on the image).
+                </p>
+                {analysis.validation && analysis.validation.rejection_reasons.length > 0 && (
+                  <div className="notice warn" style={{ margin: 0 }}>
+                    <b>Rejected:</b> {analysis.validation.rejection_reasons.join(" · ")}
+                  </div>
+                )}
+              </div>
             )}
             <div className="muted small" style={{ marginTop: 10 }}>
-              Lines: {analysis.lines.length} · Zones (FVG/OB): {analysis.zones.length} · Markers: {analysis.markers.length}
+              Lines: {analysis.lines.length} · Zones (Pattern/FVG/OB): {analysis.zones.length} · Markers: {analysis.markers.length}
             </div>
           </div>
         </div>
