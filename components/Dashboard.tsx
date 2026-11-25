@@ -16,7 +16,9 @@ import PovChips from "@/components/Pov";
 import ChartView, { type ChartSource } from "@/components/ChartView";
 import { OpinionButton } from "@/components/Opinion";
 import Icon from "@/components/Icon";
-import VersionSwitch from "@/components/v6/VersionSwitch";
+import V6Dashboard from "@/components/v6/V6Dashboard";
+import Backtests from "@/components/v6/Backtests";
+import ChartTesting from "@/components/ChartTesting";
 import Zerodha, { ZerodhaBanner } from "@/components/Zerodha";
 import { FnoWatch, NseWatch, UsWatch } from "@/components/Watchlists";
 import { INDIA, liveFor, useLiveTicks, type LiveTicks } from "@/lib/live";
@@ -76,7 +78,6 @@ export default function Dashboard() {
           <div className="muted small">Paper trading · times in IST</div>
         </div>
         <span className={`runpill ${runState.cls}`} role="status"><span className="dot" aria-hidden="true" />{runState.label}</span>
-        <VersionSwitch current="v4" />
         <ThemeToggle />
       </header>
       <TabBar nav={nav} />
@@ -97,12 +98,13 @@ export default function Dashboard() {
           {snap && <div className="home-full"><LedgerSection snap={snap} onChange={changed} live={live} part="open" /></div>}
         </div>
 
-        {/* Bot: control, the agents, the runner */}
+        {/* Bot: control, the agents, V6 engine, the runner */}
         <div className="pane" hidden={nav.tab !== "bot"}>
-          <Seg value={nav.sub.bot} onChange={(v) => nav.go("bot", v)} items={[["control", "Control"], ["agents", "Agents"], ["timemachine", "Time machine"], ["runner", "Runner"]]} label="Bot" />
+          <Seg value={nav.sub.bot} onChange={(v) => nav.go("bot", v)} items={[["control", "Control"], ["agents", "Agents"], ["timemachine", "Time machine"], ["v6", "V6 Engine"], ["runner", "Runner"]]} label="Bot" />
           <div className="pane" hidden={nav.sub.bot !== "control"}>{snap && <ControlPanel />}</div>
           <div className="pane" hidden={nav.sub.bot !== "agents"}>{snap && <Agents refreshKey={refreshKey} />}</div>
           <div className="pane" hidden={nav.sub.bot !== "timemachine"}>{snap && <TimeMachine refreshKey={refreshKey} />}</div>
+          <div className="pane" hidden={nav.sub.bot !== "v6"}>{data && <V6Dashboard />}</div>
           <div className="pane" hidden={nav.sub.bot !== "runner"}>
             {snap && <RunnerSection snap={snap} ageSec={ageSec} />}
             {data && <Operations onChange={changed} part="runner" />}
@@ -140,7 +142,8 @@ export default function Dashboard() {
             <button className="btn back" onClick={() => nav.go("more", "")}><Icon name="left" size={16} />{MORE.find(([k]) => k === nav.sub.more)?.[1] ?? "More"}</button>
           )}
           <div className="pane" hidden={nav.sub.more !== "settings"}>{data && <Settings />}</div>
-          <div className="pane" hidden={nav.sub.more !== "backtest"}>{data && <Backtest />}</div>
+          <div className="pane" hidden={nav.sub.more !== "backtest"}>{data && <><Backtest /><Backtests /></>}</div>
+          <div className="pane" hidden={nav.sub.more !== "chart-test"}>{data && <ChartTesting />}</div>
           <div className="pane" hidden={nav.sub.more !== "alerts"}>{data && <Alerts />}</div>
           <div className="pane" hidden={nav.sub.more !== "log"}>{snap && <LogsSection snap={snap} />}</div>
           <div className="pane" hidden={nav.sub.more !== "data"}>{data && <Operations onChange={changed} part="data" />}</div>
@@ -164,6 +167,7 @@ const TABS: [TabKey, string][] = [["home", "Home"], ["bot", "Bot"], ["trades", "
 const MORE: [string, string, string][] = [
   ["settings", "Settings", "Strategy rules and risk limits"],
   ["backtest", "Backtest", "Test a rule before changing it live"],
+  ["chart-test", "Chart testing", "Upload a chart image and run any scanner strategy on it"],
   ["alerts", "Phone alerts", "Telegram messages for trades and problems"],
   ["log", "Runner log", "The runner's latest lines, newest first"],
   ["data", "Data and downloads", "Trades, ledger, decisions, data check"],
@@ -171,8 +175,8 @@ const MORE: [string, string, string][] = [
 // the old one-page anchors (#control, #logs ...) and the Zerodha login redirect still land in the right place
 const LEGACY: Record<string, [TabKey, string?]> = {
   performance: ["home"], ledger: ["home"], positions: ["home"], control: ["bot", "control"], runner: ["bot", "runner"],
-  agents: ["bot", "agents"], timemachine: ["bot", "timemachine"], operations: ["more", "data"], coins: ["markets", "crypto"], zerodha: ["markets"], reasons: ["trades", "skipped"],
-  decisions: ["trades", "decisions"], logs: ["more", "log"], settings: ["more", "settings"], backtest: ["more", "backtest"],
+  agents: ["bot", "agents"], timemachine: ["bot", "timemachine"], v6: ["bot", "v6"], operations: ["more", "data"], coins: ["markets", "crypto"], zerodha: ["markets"], reasons: ["trades", "skipped"],
+  decisions: ["trades", "decisions"], logs: ["more", "log"], settings: ["more", "settings"], backtest: ["more", "backtest"], "chart-test": ["more", "chart-test"], charttest: ["more", "chart-test"],
   alerts: ["more", "alerts"],
 };
 const SUB_DEFAULT: SubState = { bot: "control", trades: "closed", markets: "crypto", more: "" };

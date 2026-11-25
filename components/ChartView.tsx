@@ -16,6 +16,7 @@ type ChartPos = {
   rr?: number | null; planned?: boolean;
 };
 type Marker = { t: number; kind: string; text: string };
+type SetupLine = { kind: string; label: string; price: number };
 type Verdict = { tone: "good" | "bad" | "flat"; title: string; lines: string[] };
 /** What to chart: a paper position (open or closed) or a scanner candidate from the decisions log. */
 export type ChartSource = { kind: "position"; key: string; entryTime?: string } | { kind: "decision"; time: string; symbol: string }
@@ -28,7 +29,7 @@ type Replay = {
 type ChartDoc = {
   chart: string; tf: string; open: boolean; box: boolean; note?: string | null;
   candles: [number, number, number, number, number][]; links: { name: string; url: string }[]; pos: ChartPos;
-  markers?: Marker[]; verdict?: Verdict; replay?: Replay;
+  markers?: Marker[]; setup_lines?: SetupLine[]; verdict?: Verdict; replay?: Replay;
 };
 
 const IST = 19800; // the chart's clock: IST, like the rest of the dashboard
@@ -69,7 +70,7 @@ class PositionBox implements ISeriesPrimitive<Time> {
           const yt = spec.target !== undefined ? series.priceToCoordinate(spec.target) : null;
           if (x1 === null || x2 === null || ye === null || yr === null) return;
           target.useBitmapCoordinateSpace(({ context: ctx, horizontalPixelRatio: hr, verticalPixelRatio: vr }) => {
-            const left = Math.min(x1, x2) * hr, w = Math.max(Math.abs(x2 - x1) * hr, 6 * hr);
+            const left = Math.min(x1, x2) * hr, w = Math.max(Math.abs(x2 - x1) * hr, 24 * hr);
             const zone = (ya: number, yb: number, fill: string, edge: string) => {
               const top = Math.min(ya, yb) * vr, h = Math.abs(yb - ya) * vr;
               ctx.fillStyle = fill;
@@ -126,6 +127,9 @@ export default function ChartView({ src, onClose }: { src: ChartSource; onClose:
   const [doc, setDoc] = useState<ChartDoc | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [updated, setUpdated] = useState<Date | null>(null);
+  const [fitFull, setFitFull] = useState(true);
+  const chartRef = useRef<IChartApi | null>(null);
+  const setupRangeRef = useRef<{ from: number; to: number } | null>(null);
   // where the person had scrolled / zoomed, kept across live refreshes
   const view = useRef<{ from: number; to: number; n: number } | null>(null);
 
@@ -213,13 +217,19 @@ export default function ChartView({ src, onClose }: { src: ChartSource; onClose:
       }
       if (p.exit != null) s.createPriceLine({ price: p.exit, color: muted, lineWidth: 1, lineStyle: LineStyle.Dotted, title: "exit" });
     }
+    for (const sl of doc.setup_lines ?? []) {
+      const col = sl.kind === "choch" ? accent : sl.kind === "sweep" ? "#a855f7" : muted;
+      s.createPriceLine({ price: sl.price, color: col, lineWidth: 1, lineStyle: LineStyle.Dashed, title: sl.label });
+    }
     const short = p.side === "short";
-    // server markers: BOS, sweep, signal, entry / skip, Trade Manager actions, exit (or what a skipped trade would hit)
+    // server markers: CHoCH, BOS, sweep, signal, confirm, entry / skip, Trade Manager actions, exit
     type MStyle = { color: string; shape: "circle" | "square" | "arrowUp" | "arrowDown"; position: "aboveBar" | "belowBar" };
     const style: Record<string, MStyle> = {
+      choch: { color: accent, shape: "square", position: short ? "belowBar" : "aboveBar" },
       bos: { color: muted, shape: "square", position: short ? "belowBar" : "aboveBar" },
       sweep: { color: accent, shape: short ? "arrowUp" : "arrowDown", position: short ? "aboveBar" : "belowBar" },
       signal: { color: accent, shape: "circle", position: short ? "aboveBar" : "belowBar" },
+      confirm: { color: good, shape: "circle", position: short ? "aboveBar" : "belowBar" },
       entry: { color: ink, shape: short ? "arrowDown" : "arrowUp", position: short ? "aboveBar" : "belowBar" },
       skip: { color: bad, shape: "square", position: short ? "belowBar" : "aboveBar" },   // the other side: no pile-up
       tm: { color: accent, shape: "circle", position: short ? "belowBar" : "aboveBar" },
@@ -258,24 +268,33 @@ export default function ChartView({ src, onClose }: { src: ChartSource; onClose:
         ls.setData(path.c.map((v, k) => ({ time: (rp.start + k * rp.step + IST) as UTCTimestamp, value: v })));
       }
     }
+    chartRef.current = chart;
     const firstMark = marks.length ? (marks[0].time as number) : null;
     const startAt = firstMark !== null && tEntry !== null ? Math.min(firstMark, tEntry as number) : (tEntry as number | null);
+    if (startAt !== null) {
+      const before = (box.current?.clientWidth ?? 800) < 600 ? 10 : 30;
+      const i = Math.max(0, times.indexOf(startAt) - before);
+      setupRangeRef.current = { from: i, to: times.length + 5 };
+    } else {
+      setupRangeRef.current = null;
+    }
     const was = view.current;
     if (was) {                // a live refresh: keep the person's view; at the right edge, follow the new candles
       const added = times.length - was.n;
       const follow = was.to >= was.n - 2;
       chart.timeScale().setVisibleLogicalRange(follow ? { from: was.from + added, to: was.to + added } : { from: was.from, to: was.to });
-    } else if (startAt !== null) {   // open on the setup: a little before its first marker to the end
-      const before = (box.current?.clientWidth ?? 800) < 600 ? 10 : 30;   // fewer candles before it on a phone
-      const i = Math.max(0, times.indexOf(startAt) - before);
-      chart.timeScale().setVisibleLogicalRange({ from: i, to: times.length + 5 });
+    } else if (fitFull || !setupRangeRef.current) {
+      chart.timeScale().fitContent();
+    } else {
+      chart.timeScale().setVisibleLogicalRange(setupRangeRef.current);
     }
     return () => {
       const r = chart.timeScale().getVisibleLogicalRange();
       if (r) view.current = { from: r.from, to: r.to, n: times.length };
+      chartRef.current = null;
       chart.remove();
     };
-  }, [doc]);
+  }, [doc, fitFull]);
 
   const p = doc?.pos;
   const r = p && p.entry != null && p.risk_stop != null ? Math.abs(p.entry - p.risk_stop) : null;
@@ -302,7 +321,23 @@ export default function ChartView({ src, onClose }: { src: ChartSource; onClose:
             </p>
           )}
         </div>
-        <button className="btn small-btn" onClick={() => dlg.current?.close()} aria-label="Close chart">Close</button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            className="btn small-btn"
+            onClick={() => {
+              const next = !fitFull;
+              setFitFull(next);
+              view.current = null;
+              if (chartRef.current) {
+                if (next || !setupRangeRef.current) chartRef.current.timeScale().fitContent();
+                else chartRef.current.timeScale().setVisibleLogicalRange(setupRangeRef.current);
+              }
+            }}
+          >
+            {fitFull ? "Zoom to setup" : "Full chart"}
+          </button>
+          <button className="btn small-btn" onClick={() => dlg.current?.close()} aria-label="Close chart">Close</button>
+        </div>
       </div>
       {err && <div className="notice bad">Chart not loaded: {err}</div>}
       {v && (

@@ -250,16 +250,34 @@ def decision_of(pos):
 
 
 def setup_markers(rec):
-    """BOS / sweep / signal / trigger markers from a decision record's scanner step."""
+    """CHoCH / BOS / sweep / signal / confirm / trigger markers from a decision record's scanner step."""
     sc = ((rec or {}).get("steps") or {}).get("1_scanner") or {}
     out = []
-    for key, kind, text in (("BOS_at", "bos", "BOS"), ("sweep_at", "sweep", "sweep"), ("signal_at", "signal", None),
+    for key, kind, text in (("choch_at", "choch", "CHoCH"), ("CHoCH_at", "choch", "CHoCH"),
+                            ("BOS_at", "bos", "BOS"), ("sweep_at", "sweep", "sweep"),
+                            ("signal_at", "signal", None), ("confirm_at", "confirm", "confirm"),
+                            ("confirmed_at", "confirm", "confirm"),
                             ("primary_closed_at", "info", "primary closed"), ("tapped_at", "info", "zone tap")):
         t = _ts(sc.get(key))
         if t:
             label = text or (sc.get("signal") or "signal")
             out.append({"t": t, "kind": kind, "text": label})
     return out, sc
+
+
+def setup_levels(sc):
+    """Horizontal structure / liquidity prices recorded on the scanner step."""
+    if not sc:
+        return []
+    out = []
+    for key, kind, label in (("choch_px", "choch", "CHoCH"), ("bos_px", "bos", "BOS"), ("swept_px", "sweep", "swept")):
+        val = sc.get(key)
+        if val is not None:
+            try:
+                out.append({"kind": kind, "label": label, "price": float(val)})
+            except (TypeError, ValueError):
+                pass
+    return out
 
 
 def setup_line(sc):
@@ -408,6 +426,7 @@ def chart_position(key: str, entry_time: str = ""):
                       else "exit", "text": "exit: %s" % (pos.get("reason") or "")[:40]})
     out = _base(pos, market, sym, chart, box, cs, is_open)
     out["markers"] = sorted(marks, key=lambda m: m["t"])
+    out["setup_lines"] = setup_levels(sc)
     if is_open:
         sl = setup_line(sc)
         out["verdict"] = {"tone": "flat", "title": "Open: %s" % (pos.get("setup_name") or "trade"),

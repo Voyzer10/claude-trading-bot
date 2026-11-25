@@ -620,7 +620,7 @@ def live_timing_main(a, syms, src):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="Walk-forward backtest of the breakout rules. Not financial advice.")
-    p.add_argument("mode", choices=["nse", "nse-v2", "crypto", "crypto-short", "crypto-mr", "crypto-5m", "crypto-live", "crypto-v4", "crypto-v4-5m", "crypto-v4-short", "crypto-smc", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-abcd", "crypto-abcd-5m", "nse-abcd", "us-abcd", "us-orb", "crypto-v3", "crypto-v3-5m", "nse-v3", "us-v3", "crypto-sv4", "crypto-sv4-5m", "nse-sv4", "us-sv4", "us-tm", "nse-tm", "crypto-tm", "crypto-tm-5m", "fno", "fno-sv4", "bnf-sv4", "nifty-sv4", "usopt-sv4", "crypto-sv5", "crypto-sv5-5m", "us-sv5", "nse-sv5", "gold-sv5"])
+    p.add_argument("mode", choices=["nse", "nse-v2", "crypto", "crypto-short", "crypto-mr", "crypto-5m", "crypto-live", "crypto-v4", "crypto-v4-5m", "crypto-v4-short", "crypto-smc", "crypto-smcp", "crypto-smcp-5m", "nse-smcp", "crypto-abcd", "crypto-abcd-5m", "nse-abcd", "us-abcd", "us-orb", "crypto-v3", "crypto-v3-5m", "nse-v3", "us-v3", "crypto-sv4", "crypto-sv4-5m", "nse-sv4", "us-sv4", "us-tm", "nse-tm", "crypto-tm", "crypto-tm-5m", "fno", "fno-sv4", "bnf-sv4", "nifty-sv4", "usopt-sv4", "crypto-sv5", "crypto-sv5-5m", "us-sv5", "nse-sv5", "gold-sv5", "crypto-sv6", "crypto-sv6-5m", "us-sv6", "nse-sv6"])
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--workers", type=int, default=6)
     p.add_argument("--top", type=int, default=10)
@@ -661,6 +661,14 @@ def main(argv=None):
             syms = syms[:a.limit]
         return research_tm.main(a, syms, src, fetch_all, fetch, stats, OUT, IST,
                                 market="nse" if a.mode == "nse-tm" else "us")
+    if a.mode in ("nse-sv6", "us-sv6"):  # Scanner v6: research_scanner_v6.py
+        import research_abcd
+        import research_scanner_v6
+        syms, src, mkt = (list(S.NIFTY50), "Nifty 50", "nse") if a.mode == "nse-sv6" else (
+            list(research_abcd.US_LIQUID), "built-in liquid US list", "us")
+        if a.limit:
+            syms = syms[:a.limit]
+        return research_scanner_v6.main(a, syms, src, fetch_all, stats, OUT, IST, market=mkt)
     if a.mode in ("nse-sv5", "us-sv5", "gold-sv5"):  # Scanner v5 (the 0.146 level): research_scanner_v5.py
         import research_abcd
         import research_scanner_v5
@@ -775,6 +783,10 @@ def main(argv=None):
             import research_tm
             return research_tm.main(a, syms, src, fetch_all, fetch, stats, OUT, IST, market="crypto",
                                     step=5 if a.mode.endswith("5m") else 15)
+        if a.mode in ("crypto-sv6", "crypto-sv6-5m"):  # Scanner v6: research_scanner_v6.py
+            import research_scanner_v6
+            return research_scanner_v6.main(a, syms, src, fetch_all, stats, OUT, IST,
+                                            step=5 if a.mode.endswith("5m") else 15)
         if a.mode in ("crypto-sv5", "crypto-sv5-5m"):  # Scanner v5 (the 0.146 level): research_scanner_v5.py
             import research_scanner_v5
             return research_scanner_v5.main(a, syms, src, fetch_all, stats, OUT, IST,

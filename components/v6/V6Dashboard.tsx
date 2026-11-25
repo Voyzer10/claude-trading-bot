@@ -1,11 +1,10 @@
 "use client";
 
-// V6 dashboard (PAPER TRADING). Fully independent of V4: it imports no V4 component, reads only /api/py/v6/*,
-// and shows NOT CONNECTED / NOT ACTIVE / NOT READY states instead of numbers whenever the backend has none.
+// V6 modules (PAPER TRADING): reads /api/py/v6/* and shows NOT CONNECTED / NOT ACTIVE / NOT READY states
+// instead of numbers whenever the backend has none.
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { errText, v6Get } from "@/lib/v6/api";
 import type { BookDetail, BookStatus, DataHealth, Performance, Signal, Status, Trade } from "@/lib/v6/types";
-import VersionSwitch from "@/components/v6/VersionSwitch";
 import Backtests from "@/components/v6/Backtests";
 
 const TABS = ["Overview", "Accounts", "Positions", "Trades", "Agentic Workflow", "Signals", "Data health",
@@ -116,25 +115,14 @@ export default function V6Dashboard() {
   const closed = trades.filter((t) => t.status !== "OPEN");
 
   return (
-    <div className="app">
-      <header className="appbar" style={{ flexWrap: "wrap", rowGap: 8 }}>
-        <div className="titleblock" style={{ flex: "1 1 220px", minWidth: 0 }}>
-          <h1>Trader Bot · V6</h1>
-          <div className="muted small">No broker orders · times in UTC</div>
-        </div>
-        <span className="runpill warn" title="V6 is paper-only">PAPER TRADING</span>
-        <span className={`runpill ${label === "V6 SMC Scanner" ? "good" : "warn"}`}>{label}</span>
-        <VersionSwitch current="v6" />
-      </header>
+    <>
+      <div className="seg" role="tablist" aria-label="V6 sections">
+        {TABS.map((t) => (
+          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>{t}</button>
+        ))}
+      </div>
 
-      <div className="wrap">
-        <div className="seg" role="tablist" aria-label="V6 sections">
-          {TABS.map((t) => (
-            <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>{t}</button>
-          ))}
-        </div>
-
-        <StateNotice label={label} reason={reason} />
+      <StateNotice label={label} reason={reason} />
 
         {["Positions", "Trades", "Signals", "Performance"].includes(tab) && (
           <div className="seg" role="tablist" aria-label="Book">
@@ -218,8 +206,7 @@ export default function V6Dashboard() {
               <p>Generated: <span className="mono">{status.generated_at}</span></p>
             </section>
           )}
-        </div>
       </div>
-    </div>
+    </>
   );
 }
