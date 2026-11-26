@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n next,api \"next dev\" \"python -m uvicorn api.index:app --reload --port 8000\"",
+    "dev": "concurrently -n next,api \"next dev\" \"python -m uvicorn api.index:app --reload --reload-dir api --reload-dir api_v6 --reload-dir scanner_v6 --reload-dir us --port 8000\"",
     "next-dev": "next dev",
-    "api-dev": "python -m uvicorn api.index:app --reload --port 8000",
+    "api-dev": "python -m uvicorn api.index:app --reload --reload-dir api --reload-dir api_v6 --reload-dir scanner_v6 --reload-dir us --port 8000",
     "build": "next build",
     "start": "next start"
   },

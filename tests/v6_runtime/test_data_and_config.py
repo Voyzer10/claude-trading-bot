@@ -70,15 +70,17 @@ def test_malformed_payload_refused():
 
 def test_credential_rules(tmp_path):
     assert A.load_credential(str(tmp_path / "absent.json")) is None
-    for bad in ("/etc/trader/trader.env", "/etc/trader/alpaca.json", "/opt/trader/x.json", str(tmp_path / "trader.env")):
+    for bad in ("/etc/trader/trader.env", "/etc/trader/alpaca.json", "/opt/trader/x.json", str(tmp_path / "trader.env"),
+                r"C:\etc\trader\alpaca.json", r"D:\opt\trader\x.json", r"C:\tmp\trader.env"):
         with pytest.raises(A.CredentialError):
             A.load_credential(bad)
     p = tmp_path / "alpaca-data.json"
     p.write_text(json.dumps({"purpose": "v6-data-only", "key_id": "SYNTHKEY", "secret": "s3cr3t"}))
-    os.chmod(p, 0o644)
-    with pytest.raises(A.CredentialError):
-        A.load_credential(str(p))                                    # group/other readable
-    os.chmod(p, 0o600)
+    if os.name != "nt":
+        os.chmod(p, 0o644)
+        with pytest.raises(A.CredentialError):
+            A.load_credential(str(p))                                    # group/other readable
+        os.chmod(p, 0o600)
     c = A.load_credential(str(p))
     assert c.key_id == "SYNTHKEY" and "s3cr3t" not in repr(c)
     p.write_text(json.dumps({"purpose": "v4", "key_id": "k", "secret": "s"}))

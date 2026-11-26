@@ -19,11 +19,20 @@ type Agent = {
   v2_today?: number;
   last?: { time: string; symbol: string; market: string; verdict: "passed" | "stopped" | "traded"; text: string };
 };
+type TraceItem = {
+  agent_id: number;
+  name: string;
+  status: string;
+  reason: string;
+};
 type Flow = {
   time: string;
   symbol: string;
   market: string;
   setup?: string;
+  setup_id?: string;
+  raw_counts?: { raw_sweeps?: number; raw_patterns?: number; setup_sweeps?: number };
+  trace?: TraceItem[];
   own?: boolean;
   result: string;
   why: string;
@@ -58,8 +67,8 @@ const LABEL: Record<Status, string> = {
   off: "Off",
   "n/a": "Not used",
 };
-const SHORT = ["Scan", "News", "Entry", "Exit", "TM", "Size", "Risk", "Broker", "Alerts"]; // fits 9 across a phone
-const FULL = ["Scanner", "News", "Entry", "Exit", "Time machine", "Budget", "Risk", "Broker", "Alerts"];
+const SHORT = ["Scan", "News", "Entry", "Exit", "Port", "Size", "Risk", "Broker", "Alerts"]; // fits 9 across a phone
+const FULL = ["Scanner", "News", "Entry", "Exit", "Portfolio", "Budget", "Risk", "Broker", "Trade Manager"];
 
 const secsSince = (iso: string) => (Date.now() - new Date(iso).getTime()) / 1000;
 
@@ -153,17 +162,27 @@ export default function Agents({ refreshKey }: { refreshKey: number }) {
                   <b className="mono sym"><SymbolIcon market={f.market === "FNO" ? "NFO" : f.market} symbol={f.symbol} />{f.symbol}</b>
                   <span className="muted small">{f.market} · {timeIST(f.time)}</span>
                   {f.setup && <span className={`chip plain ${f.own ? "c-warn" : "c-off"}`}>{f.setup}</span>}
+                  {f.raw_counts && (
+                    <span className="muted small mono" title="Raw global sweeps vs setup-qualified sweeps">
+                      raw {f.raw_counts.raw_sweeps ?? 0} / qual {f.raw_counts.setup_sweeps ?? 0}
+                    </span>
+                  )}
                   <span className={`chip plain ${f.stopped_at === null ? "c-good" : f.result === "blocked" ? "c-bad" : "c-off"}`}>
                     {f.stopped_at === null ? f.result : f.result === "LOG ONLY" ? "recorded, not traded" : `stopped at ${FULL[f.stopped_at - 1] ?? f.stopped_at}`}
                   </span>
                 </div>
                 <div className="pipe" role="img" aria-label={pipeLabel(f)}>
-                  {f.chain.map((c, j) => (
-                    <span key={j} className={`step s-${c}`} title={`${j + 1} ${FULL[j]}: ${c}`}>
-                      {SHORT[j]}
-                    </span>
-                  ))}
+                  {f.chain.map((c, j) => {
+                    const trItem = f.trace?.[j];
+                    const tip = trItem ? `${trItem.agent_id} ${trItem.name}: ${trItem.status}${trItem.reason ? ` — ${trItem.reason}` : ""}` : `${j + 1} ${FULL[j]}: ${c}`;
+                    return (
+                      <span key={j} className={`step s-${c}`} title={tip}>
+                        {SHORT[j]}
+                      </span>
+                    );
+                  })}
                 </div>
+                {f.setup_id && <p className="small muted mono" style={{ margin: "4px 0 0" }}>id: {f.setup_id}</p>}
                 {f.stopped_at !== null && <p className="small muted flow-why">{f.why}</p>}
               </li>
             ))}

@@ -49,8 +49,19 @@ class DataCredential:
 def load_credential(path: str = DEFAULT_CREDENTIAL_FILE) -> Optional[DataCredential]:
     """The V6 data-only credential, or None if the owner has not supplied it. Refuses V4 locations and files readable
     by other users."""
+    import ntpath
     real = os.path.realpath(path)
-    if real.startswith("/etc/trader/") or os.path.basename(real) == "trader.env" or "/opt/trader" in real:
+    real_fwd = real.replace(os.sep, "/")
+    _, tail = ntpath.splitdrive(real_fwd)
+    cmp_tail = tail.lower()
+    raw_fwd = str(path).replace("\\", "/")
+    _, raw_tail = ntpath.splitdrive(raw_fwd)
+    raw_cmp = raw_tail.lower()
+    if (cmp_tail.startswith("/etc/trader/") or cmp_tail == "/etc/trader"
+            or "/opt/trader" in cmp_tail or os.path.basename(real).lower() == "trader.env"
+            or ntpath.basename(raw_fwd).lower() == "trader.env"
+            or raw_cmp.startswith("/etc/trader/") or raw_cmp == "/etc/trader"
+            or "/opt/trader" in raw_cmp):
         raise CredentialError("refusing %s: V6 never reads V4 secrets" % path)
     if not os.path.exists(real):
         return None

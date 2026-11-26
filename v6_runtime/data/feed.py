@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from scanner_v6.data.candle_models import Candle, CandleError
 from scanner_v6.data.integrity import CandleUpdate, CompletedCandleGate
@@ -61,10 +61,27 @@ class BarFeed:
 
     # ------------------------------------------------------------ session helpers
     def _session_of(self, t: datetime) -> Optional[Tuple[datetime, datetime]]:
-        for o, c in self.session.sessions:
-            if o <= t < c:
-                return o, c
-        return None
+        if self.session.kind is not SessionKind.EXCHANGE:
+            return None
+        j = self.session.session_index(t)
+        return None if j is None else self.session.sessions[j]
+
+    def resume_from(self, candles: Sequence[Candle], data_changes: Sequence[Any] = ()) -> None:
+        """Restore gate, last bar and data-interruption state after replaying a persisted journal."""
+        self.gate = CompletedCandleGate()
+        self.gate._done = list(candles)
+        if candles:
+            c = candles[-1]
+            self.last = Bar(self.symbol, c.ts, c.open, c.high, c.low, c.close, c.volume)
+        else:
+            self.last = None
+        if data_changes:
+            last_ev = data_changes[-1]
+            self.last_event_ts = last_ev.ts
+            self.interrupted = last_ev.state == "DATA_INTERRUPTED"
+        else:
+            self.last_event_ts = None
+            self.interrupted = False
 
     def offer(self, bar: Bar, now: datetime) -> FeedOutput:
         self.last_poll = now
@@ -121,7 +138,9 @@ class BarFeed:
             return max(0, (start - self.last.start) // self.tf - 1)
         n = 0
         for o, c in self.session.sessions:
-            if c <= self.last.start or o >= start:
+            if o >= start:
+                break
+            if c <= self.last.start:
                 continue
             t = o
             while t + self.tf <= c and t < start:

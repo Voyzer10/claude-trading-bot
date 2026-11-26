@@ -70,7 +70,7 @@ def chart_of(pos):
     return m, sym, "%s:%s" % (m, sym), True
 
 
-def candles(market, sym, since):
+def candles(market, sym, since, hours=30):
     """5-minute candles [(t, o, h, l, c)] from a little before `since` to now."""
     import scan_nse as S
     age = (datetime.now(timezone.utc) - since).days if since else 0
@@ -91,8 +91,8 @@ def candles(market, sym, since):
             out = top_up(market, sym, out)
         except Exception:
             pass
-    if since:   # keep about 1.5 sessions before the entry for context
-        lo = int((since - timedelta(hours=30)).timestamp())
+    if since:   # keep ~1.5 sessions (30h) by default, or up to 5 days (120h) for V6 CHoCH / BOS / pools
+        lo = int((since - timedelta(hours=hours)).timestamp())
         out = [r for r in out if r[0] >= lo] or out
     return out
 
@@ -250,16 +250,115 @@ def decision_of(pos):
 
 
 def setup_markers(rec):
-    """BOS / sweep / signal / trigger markers from a decision record's scanner step."""
+    """CHoCH / BOS / sweep / signal / confirm / trigger markers from a decision record's scanner step."""
     sc = ((rec or {}).get("steps") or {}).get("1_scanner") or {}
     out = []
-    for key, kind, text in (("BOS_at", "bos", "BOS"), ("sweep_at", "sweep", "sweep"), ("signal_at", "signal", None),
+    pat_name = None
+    if sc.get("pattern"):
+        pat_name = str(sc["pattern"]).split(":")[-1].replace("_", " ").lower()
+    for key, kind, text in (("choch_at", "choch", "CHoCH"), ("CHoCH_at", "choch", "CHoCH"),
+                            ("BOS_at", "bos", "BOS"), ("sweep_at", "sweep", "sweep"),
+                            ("signal_at", "signal", None), ("pattern_at", "signal", pat_name),
+                            ("confirm_at", "confirm", "confirm"), ("confirmed_at", "confirm", "confirm"),
                             ("primary_closed_at", "info", "primary closed"), ("tapped_at", "info", "zone tap")):
         t = _ts(sc.get(key))
         if t:
             label = text or (sc.get("signal") or "signal")
             out.append({"t": t, "kind": kind, "text": label})
     return out, sc
+
+
+def _v6_setup_overlay(cs, sc, pos, market, et=None):
+    """For Scanner v6 trades/decisions, replay `cs` through scanner_v6 to get exact CHoCH, BOS, sweep, pattern, confirm."""
+    scanner = (sc or {}).get("scanner") or (pos or {}).get("scanner")
+    if scanner != "v6" or len(cs) < 20:
+        return [], []
+    try:
+        from datetime import timedelta
+        from decimal import Decimal
+        import scanner_v6_bridge as V6B
+        from scanner_v6.data.candle_models import Candle, CandleSeries
+        from scanner_v6.data.market_config import ConfigOrigin, MarketDataConfig
+        from scanner_v6.entry.confirmation import CONFIRMED, ConfirmationStream
+        from scanner_v6.structure.choch import CHoCHBreak, analyze_structure
+
+        rows = [(datetime.fromtimestamp(r[0], timezone.utc), r[1], r[2], r[3], r[4], 0.0) for r in cs]
+        T = V6B.tick_for(market, rows)
+        tf = timedelta(seconds=max(60, cs[1][0] - cs[0][0]))
+        mkt = MarketDataConfig(origin=ConfigOrigin.INSTRUMENT_CONFIG, instrument_id="chart",
+                               timeframe=tf, tick_size=float(T), session=None)
+        st = ConfirmationStream("chart", "%ds" % int(tf.total_seconds()), mkt)
+        candles_v6 = []
+        for k, r in enumerate(rows):
+            c = Candle(k, r[0], float(r[1]), float(r[2]), float(r[3]), float(r[4]), 0.0)
+            st.on_candle(c)
+            candles_v6.append(c)
+
+        target_id = (sc or {}).get("v6_setup_id")
+        confirmed = [r for r in st.setups if r.status == CONFIRMED and r.history]
+        rec_v6 = next((r for r in confirmed if target_id and r.setup_id == target_id), None)
+        if rec_v6 is None and confirmed:
+            if et:
+                before = [r for r in confirmed if cs[r.history[-1].index][0] <= et + 600]
+                rec_v6 = before[-1] if before else confirmed[-1]
+            else:
+                rec_v6 = confirmed[-1]
+        if rec_v6 is None:
+            return [], []
+
+        srep = analyze_structure(CandleSeries(candles_v6))
+        swing_by_id = {sw.id: sw for sw in srep.swings}
+        choch_by_id = {ev.id: ev for ev in srep.events if isinstance(ev, CHoCHBreak)}
+        bos_by_id = {ev.id: ev for ev in srep.bos}
+        pat_by_id = {p.pattern_id: p for p in st.pattern_states}
+
+        extra_marks, extra_lines = [], []
+        ch_ev = choch_by_id.get(rec_v6.choch_id) if rec_v6.choch_id else None
+        if ch_ev is not None:
+            sid = getattr(ch_ev, "broken_swing_id", None)
+            sw = swing_by_id.get(sid) if sid else None
+            t1 = cs[sw.index][0] if sw else cs[max(0, ch_ev.index - 8)][0]
+            t2 = cs[ch_ev.index][0]
+            extra_marks.append({"t": t2, "kind": "choch", "text": "CHoCH"})
+            extra_lines.append({"kind": "choch", "label": "CHoCH", "price": float(ch_ev.level), "t1": t1, "t2": t2})
+
+        b_ev = bos_by_id.get(rec_v6.bos_id)
+        if b_ev is not None:
+            sid = b_ev.related[0] if getattr(b_ev, "related", None) else None
+            sw = swing_by_id.get(sid) if sid else None
+            t1 = cs[sw.index][0] if sw else cs[max(0, b_ev.index - 8)][0]
+            t2 = cs[b_ev.index][0]
+            extra_marks.append({"t": t2, "kind": "bos", "text": "BOS"})
+            extra_lines.append({"kind": "bos", "label": "BOS", "price": float(b_ev.level), "t1": t1, "t2": t2})
+
+        sw_t = cs[rec_v6.sweep_index][0]
+        extra_marks.append({"t": sw_t, "kind": "sweep", "text": "sweep"})
+
+        pat = pat_by_id.get(rec_v6.confirmed_pattern_id) if rec_v6.confirmed_pattern_id else None
+        if pat is not None and 0 <= pat.end_candle < len(cs):
+            pname = pat.pattern_id.split(":")[-1].replace("_", " ").lower()
+            extra_marks.append({"t": cs[pat.end_candle][0], "kind": "signal", "text": pname})
+
+        conf_t = cs[rec_v6.history[-1].index][0]
+        extra_marks.append({"t": conf_t, "kind": "confirm", "text": "confirm"})
+        return extra_marks, extra_lines
+    except Exception:
+        return [], []
+
+
+def setup_levels(sc):
+    """Horizontal structure / liquidity prices recorded on the scanner step."""
+    if not sc:
+        return []
+    out = []
+    for key, kind, label in (("choch_px", "choch", "CHoCH"), ("bos_px", "bos", "BOS"), ("swept_px", "sweep", "swept")):
+        val = sc.get(key)
+        if val is not None:
+            try:
+                out.append({"kind": kind, "label": label, "price": float(val)})
+            except (TypeError, ValueError):
+                pass
+    return out
 
 
 def setup_line(sc):
@@ -388,8 +487,9 @@ def chart_position(key: str, entry_time: str = ""):
     marks, sc = setup_markers(rec)
     first = min([m["t"] for m in marks] + [_ts(pos.get("entry_time")) or 0]) or None
     since = datetime.fromtimestamp(first, timezone.utc) if first else _iso(pos.get("entry_time"))
+    is_v6 = (sc or {}).get("scanner") == "v6" or pos.get("scanner") == "v6"
     try:
-        cs = candles(market, sym, since)
+        cs = candles(market, sym, since, hours=120 if is_v6 else 30)
     except Exception as e:
         raise HTTPException(502, "candles for %s: %s" % (chart, str(e)[:200]))
     side = pos.get("side") or "long"
@@ -406,8 +506,15 @@ def chart_position(key: str, entry_time: str = ""):
     if xt:
         marks.append({"t": xt, "kind": "win" if (pos.get("r") or 0) > 0.05 else "loss" if (pos.get("r") or 0) < -0.05
                       else "exit", "text": "exit: %s" % (pos.get("reason") or "")[:40]})
+    v6_marks, v6_lines = _v6_setup_overlay(cs, sc, pos, market, et)
+    seen_mk = {(m["kind"], m["t"]) for m in marks}
+    for m in v6_marks:
+        if (m["kind"], m["t"]) not in seen_mk:
+            marks.append(m)
+            seen_mk.add((m["kind"], m["t"]))
     out = _base(pos, market, sym, chart, box, cs, is_open)
     out["markers"] = sorted(marks, key=lambda m: m["t"])
+    out["setup_lines"] = v6_lines or setup_levels(sc)
     if is_open:
         sl = setup_line(sc)
         out["verdict"] = {"tone": "flat", "title": "Open: %s" % (pos.get("setup_name") or "trade"),
@@ -467,8 +574,9 @@ def chart_decision(time: str, symbol: str):
     marks, _ = setup_markers(rec)
     bar = _ts(sc.get("bar_end")) or _ts(rec["time"])
     first = min([m["t"] for m in marks] + [bar or 0]) or None
+    is_v6 = (sc or {}).get("scanner") == "v6"
     try:
-        cs = candles(m2, s2, datetime.fromtimestamp(first, timezone.utc) if first else None)
+        cs = candles(m2, s2, datetime.fromtimestamp(first, timezone.utc) if first else None, hours=120 if is_v6 else 30)
     except Exception as e:
         raise HTTPException(502, "candles for %s: %s" % (chart, str(e)[:200]))
     res = str(rec.get("result") or "")

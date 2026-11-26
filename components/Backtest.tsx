@@ -7,6 +7,10 @@ import { timeIST } from "@/lib/format";
 type Job = { id: string; mode: string; status: string; started: string; ended?: string; seconds?: number; exit_code?: number };
 
 const MODE_NAMES: Record<string, string> = {
+  "crypto-sv6": "Scanner v6 (crypto 15m): CHoCH -> BOS -> Liquidity Sweep -> Pattern -> Confirm -> Structural SL & Pool TP",
+  "crypto-sv6-5m": "Scanner v6 (crypto 5m)",
+  "us-sv6": "Scanner v6 (US 5m)",
+  "nse-sv6": "Scanner v6 (NSE 5m, India charges)",
   "crypto-v4": "Crypto v4 pro setup: trend, squeeze, session, ATR stop, partial/trailing exit",
   "crypto-v4-short": "Crypto v4 grid for SHORTS (4h breakdowns): ATR stop, trailing, BTC filter, fee cap",
   "crypto-v4-5m": "Crypto v4 on 5-minute candles (compare with Crypto v4)",
@@ -152,6 +156,10 @@ export default function Backtest() {
       </div>
       <div className="actions">
         <span className="small muted" style={{ alignSelf: "center" }}>Quick:</span>
+        <button className="btn" onClick={() => start("crypto-sv6")} disabled={running}>Scanner v6 crypto 15m</button>
+        <button className="btn" onClick={() => start("crypto-sv6-5m")} disabled={running}>Scanner v6 crypto 5m</button>
+        <button className="btn" onClick={() => start("us-sv6")} disabled={running}>Scanner v6 US</button>
+        <button className="btn" onClick={() => start("nse-sv6")} disabled={running}>Scanner v6 NSE</button>
         <button className="btn" onClick={() => start("us-tm")} disabled={running}>Trade Manager US</button>
         <button className="btn" onClick={() => start("nse-tm")} disabled={running}>Trade Manager NSE</button>
         <button className="btn" onClick={() => start("crypto-tm")} disabled={running}>Trade Manager crypto 15m</button>

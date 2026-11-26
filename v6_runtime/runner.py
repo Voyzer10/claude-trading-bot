@@ -20,11 +20,11 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Callable, Dict, List, Optional
 
 from . import identity, status as v6status, us_stocks
-from .data.alpaca import AlpacaBars, Bar, load_credential
+from .data.alpaca import AlpacaBars, AlpacaDataError, Bar, load_credential
 from .data.feed import ACCEPT, BarFeed
-from .ledger import BookLedger
+from .ledger import BookLedger, LedgerCorrupt, LedgerError
 from .paths import DataRoot
-from .portfolio import Portfolio
+from .portfolio import Portfolio, PortfolioError
 
 
 class NotReady(RuntimeError):
@@ -42,8 +42,16 @@ def gates(root: DataRoot, book: str) -> List[str]:
         out.append("owner switch runtime/ENABLED_%s is absent (V6 NOT ACTIVE)" % book)
     if not BookLedger.exists(root, book):
         out.append("book %s is not initialised" % book)
+    else:
+        try:
+            BookLedger.load(root, book)
+        except LedgerError as e:
+            out.append("book %s ledger error: %s" % (book, e))
     cal = us_stocks.load_calendar()
-    cfg = us_stocks.load_config(root)
+    try:
+        cfg = us_stocks.load_config(root)
+    except (us_stocks.USConfigError, ValueError, json.JSONDecodeError) as e:
+        return out + ["us_stocks.json invalid: %s" % e]
     out += us_stocks.readiness(cfg, cal, v6status.credential_present()).get("blockers", [])
     return out
 
@@ -65,36 +73,47 @@ class USRunner:
         self.tf = self.specs[0].market.timeframe
         self.feeds = {s.instrument_id: BarFeed(s.instrument_id, self.tf, s.market.session, a["bar_settle_seconds"],
                                                a["stale_after_bars"], a["alignment_rule"]) for s in self.specs}
-        for iid, st in self.portfolio.streams.items():      # resume feeds after the journal replay
-            if st.candles:
-                c = st.candles[-1]
-                self.feeds[iid].last = Bar(iid, c.ts, c.open, c.high, c.low, c.close, c.volume)
+        for iid, st in self.portfolio.streams.items():      # resume gate, last bar and data state after replay
+            self.feeds[iid].resume_from(st.candles, st.d.data_changes)
 
     def poll_once(self, now: datetime) -> Dict[str, object]:
         out = {"accepted": 0, "events": 0, "signals": 0}
+        accepted_steps = []
+        stale_events = []
         for iid in sorted(self.feeds):
             feed = self.feeds[iid]
-            ev = feed.check_stale(now)
-            if ev:
-                self.portfolio.on_data_interrupted(iid, ev[1])
-                out["events"] += 1
-            since = feed.last.start + self.tf if feed.last else now - timedelta(hours=8)
-            try:
-                bars = self.source(iid, self.cfg.timeframe, since, now)
-            except Exception as e:  # noqa: BLE001 - provider down / 403 / timeout: no bar is accepted, nothing is
-                feed.fetch_failed(e)  # substituted (no other feed, no delayed fallback); staleness interrupts the stream
-                out["fetch_errors"] = out.get("fetch_errors", 0) + 1
-                continue
+            since = (feed.last.start + self.tf if feed.last
+                     else now - max(timedelta(hours=8), self.tf * (feed.stale_after + 2)))
+            bars: List[Bar] = []
+            if since < now:
+                try:
+                    bars = self.source(iid, self.cfg.timeframe, since, now)
+                except Exception as e:  # noqa: BLE001 - provider down / 403 / timeout: no bar is accepted, nothing is
+                    feed.fetch_failed(e)  # substituted (no other feed, no delayed fallback); staleness interrupts
+                    out["fetch_errors"] = out.get("fetch_errors", 0) + 1
+                    ev = feed.check_stale(now)
+                    if ev:
+                        stale_events.append((ev[1], iid, ev[1]))
+                    continue
             for bar in bars:
                 r = feed.offer(bar, now)
-                if r.status != ACCEPT:
-                    continue
-                for state, ts in r.events:
-                    (self.portfolio.on_data_interrupted if state == "DATA_INTERRUPTED"
-                     else self.portfolio.on_data_resumed)(iid, ts)
-                    out["events"] += 1
-                out["signals"] += len(self.portfolio.on_candle(iid, r.candle))
-                out["accepted"] += 1
+                if r.status == ACCEPT:
+                    accepted_steps.append((r.candle.ts, iid, r))
+            ev = feed.check_stale(now)
+            if ev:
+                stale_events.append((ev[1], iid, ev[1]))
+        accepted_steps.sort(key=lambda item: (item[0], item[1]))
+        for _, iid, r in accepted_steps:
+            for state, ts in r.events:
+                (self.portfolio.on_data_interrupted if state == "DATA_INTERRUPTED"
+                 else self.portfolio.on_data_resumed)(iid, ts)
+                out["events"] += 1
+            out["signals"] += len(self.portfolio.on_candle(iid, r.candle))
+            out["accepted"] += 1
+        stale_events.sort(key=lambda item: (item[0], item[1]))
+        for _, iid, ts in stale_events:
+            self.portfolio.on_data_interrupted(iid, ts)
+            out["events"] += 1
         self.root.write_json_atomic(self.portfolio.mtm or {}, "runtime", "mtm_US.json")
         self.root.write_json_atomic(dict(identity.stamp(), at=now.isoformat(), pid=os.getpid(), book="US",
                                          data_source=us_stocks.feed_label(self.cfg.feed),
@@ -126,20 +145,27 @@ def main(argv: Optional[List[str]] = None) -> int:
     if blockers:
         print(json.dumps({"status": "NOT READY", "book": a.book, "blockers": blockers}, indent=1))
         return 2
-    cal = us_stocks.load_calendar()
-    cfg = us_stocks.load_config(root)
-    bars = AlpacaBars(load_credential(), cfg.feed)
     try:
+        cal = us_stocks.load_calendar()
+        cfg = us_stocks.load_config(root)
+        bars = AlpacaBars(load_credential(), cfg.feed)
         runner = USRunner(root, cfg, cal, bars.fetch)              # full calendar range (no rolling window)
-    except (ValueError, TypeError) as e:     # refused configuration OR unreadable journal / fee rate: NOT READY, no loop
+    except (AlpacaDataError, LedgerError, PortfolioError, ValueError, TypeError, json.JSONDecodeError, OSError) as e:
         print(json.dumps({"status": "NOT READY", "book": a.book,
                           "blockers": ["runner start refused (%s): %s" % (type(e).__name__, e)]}))
         return 2
-    while True:
-        if gates(root, a.book):                   # the owner switch can stop the loop at any time
-            return 3
-        runner.poll_once(datetime.now(timezone.utc))
-        _time.sleep(max(5, a.poll_seconds))
+    try:
+        while True:
+            if gates(root, a.book):                   # the owner switch can stop the loop at any time
+                return 3
+            runner.poll_once(datetime.now(timezone.utc))
+            _time.sleep(max(5, a.poll_seconds))
+    except KeyboardInterrupt:
+        return 0
+    except (LedgerCorrupt, PortfolioError, ValueError) as e:
+        print(json.dumps({"status": "STOPPED", "book": a.book,
+                          "error": "%s: %s" % (type(e).__name__, e)}))
+        return 2
 
 
 if __name__ == "__main__":

@@ -73,6 +73,31 @@ LOCAL_MARKETS = ["CRYPTO", "US", "NSE", "FNO"]
 LOCAL_DEFAULT = {"CRYPTO": True, "US": True, "NSE": True, "FNO": True, "paused": False}
 
 
+def _load_dotenv(path):
+    if not os.path.isfile(path):
+        return
+    with open(path, encoding="utf-8") as fh:
+        for raw in fh:
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[7:].strip()
+            if "=" not in line:
+                continue
+            key, val = line.split("=", 1)
+            key = key.strip()
+            val = val.strip()
+            if len(val) >= 2 and val[0] == val[-1] and val[0] in ("'", '"'):
+                val = val[1:-1]
+            if key:
+                os.environ.setdefault(key, val)
+
+
+if LOCAL:
+    _load_dotenv(os.path.join(ROOT, ".env"))
+
+
 # ------------------------------------------------------------------ storage (Upstash Redis, or a local folder)
 
 def _redis_conf():
@@ -435,3 +460,13 @@ if LOCAL:
     except ImportError:
         from _timemachine import router as _tm_router
     app.include_router(_tm_router)
+    try:
+        from api_v6.app import router as _v6_router
+        app.include_router(_v6_router)
+    except ImportError:
+        pass
+    try:
+        from api._chart_test import router as _chart_test_router
+        app.include_router(_chart_test_router)
+    except ImportError:
+        pass

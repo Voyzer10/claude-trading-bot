@@ -34,9 +34,29 @@ def _shim_env(tmp):
     return env, log
 
 
+def _wsl_path(p):
+    return subprocess.check_output(["wsl", "wslpath", "-u", str(p)], text=True).strip()
+
+
+def _run_bash(script_path, bin_dir, app_dir, log_path):
+    if os.name == "nt":
+        w_script = _wsl_path(script_path)
+        w_bin = _wsl_path(bin_dir)
+        w_app = _wsl_path(app_dir)
+        # Re-write shims with WSL log path so bash shims log to the Windows temp log file
+        w_log = _wsl_path(log_path)
+        for p in bin_dir.iterdir():
+            txt = p.read_text().replace(str(log_path), w_log)
+            p.write_text(txt, newline="\n")
+        cmd = 'PATH="%s:$PATH" V6_APP_DIR="%s" bash "%s"' % (w_bin, w_app, w_script)
+        return subprocess.run(["wsl", "bash", "-c", cmd], capture_output=True, text=True)
+    env = dict(os.environ, PATH="%s:%s" % (bin_dir, os.environ.get("PATH", "")), V6_APP_DIR=str(app_dir))
+    return subprocess.run(["bash", script_path], env=env, capture_output=True, text=True)
+
+
 def test_install_script_never_enables_or_starts(tmp_path):
     env, log = _shim_env(tmp_path)
-    out = subprocess.run(["bash", os.path.join(D, "install_v6.sh")], env=env, capture_output=True, text=True)
+    out = _run_bash(os.path.join(D, "install_v6.sh"), tmp_path / "bin", tmp_path / "app", log)
     assert out.returncode == 0, out.stderr
     calls = log.read_text().splitlines()
     sysd = [c for c in calls if c.startswith("systemctl")]
@@ -52,7 +72,7 @@ def test_install_script_never_enables_or_starts(tmp_path):
 
 def test_uninstall_keeps_data_unless_purge(tmp_path):
     env, log = _shim_env(tmp_path)
-    out = subprocess.run(["bash", os.path.join(D, "uninstall_v6.sh")], env=env, capture_output=True, text=True)
+    out = _run_bash(os.path.join(D, "uninstall_v6.sh"), tmp_path / "bin", tmp_path / "app", log)
     assert out.returncode == 0, out.stderr
     calls = log.read_text().splitlines()
     assert not [c for c in calls if "/var/lib/trader-v6" in c] and "Kept /var/lib/trader-v6" in out.stdout

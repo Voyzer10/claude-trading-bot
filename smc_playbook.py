@@ -453,11 +453,11 @@ def v6_params(market):
     return {"sl_buffer_ticks": int(acc.get("v6_sl_buffer_ticks", 2)), "tp_offset_ticks": int(acc.get("v6_tp_offset_ticks", 1))}
 
 
-def v6_setups(rows, i, market=None, params=None):
+def v6_setups(rows, i, market=None, params=None, symbol=None):
     """Scanner v6 (scanner_v6 Modules A-D via scanner_v6_bridge.py): the setups V6 confirms on candle i."""
     import scanner_v6_bridge as V6B
     try:
-        return V6B.setups(rows, i, market, **(params or {}))
+        return V6B.setups(rows, i, market, symbol=symbol, **(params or {}))
     except Exception:
         return []
 
@@ -480,7 +480,7 @@ def owner_setups(rows, day_of, ctx=None, version="v3", intraday=False, market=No
     if version == "rules":
         return []                     # "rules" selected: no Scanner setups at all
     if version == "v6":
-        out = v6_setups(rows, i, market, v6_params(market) if market else {})
+        out = v6_setups(rows, i, market, v6_params(market) if market else {}, symbol=symbol)
     elif version == "v5":
         out = v5_setups(rows, day_of, i, intraday, v5_params(market) if market else {})
     elif version == "v4":
