@@ -261,6 +261,13 @@ def load_config():
             if name in accs:
                 accs[name].update(budget_limits(cap))
         cfg["_budget_1117"] = changed = True
+    if not cfg.get("_budget_1126") and os.path.exists(LEDGER):
+        _led_prev = str(load_json(LEDGER, {}).get("_budget_1117") or "")
+        if _led_prev and _led_prev[:10] < "2026-11-26":
+            # one-time (owner, 26 Nov 2026): reset P&L/budgets & set USFNO to $2,000 on live/prod installs
+            if "USFNO" in accs:
+                accs["USFNO"].update(budget_limits(2000))
+            cfg["_budget_1126"] = changed = True
     if not cfg.get("_no_trade_cap_1121"):   # one-time (owner, 21 Nov 2026): no daily trade-count limit anywhere
         for acc in accs.values():
             if isinstance(acc, dict):
@@ -309,7 +316,10 @@ def load_config():
 def load_ledger(cfg):
     led = load_json(LEDGER, {"accounts": {}, "open": [], "closed": []})
     topped = split_fno(led, cfg)
+    _led_1117 = str(led.get("_budget_1117") or "")
     topped = budget_reset(led, cfg) or topped
+    if _led_1117 and _led_1117[:10] < "2026-11-26":
+        topped = _budget_reset_flag(led, cfg, "_budget_1126") or topped
     for name, acc in cfg["accounts"].items():
         if name in ACCOUNT_MARKET:
             book = led["accounts"].setdefault(name, {"cash": float(acc["capital"]), "start_capital": float(acc["capital"])})
@@ -324,10 +334,10 @@ def load_ledger(cfg):
     return led
 
 
-def budget_reset(led, cfg):
-    """One-time (owner, 17 Nov 2026): every book restarts at its configured budget; open positions stay open and
+def _budget_reset_flag(led, cfg, flag):
+    """One-time budget & P&L reset: every book restarts at its configured budget; open positions stay open and
     keep the money they tie up (margin, or the entry value); closed trades stay as history. True if it ran."""
-    if led.get("_budget_1117") or not cfg.get("_budget_1117"):
+    if led.get(flag) or not cfg.get(flag):
         return False
     books = led.setdefault("accounts", {})
     at = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -341,8 +351,13 @@ def budget_reset(led, cfg):
         books[name] = {"cash": round(cap - tied, 6), "start_capital": cap,
                        "budget_reset": {"at": at, "old_cash": old.get("cash"), "old_start": old.get("start_capital"),
                                         "tied": round(tied, 4)}}
-    led["_budget_1117"] = at
+    led[flag] = at
     return True
+
+
+def budget_reset(led, cfg):
+    """One-time (owner, 17 Nov 2026): keep 2-arg signature for tests/monkeypatches."""
+    return _budget_reset_flag(led, cfg, "_budget_1117")
 
 
 def split_fno(led, cfg):
