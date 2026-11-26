@@ -16,7 +16,7 @@ type ChartPos = {
   rr?: number | null; planned?: boolean;
 };
 type Marker = { t: number; kind: string; text: string };
-type SetupLine = { kind: string; label: string; price: number };
+type SetupLine = { kind: string; label: string; price: number; t1?: number; t2?: number };
 type Verdict = { tone: "good" | "bad" | "flat"; title: string; lines: string[] };
 /** What to chart: a paper position (open or closed) or a scanner candidate from the decisions log. */
 export type ChartSource = { kind: "position"; key: string; entryTime?: string } | { kind: "decision"; time: string; symbol: string }
@@ -218,18 +218,28 @@ export default function ChartView({ src, onClose }: { src: ChartSource; onClose:
       if (p.exit != null) s.createPriceLine({ price: p.exit, color: muted, lineWidth: 1, lineStyle: LineStyle.Dotted, title: "exit" });
     }
     for (const sl of doc.setup_lines ?? []) {
-      const col = sl.kind === "choch" ? accent : sl.kind === "sweep" ? "#a855f7" : muted;
-      s.createPriceLine({ price: sl.price, color: col, lineWidth: 1, lineStyle: LineStyle.Dashed, title: sl.label });
+      const col = sl.kind === "choch" ? accent : sl.kind === "sweep" ? "#a855f7" : "#38bdf8";
+      const st1 = sl.t1 != null ? snap(toT(sl.t1)) : null;
+      const st2 = sl.t2 != null ? snap(toT(sl.t2)) : null;
+      if (st1 !== null && st2 !== null && st1 < st2) {
+        const seg = chart.addSeries(LineSeries, {
+          color: col, lineWidth: 2, lineStyle: LineStyle.Dotted,
+          lastValueVisible: true, priceLineVisible: false, crosshairMarkerVisible: false, title: sl.label,
+        });
+        seg.setData([{ time: st1, value: sl.price }, { time: st2, value: sl.price }]);
+      } else {
+        s.createPriceLine({ price: sl.price, color: col, lineWidth: 1, lineStyle: LineStyle.Dashed, title: sl.label });
+      }
     }
     const short = p.side === "short";
     // server markers: CHoCH, BOS, sweep, signal, confirm, entry / skip, Trade Manager actions, exit
     type MStyle = { color: string; shape: "circle" | "square" | "arrowUp" | "arrowDown"; position: "aboveBar" | "belowBar" };
     const style: Record<string, MStyle> = {
       choch: { color: accent, shape: "square", position: short ? "belowBar" : "aboveBar" },
-      bos: { color: muted, shape: "square", position: short ? "belowBar" : "aboveBar" },
-      sweep: { color: accent, shape: short ? "arrowUp" : "arrowDown", position: short ? "aboveBar" : "belowBar" },
+      bos: { color: "#38bdf8", shape: "square", position: short ? "belowBar" : "aboveBar" },
+      sweep: { color: "#a855f7", shape: short ? "arrowUp" : "arrowDown", position: short ? "aboveBar" : "belowBar" },
       signal: { color: accent, shape: "circle", position: short ? "aboveBar" : "belowBar" },
-      confirm: { color: good, shape: "circle", position: short ? "aboveBar" : "belowBar" },
+      confirm: { color: good, shape: "circle", position: short ? "belowBar" : "aboveBar" },
       entry: { color: ink, shape: short ? "arrowDown" : "arrowUp", position: short ? "aboveBar" : "belowBar" },
       skip: { color: bad, shape: "square", position: short ? "belowBar" : "aboveBar" },   // the other side: no pile-up
       tm: { color: accent, shape: "circle", position: short ? "belowBar" : "aboveBar" },
@@ -243,11 +253,11 @@ export default function ChartView({ src, onClose }: { src: ChartSource; onClose:
       .filter((x) => x.t !== null)
       .map(({ m, t }) => ({ time: t as Time, text: m.text, ...(style[m.kind] ?? style.info) }));
     marks.sort((a, b) => (a.time as number) - (b.time as number));
-    // labels on neighbouring candles on the same side overlap: join them into the first one ("sweep · doji")
+    // only join labels that land on the exact same candle and side
     const lastLabel: Record<string, SeriesMarker<Time> | undefined> = {};
     for (const mk of marks) {
       const prev = lastLabel[mk.position];
-      if (prev && mk.text && (mk.time as number) - (prev.time as number) <= 2 * 300) {
+      if (prev && mk.text && (mk.time as number) === (prev.time as number)) {
         prev.text = `${prev.text} · ${mk.text}`;
         mk.text = "";
       } else if (mk.text) {
@@ -352,7 +362,7 @@ export default function ChartView({ src, onClose }: { src: ChartSource; onClose:
       {doc?.replay && <ReplaySummary rp={doc.replay} />}
       {doc?.note && <p className="small muted" style={{ margin: "6px 0 0" }}>{doc.note}</p>}
       <p className="small muted chart-legend" style={{ margin: "6px 0 0" }}>
-        Markers: ■ BOS · ▼▲ sweep · ● signal / Trade Manager · arrow = entry · red ■ = skipped · exit in green (win) / red (loss)
+        Markers: ■ CHoCH / BOS · ▼▲ sweep · ● pattern / confirm / Trade Manager · arrow = entry · red ■ = skipped · exit in green (win) / red (loss)
       </p>
       {!!doc?.links.length && (
         <div className="actions" style={{ marginTop: 8 }}>

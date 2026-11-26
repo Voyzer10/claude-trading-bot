@@ -128,6 +128,7 @@ RISK_FIELDS = {
     "v6_setups": {"type": "setups", "allow_empty": True, "choices": ["v6_smc_long", "v6_smc_short"]},
     "v6_sl_buffer_ticks": {"type": "int", "min": 0, "max": 50},
     "v6_tp_offset_ticks": {"type": "int", "min": 0, "max": 50},
+    "v6_exit_policy": {"type": "choice", "choices": ["FIXED_SL_TP", "BREAKEVEN", "TRAILING"]},
     "v5_setups": {"type": "setups", "allow_empty": True, "choices": ["v5_level_long", "v5_level_short"]},
     "v5_constant": {"type": "float", "min": 0.01, "max": 0.95},
     "v5_move": {"type": "choice", "choices": ["swing", "day"]},
@@ -1127,6 +1128,13 @@ def _step_no(key):
 
 def _stopped_at(rec):
     """None if the candidate was traded, else the number of the agent that stopped it."""
+    tr = rec.get("trace")
+    if isinstance(tr, list) and tr:
+        for item in tr:
+            if item.get("status") == "REJECT":
+                return item.get("agent_id")
+        if any(item.get("status") == "TRADED" for item in tr):
+            return None
     res = (rec.get("result") or "").upper()
     if res.startswith("PAPER"):
         return None
@@ -1442,13 +1450,25 @@ def agents():
     flow = []
     for r in recs[-15:][::-1]:
         s = r["_stop"]
+        sc1 = (r.get("steps") or {}).get("1_scanner") or {}
+        tr = r.get("trace")
+        if isinstance(tr, list) and len(tr) == 9:
+            chain = [
+                "pass" if item.get("status") in ("PASS", "TRADED")
+                else "rec" if r.get("result") == "LOG ONLY" and item.get("agent_id") == 8
+                else "stop" if item.get("status") == "REJECT"
+                else "none"
+                for item in tr
+            ]
+        else:
+            chain = ["pass" if (s is None or i < s) else
+                     ("rec" if r.get("result") == "LOG ONLY" else "stop") if i == s else "none"
+                     for i in range(1, 10)]
         flow.append({"time": r["time"], "symbol": (r.get("symbol") or "").split(":")[-1], "setup": _setup_label(r),
+                     "setup_id": r.get("setup_id"), "raw_counts": sc1.get("raw_counts"), "trace": tr,
                      "own": bool(r.get("scanner_v2") or r.get("record_only")),
                      "market": _MKT.get((r.get("symbol") or "").split(":")[0], ""), "result": r.get("result"),
-                     "why": r.get("why"), "stopped_at": s,
-                     "chain": ["pass" if (s is None or i < s) else
-                               ("rec" if r.get("result") == "LOG ONLY" else "stop") if i == s else "none"
-                               for i in range(1, 10)]})
+                     "why": r.get("why"), "stopped_at": s, "chain": chain})
     return {"generated_at": now.isoformat(), "running": running, "runner_status": status_txt,
             "next_run": state.get("next_run"), "markets": markets, "thin_hours_now": thin, "thin_until": thin_end,
             "agents": out, "flow": flow,

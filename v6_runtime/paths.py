@@ -27,11 +27,14 @@ def _norm(p: str) -> str:
 
 def check_root(root: str) -> str:
     r = _norm(root)
+    r_fwd = r.replace(os.sep, "/")
+    _, tail = os.path.splitdrive(r_fwd)
+    cmp_tail = tail.lower() if os.name == "nt" else tail
     for pre in FORBIDDEN_PREFIXES:
-        if r == pre or r.startswith(pre + os.sep):
+        if cmp_tail == pre or cmp_tail.startswith(pre + "/"):
             raise PathGuardError("V6 data root %s is inside %s (forbidden: deploy rsync --delete / V4 data)" % (r, pre))
     for frag in FORBIDDEN_FRAGMENTS:
-        if frag in r.replace(os.sep, "/"):
+        if frag in cmp_tail:
             raise PathGuardError("V6 data root %s looks like V4 data (%s)" % (r, frag))
     return r
 

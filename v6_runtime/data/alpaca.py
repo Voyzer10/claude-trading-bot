@@ -51,7 +51,13 @@ def load_credential(path: str = DEFAULT_CREDENTIAL_FILE) -> Optional[DataCredent
     by other users."""
     real = os.path.realpath(path)
     real_fwd = real.replace(os.sep, "/")
-    if real_fwd.startswith("/etc/trader/") or os.path.basename(real) == "trader.env" or "/opt/trader" in real_fwd:
+    _, tail = os.path.splitdrive(real_fwd)
+    cmp_tail = tail.lower() if os.name == "nt" else tail
+    raw_fwd = str(path).replace("\\", "/")
+    raw_cmp = raw_fwd.lower() if os.name == "nt" else raw_fwd
+    if (cmp_tail.startswith("/etc/trader/") or cmp_tail == "/etc/trader"
+            or "/opt/trader" in cmp_tail or os.path.basename(real).lower() == "trader.env"
+            or raw_cmp.startswith("/etc/trader/") or "/opt/trader" in raw_cmp):
         raise CredentialError("refusing %s: V6 never reads V4 secrets" % path)
     if not os.path.exists(real):
         return None

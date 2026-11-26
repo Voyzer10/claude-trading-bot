@@ -16,7 +16,6 @@ import PovChips from "@/components/Pov";
 import ChartView, { type ChartSource } from "@/components/ChartView";
 import { OpinionButton } from "@/components/Opinion";
 import Icon from "@/components/Icon";
-import V6Dashboard from "@/components/v6/V6Dashboard";
 import Backtests from "@/components/v6/Backtests";
 import ChartTesting from "@/components/ChartTesting";
 import Zerodha, { ZerodhaBanner } from "@/components/Zerodha";
@@ -98,13 +97,12 @@ export default function Dashboard() {
           {snap && <div className="home-full"><LedgerSection snap={snap} onChange={changed} live={live} part="open" /></div>}
         </div>
 
-        {/* Bot: control, the agents, V6 engine, the runner */}
+        {/* Bot: control, the agents, time machine, the runner */}
         <div className="pane" hidden={nav.tab !== "bot"}>
-          <Seg value={nav.sub.bot} onChange={(v) => nav.go("bot", v)} items={[["control", "Control"], ["agents", "Agents"], ["timemachine", "Time machine"], ["v6", "V6 Engine"], ["runner", "Runner"]]} label="Bot" />
+          <Seg value={nav.sub.bot} onChange={(v) => nav.go("bot", v)} items={[["control", "Control"], ["agents", "Agents"], ["timemachine", "Time machine"], ["runner", "Runner"]]} label="Bot" />
           <div className="pane" hidden={nav.sub.bot !== "control"}>{snap && <ControlPanel />}</div>
           <div className="pane" hidden={nav.sub.bot !== "agents"}>{snap && <Agents refreshKey={refreshKey} />}</div>
           <div className="pane" hidden={nav.sub.bot !== "timemachine"}>{snap && <TimeMachine refreshKey={refreshKey} />}</div>
-          <div className="pane" hidden={nav.sub.bot !== "v6"}>{data && <V6Dashboard />}</div>
           <div className="pane" hidden={nav.sub.bot !== "runner"}>
             {snap && <RunnerSection snap={snap} ageSec={ageSec} />}
             {data && <Operations onChange={changed} part="runner" />}
@@ -175,7 +173,7 @@ const MORE: [string, string, string][] = [
 // the old one-page anchors (#control, #logs ...) and the Zerodha login redirect still land in the right place
 const LEGACY: Record<string, [TabKey, string?]> = {
   performance: ["home"], ledger: ["home"], positions: ["home"], control: ["bot", "control"], runner: ["bot", "runner"],
-  agents: ["bot", "agents"], timemachine: ["bot", "timemachine"], v6: ["bot", "v6"], operations: ["more", "data"], coins: ["markets", "crypto"], zerodha: ["markets"], reasons: ["trades", "skipped"],
+  agents: ["bot", "agents"], timemachine: ["bot", "timemachine"], v6: ["bot", "agents"], operations: ["more", "data"], coins: ["markets", "crypto"], zerodha: ["markets"], reasons: ["trades", "skipped"],
   decisions: ["trades", "decisions"], logs: ["more", "log"], settings: ["more", "settings"], backtest: ["more", "backtest"], "chart-test": ["more", "chart-test"], charttest: ["more", "chart-test"],
   alerts: ["more", "alerts"],
 };

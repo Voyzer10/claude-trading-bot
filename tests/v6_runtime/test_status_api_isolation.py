@@ -75,12 +75,28 @@ def test_api_views_and_app(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from api_v6.app import app
     c = TestClient(app)
+    assert c.get("/api/py/v6/health").json()["paper_only"] is True
     assert c.get("/api/py/v6/status").json()["scanner"]["label"] == "V6 NOT ACTIVE"
     assert c.get("/api/py/v6/books/NOPE").status_code == 404
-    for r in app.routes:                                                 # read-only API
+
+    def _iter_routes(routes):
+        for r in routes:
+            sub = getattr(r, "routes", None)
+            if sub is None:
+                inner = getattr(r, "original_router", None) or getattr(r, "router", None)
+                sub = getattr(inner, "routes", None) if inner is not None else None
+            if sub is not None:
+                yield from _iter_routes(sub)
+            else:
+                yield r
+
+    flat_routes = list(_iter_routes(app.routes))
+    assert any(r.path == "/api/py/v6/status" for r in flat_routes)
+    for r in flat_routes:                                                # read-only API
         methods = getattr(r, "methods", None) or set()
         assert methods <= {"GET", "HEAD"}, (r.path, methods)
         assert r.path.startswith("/api/py/v6/")
+    assert "/api/py/v6/status" in app.openapi()["paths"]
     assert fastapi
 
 
@@ -141,7 +157,7 @@ def test_no_v4_paths_secrets_or_order_calls():
 
 
 def test_v6_ui_uses_only_v6_api():
-    for rel in ("components/v6/V6Dashboard.tsx", "components/v6/VersionSwitch.tsx", "lib/v6/api.ts", "app/v6/page.tsx"):
+    for rel in ("components/v6/V6Dashboard.tsx", "components/v6/Backtests.tsx", "lib/v6/api.ts", "app/v6/page.tsx"):
         src = open(os.path.join(REPO, rel)).read()
         for m in re.findall(r"""["'`](/api/[^"'`]*)""", src):
             assert m.startswith("/api/py/v6"), (rel, m)
@@ -152,8 +168,13 @@ def test_v6_ui_uses_only_v6_api():
 def test_import_isolation_in_subprocess(tmp_path):
     code = ("import sys, json; import v6_runtime.runner, v6_runtime.portfolio, api_v6.views; "
             "bad=[m for m in sys.modules if m.split('.')[0] in %r]; print(json.dumps(bad))" % sorted(V4_MODULES))
+    env = {"V6_DATA_ROOT": str(tmp_path)}
+    if os.name == "nt":
+        for k in ("SYSTEMROOT", "WINDIR", "PATH", "TEMP", "TMP"):
+            if k in os.environ:
+                env[k] = os.environ[k]
     out = subprocess.run([sys.executable, "-I", "-c", "import sys; sys.path.insert(0, %r); " % REPO + code],
-                         capture_output=True, text=True, cwd=str(tmp_path), env={"V6_DATA_ROOT": str(tmp_path)})
+                         capture_output=True, text=True, cwd=str(tmp_path), env=env)
     assert out.returncode == 0, out.stderr
     assert json.loads(out.stdout) == []
 

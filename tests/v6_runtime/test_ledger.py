@@ -103,7 +103,7 @@ def test_atomic_write_leaves_no_temp_and_event_log(tmp_path):
 
 
 @pytest.mark.parametrize("bad", ["/opt/trader", "/opt/trader/trader", "/etc/trader", "/home/x/trader/paper",
-                                 "/srv/trader/live", "/x/trader.env"])
+                                 "/srv/trader/live", "/x/trader.env", r"C:\opt\trader", r"D:\etc\trader"])
 def test_path_guard_refuses_v4_locations(bad):
     with pytest.raises(PathGuardError):
         check_root(bad)
@@ -118,7 +118,11 @@ def test_path_guard_escape(tmp_path):
 def test_default_root():
     old = os.environ.pop("V6_DATA_ROOT", None)
     try:
-        assert DataRoot().root == "/var/lib/trader-v6"
+        r = DataRoot().root
+        if os.name == "nt":
+            assert os.path.splitdrive(r)[1].replace(os.sep, "/") == "/var/lib/trader-v6"
+        else:
+            assert r == "/var/lib/trader-v6"
     finally:
         if old is not None:
             os.environ["V6_DATA_ROOT"] = old

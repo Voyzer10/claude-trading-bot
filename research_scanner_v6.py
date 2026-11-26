@@ -25,26 +25,34 @@ UTC = timezone.utc
 ROUNDING = "ROUND_HALF_UP"
 
 
-def _walk(rows, day_of, i, entry, stop, target, side, max_hold, intraday):
-    """Simulate exit from candle i+1 onwards (stop first on same bar, intraday EOD flatten)."""
+def _walk(rows, day_of, i, entry, stop, target, side, max_hold, intraday, be_at_r=None):
+    """Simulate exit from candle i+1 onwards (stop first on same bar, optional BE move, intraday EOD flatten)."""
     sh = side == "short"
     n = len(rows)
     entry_day = day_of(rows[i][0])
     last_j = min(n - 1, i + max_hold)
+    cur_stop = stop
+    risk = abs(entry - stop)
+    moved_be = False
     for j in range(i + 1, last_j + 1):
         dt, _o, h, l, c, _v = rows[j]
         if intraday and day_of(dt) != entry_day:
             prev_c = rows[j - 1][4]
-            return prev_c, "eod"
-        if (h >= stop) if sh else (l <= stop):
-            return stop, "stop"
+            return prev_c, "eod", moved_be
+        if (h >= cur_stop) if sh else (l <= cur_stop):
+            return cur_stop, ("breakeven" if moved_be else "stop"), moved_be
         if (l <= target) if sh else (h >= target):
-            return target, "target"
-    return rows[last_j][4], "max_hold"
+            return target, "target", moved_be
+        if be_at_r and not moved_be and risk > 0:
+            fav = (entry - l) if sh else (h - entry)
+            if fav >= be_at_r * risk:
+                cur_stop = entry
+                moved_be = True
+    return rows[last_j][4], "max_hold", moved_be
 
 
 def _sim_symbol(sym, rows, day_of, cost_fn, market, step_sec, intraday=False, max_hold=48, entry_ok=None,
-                sl_buffer_ticks=2, tp_offset_ticks=1):
+                sl_buffer_ticks=2, tp_offset_ticks=1, be_at_r=None, diag=None):
     if len(rows) < 60:
         return []
     T = V6B.tick_for(market, rows)
@@ -74,12 +82,16 @@ def _sim_symbol(sym, rows, day_of, cost_fn, market, step_sec, intraday=False, ma
                                int(sl_buffer_ticks), T, ROUNDING)
             entry = to_grid(Decimal(repr(c.close)), T, ROUNDING)
             if (rec.setup_side == BUY and entry <= sl) or (rec.setup_side != BUY and entry >= sl):
+                if diag is not None:
+                    diag["entry_gap_rejects"] += 1
                 continue
             lq = st.setup_stream.liquidity
             pools = [PoolView(p.id, "BSL" if p.side.value == "above" else "SSL", Decimal(repr(p.price)),
                               p.stamp.confirmed_index, lq.state[p.id]) for p in lq.pools]
             pool = select_target_pool(rec.setup_side, entry, pools)
             if pool is None:
+                if diag is not None:
+                    diag["target_rejects"] += 1
                 continue
             tp = target_price(rec.setup_side, pool.price, int(tp_offset_ticks), T, ROUNDING)
             e_f, s_f, t_f = float(entry), float(sl), float(tp)
@@ -88,20 +100,22 @@ def _sim_symbol(sym, rows, day_of, cost_fn, market, step_sec, intraday=False, ma
                 continue
             rr = abs(t_f - e_f) / risk
             side = "long" if rec.setup_side == BUY else "short"
-            exit_px, reason = _walk(rows, day_of, k, e_f, s_f, t_f, side, max_hold, intraday)
+            exit_px, reason, _ = _walk(rows, day_of, k, e_f, s_f, t_f, side, max_hold, intraday, be_at_r=be_at_r)
             cost = cost_fn(sym, e_f, s_f, exit_px, side)
             if cost is None:
                 continue
             sg = 1 if side == "long" else -1
-            r_net = (exit_px - e_f) * sg / risk - cost
+            r_gross = (exit_px - e_f) * sg / risk
+            r_net = r_gross - cost
             trades.append({
                 "sym": sym, "day": day_of(rows[k][0]).isoformat(), "i": k, "side": side,
-                "rr": rr, "r": r_net, "exit_reason": reason,
+                "rr": rr, "r_gross": r_gross, "cost_r": cost, "r": r_net, "exit_reason": reason,
             })
     return trades
 
 
-def events_v6(data, day_of, cost_fn, market, step_sec, intraday=False, max_hold=48, entry_ok=None):
+def events_v6(data, day_of, cost_fn, market, step_sec, intraday=False, max_hold=48, entry_ok=None,
+              be_at_r=None, diag=None):
     evs = []
     for sym, d in data.items():
         rows = [(datetime.fromtimestamp(t, UTC), o, h, l, c, v or 0) for t, o, h, l, c, v in
@@ -110,7 +124,8 @@ def events_v6(data, day_of, cost_fn, market, step_sec, intraday=False, max_hold=
             continue
         try:
             evs.extend(_sim_symbol(sym, rows, day_of, cost_fn, market, step_sec,
-                                   intraday=intraday, max_hold=max_hold, entry_ok=entry_ok))
+                                   intraday=intraday, max_hold=max_hold, entry_ok=entry_ok,
+                                   be_at_r=be_at_r, diag=diag))
         except Exception:
             continue
     evs.sort(key=lambda e: (e["day"], e["sym"], e["i"]))
@@ -133,14 +148,26 @@ def _score(events, side, min_rr, split, stats):
     return {"in_sample": stats(ins), "out_of_sample": stats(oos)}
 
 
-def report(events, mode, what, costs, stats, tz_local):
+def _profit_factor(rs):
+    pos = sum(x for x in rs if x > 0)
+    neg = -sum(x for x in rs if x < 0)
+    return round(pos / neg, 2) if neg > 0 else (float("inf") if pos > 0 else 0.0)
+
+
+def report(events, mode, what, costs, stats, tz_local, diag=None, events_be=None):
     days = sorted({e["day"] for e in events})
     split = days[int(len(days) * 0.7)] if len(days) > 3 else (days[-1] if days else "")
+    gross_r = sum(e.get("r_gross", e["r"]) for e in events)
+    net_r = sum(e["r"] for e in events)
+    fees_r = sum(e.get("cost_r", 0.0) for e in events)
+    pf = _profit_factor([e["r"] for e in events])
     lines = [
         "=== SCANNER v6 BACKTEST (%s, walk-forward 70/30, R after costs) ===" % mode,
         "Data: %s  (%s .. %s, %d trading days)" % (what, days[0] if days else "-", days[-1] if days else "-", len(days)),
         "In-sample < %s; out-of-sample >= %s. Costs: %s." % (split, split, costs),
         "Rules: CHoCH -> BOS -> Liquidity Sweep -> Candlestick Pattern -> 3-Candle Confirm -> Structural SL & Pool TP.",
+        "Gross: %+.2fR | Fees: %.2fR | Net: %+.2fR | Profit Factor: %s" % (gross_r, fees_r, net_r, pf),
+        *(["Rejections: entry_gap=%d | no_opposing_pool=%d" % (diag.get("entry_gap_rejects", 0), diag.get("target_rejects", 0))] if diag else []),
         "",
     ]
     for side in ("both", "long", "short"):
@@ -148,6 +175,11 @@ def report(events, mode, what, costs, stats, tz_local):
             r = _score(events, side, min_rr, split, stats)
             lines.append("side=%-5s min_rr=%.1f  | IS: %s | OOS: %s" % (
                 side, min_rr, _s(r["in_sample"]), _s(r["out_of_sample"])))
+
+    if events_be is not None:
+        be_oos = _score(events_be, "both", 1.0, split, stats)["out_of_sample"]
+        lines.append("Exit policy compare (OOS): FIXED_SL_TP=%s | BREAKEVEN(1R)=%s" % (
+            _s(_score(events, "both", 1.0, split, stats)["out_of_sample"]), _s(be_oos)))
 
     lv = _score(events, "both", 1.0, split, stats)["out_of_sample"]
     lines.append("")
@@ -214,12 +246,15 @@ def main(a, syms, src, fetch_all, stats, out_dir, tz_local, market="crypto", ste
         costs = "%.3f%% a side (fee + assumed spread/slippage)" % (fee * 100)
         mkt_code, step_sec = "US", 300
 
+    diag = {"entry_gap_rejects": 0, "target_rejects": 0}
     events = events_v6(data, day_of, cost_fn, mkt_code, step_sec,
-                       intraday=intraday, max_hold=max_hold, entry_ok=entry_ok)
+                       intraday=intraday, max_hold=max_hold, entry_ok=entry_ok, be_at_r=None, diag=diag)
     if not events:
         print("No Scanner v6 trades found.")
         return 1
-    text = report(events, mode, what, costs, stats, tz_local)
+    events_be = events_v6(data, day_of, cost_fn, mkt_code, step_sec,
+                          intraday=intraday, max_hold=max_hold, entry_ok=entry_ok, be_at_r=1.0)
+    text = report(events, mode, what, costs, stats, tz_local, diag=diag, events_be=events_be)
     print(text)
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "%s_%s.txt" % (mode, datetime.now(tz_local).strftime("%Y%m%d_%H%M")))

@@ -48,6 +48,11 @@ if __name__ == "__main__":
                  entry=250, stop=200, target=350, v4_chart="NSE:BANKNIFTY", kind="option")]}
         led["closed"].append(dict(base, key="NSE:TCS", market="NSE", symbol="TCS", entry=4000, stop=3980, target=4040,
                                   exit=4040, exit_time=now.isoformat(), reason="target"))
+        led["open"].append(
+            dict(base, key="US:AAPL", market="US", symbol="AAPL", side="long", entry=220.0, stop=218.0, risk_stop=217.5,
+                 target=224.0, setup_name="v4 primary long", v4_signal_at=(now - timedelta(hours=2, minutes=10)).isoformat(),
+                 trailing=True)
+        )
         P.save_json(P.LEDGER, led)
 
         from fastapi import FastAPI
@@ -65,6 +70,12 @@ if __name__ == "__main__":
               and r["pos"]["signal_at"] and r["candles"] and r["candles"][0][0] >= int((now - timedelta(hours=32)).timestamp())
               and asked[-1] == ("yahoo", "QCOM", "5d", "5m")
               and r["links"][0]["url"] == "https://www.tradingview.com/chart/?symbol=QCOM&interval=5", (r["links"], asked[-1]))
+        rl = cl.get("/api/py/chart/position", params={"key": "US:AAPL"}).json()
+        check("   a US long: 5m candles from ~30h before the entry, its levels, the box, a TradingView link",
+              rl["box"] and rl["pos"]["side"] == "long" and rl["pos"]["risk_stop"] == 217.5 and rl["pos"]["stop"] == 218.0
+              and rl["pos"]["signal_at"] and rl["candles"] and rl["candles"][0][0] >= int((now - timedelta(hours=32)).timestamp())
+              and asked[-1] == ("yahoo", "AAPL", "5d", "5m")
+              and rl["links"][0]["url"] == "https://www.tradingview.com/chart/?symbol=AAPL&interval=5", (rl["links"], asked[-1]))
         r = cl.get("/api/py/chart/position", params={"key": "CRYPTO:BTC"}).json()
         check("2. crypto: the crypto chart (the bot's feed), a Coinbase TradingView link and a note about CoinDCX",
               asked[-1][0] == "crypto" and "COINBASE:BTCUSD" in r["links"][0]["url"] and "CoinDCX" in (r["note"] or ""), r["links"])

@@ -74,6 +74,7 @@ DEFAULT_CONFIG = {
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
                    "v6_setups": ["v6_smc_long", "v6_smc_short"], "v6_sl_buffer_ticks": 2, "v6_tp_offset_ticks": 1,
+                   "v6_exit_policy": "FIXED_SL_TP", "v6_max_adverse_gap_r": 0.5, "v6_max_quote_age_s": 1200,
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
                    "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
                    "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
@@ -89,6 +90,7 @@ DEFAULT_CONFIG = {
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
                    "v6_setups": ["v6_smc_long", "v6_smc_short"], "v6_sl_buffer_ticks": 2, "v6_tp_offset_ticks": 1,
+                   "v6_exit_policy": "FIXED_SL_TP", "v6_max_adverse_gap_r": 0.5, "v6_max_quote_age_s": 1200,
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
                    "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
                    "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0, "fno_stock_options": False,
@@ -105,6 +107,7 @@ DEFAULT_CONFIG = {
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
                    "v6_setups": ["v6_smc_long", "v6_smc_short"], "v6_sl_buffer_ticks": 2, "v6_tp_offset_ticks": 1,
+                   "v6_exit_policy": "FIXED_SL_TP", "v6_max_adverse_gap_r": 0.5, "v6_max_quote_age_s": 1200,
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
                    "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
                    "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0,
@@ -117,6 +120,7 @@ DEFAULT_CONFIG = {
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
                    "v6_setups": ["v6_smc_long", "v6_smc_short"], "v6_sl_buffer_ticks": 2, "v6_tp_offset_ticks": 1,
+                   "v6_exit_policy": "FIXED_SL_TP", "v6_max_adverse_gap_r": 0.5, "v6_max_quote_age_s": 1200,
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
                    "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
                    "tm_candle_min": 5, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
@@ -128,6 +132,7 @@ DEFAULT_CONFIG = {
                    "v5_setups": ["v5_level_long", "v5_level_short"], "v5_constant": 0.146, "v5_move": "swing",
                    "v5_target": "leg",
                    "v6_setups": ["v6_smc_long", "v6_smc_short"], "v6_sl_buffer_ticks": 2, "v6_tp_offset_ticks": 1,
+                   "v6_exit_policy": "FIXED_SL_TP", "v6_max_adverse_gap_r": 0.5, "v6_max_quote_age_s": 1200,
                    "trade_manager": True, "tm_be_r": 1.0, "tm_lock_at": 0.0,
                    "tm_lock_keep": 0.5, "tm_reversal": False, "tm_rev_min_r": 1.0, "tm_stale_min": 0,
                    "tm_candle_min": 15, "tm_trail": True, "tm_trail_step": 1.0, "tm_trail_gap": 1.0},
@@ -170,7 +175,8 @@ DEFAULT_CONFIG = {
 
 # the strategy switches FNO starts with: INDIA's, so F&O keeps running the Scanner version it ran before the split
 FNO_FROM_INDIA = ("scanner_version", "v4_setups", "v5_setups", "v5_constant", "v5_move", "v5_target", "v6_setups",
-                  "v6_sl_buffer_ticks", "v6_tp_offset_ticks", "trade_setups",
+                  "v6_sl_buffer_ticks", "v6_tp_offset_ticks", "v6_exit_policy", "v6_max_adverse_gap_r",
+                  "v6_max_quote_age_s", "trade_setups",
                   "risk_limits", "trade_manager", "tm_be_r", "tm_trail", "tm_trail_step", "tm_trail_gap", "tm_lock_at",
                   "tm_lock_keep", "tm_reversal",
                   "tm_rev_min_r", "tm_stale_min", "tm_candle_min", "max_loss_per_trade_fno", "futures_margin_pct",
@@ -978,6 +984,17 @@ def rulebook_guards(led, m, acc, now, short):
                              % (cap, "short" if short else "long", name, ", ".join(p["key"] for p in same)))
 
 
+V6_EXIT_POLICIES = ("FIXED_SL_TP", "BREAKEVEN", "TRAILING")
+
+
+def exit_policy_for(pos, acc):
+    """Return explicit V6 exit policy for V6 positions, or None for V4/other scanners (preserving V4 TM)."""
+    if (pos or {}).get("scanner") != "v6":
+        return None
+    pol = (pos or {}).get("exit_policy") or (acc or {}).get("v6_exit_policy") or "FIXED_SL_TP"
+    return pol if pol in V6_EXIT_POLICIES else "FIXED_SL_TP"
+
+
 def cmd_buy(a, cfg, led):
     now = datetime.now(timezone.utc)
     m, t = parse_symbol(a.symbol, cfg)
@@ -1015,9 +1032,16 @@ def cmd_buy(a, cfg, led):
         entry = float(a.price)
     else:
         entry, qt = fetch_price(m, t)
-        if sess == "open" and (now - qt).total_seconds() > 20 * 60:
-            print("Note: the quote is %.0f minutes old (holiday, halt, or lagging data)."
-                  % ((now - qt).total_seconds() / 60))
+        is_v6 = getattr(a, "scanner", None) == "v6"
+        if qt is None:
+            if is_v6 and sess != "closed":
+                raise PaperError("V6 quote timestamp missing (freshness cannot be verified)")
+        else:
+            age_s = (now - qt).total_seconds()
+            if is_v6 and sess != "closed" and age_s > float(acc.get("v6_max_quote_age_s", 1200)):
+                raise PaperError("V6 quote is %.0fs old (stale quote rejected)" % age_s)
+            if sess != "closed" and age_s > 20 * 60:
+                print("Note: the quote is %.0f minutes old (holiday, halt, or lagging data)." % (age_s / 60))
     if a.stop is None:
         raise PaperError("a stop is required (price, a percent like 2%, orb-mid or orb-low)")
     stop = round_px(m, resolve_stop(a.stop, entry, t, short), down=not short)
@@ -1026,6 +1050,8 @@ def cmd_buy(a, cfg, led):
                          "bearish view)" % (money(m, stop), money(m, entry)))
     if short and stop <= entry:
         raise PaperError("stop %s is not above the entry %s (short position)" % (money(m, stop), money(m, entry)))
+    if getattr(a, "scanner", None) == "v6" and str(getattr(a, "target", "") or "").upper() == "2R":
+        raise PaperError("V6 requires an opposing liquidity-pool target (2R fallback is forbidden)")
     target = round_px(m, resolve_target(a.target, entry, stop, short), down=short)
     if (not short and target <= entry) or (short and target >= entry):
         raise PaperError("target %s is on the wrong side of the entry %s" % (money(m, target), money(m, entry)))
@@ -1110,10 +1136,13 @@ def cmd_buy(a, cfg, led):
             pos["leverage"] = lev
     # why this trade was taken (dashboard, downloads): the setup, the scanner that found it, the liquidity it
     # swept / the zone it retested, and the entry reason in words. Optional: callers that know them pass them.
-    for f in ("setup", "setup_name", "scanner", "liquidity", "entry_reason", "v4_chart", "v4_signal_at"):
+    for f in ("setup", "setup_name", "scanner", "liquidity", "entry_reason", "v4_chart", "v4_signal_at",
+              "exit_policy", "v6_setup_id"):
         v = getattr(a, f, None)
         if v not in (None, ""):
             pos[f] = v
+    if pos.get("scanner") == "v6" and not pos.get("exit_policy"):
+        pos["exit_policy"] = acc.get("v6_exit_policy") or "FIXED_SL_TP"
     led["open"].append(pos)
     print("PAPER %s %s  %s%s @ %s   stop %s   target %s (%.1fR)" % (
         "SHORT" if short else "BUY", k, fmt_qty(m, q), (" (%d lot)" % (q // lot)) if lot > 1 else "", money(m, entry),
@@ -1121,7 +1150,12 @@ def cmd_buy(a, cfg, led):
     print("  size set by: %s.  Max loss at the stop incl. charges: %s.  %s: %s.  Cash left: %s."
           % (limiter, money(m, (risk_ps + fee_unit_stop) * q), "Margin" if margin is not None else "Position",
              money(m, margin if margin is not None else q * entry), money(m, book["cash"])))
-    if acc.get("breakeven_at_r"):
+    v6_pol = exit_policy_for(pos, acc)
+    if v6_pol == "FIXED_SL_TP":
+        print("  Exit policy: V6 FIXED_SL_TP (structural stop and liquidity target fixed; V4 breakeven disabled).")
+    elif v6_pol in ("BREAKEVEN", "TRAILING"):
+        print("  Exit policy: V6 %s." % v6_pol)
+    elif acc.get("breakeven_at_r"):
         print("  Breakeven: the stop moves to the entry once price is %gR in profit." % acc["breakeven_at_r"])
     if acc.get("flat_by") and MARKETS[m]["open"]:
         print("  Intraday: `paper.py check` squares it off at %s local time if neither level hits." % acc["flat_by"])
@@ -1299,12 +1333,26 @@ def step_bar(led, cfg, pos, acc, b, now, sh):
     best = l if sh else h
     _track_excursion(pos, best, h if sh else l, sh)
     pos.pop("pdf_only", None)              # 13 Nov 2026: no v4-only exits any more
-    # the account's Trade Manager: one set for every scanner (owner, 13 Nov 2026); not the crypto trailing exits
-    tm = tm_cfg(acc) if not pos.get("trail_k") else None
+    v6_pol = exit_policy_for(pos, acc)
+    # V6 positions use their explicit exit_policy (default FIXED_SL_TP); V4 positions use the account's Trade Manager.
+    if v6_pol == "FIXED_SL_TP":
+        tm = None
+    elif v6_pol == "BREAKEVEN":
+        base_tm = tm_cfg(acc)
+        tm = dict(base_tm, tm_trail=False, tm_lock_at=0.0) if base_tm else {"tm_be_r": float(acc.get("tm_be_r", 1.0)), "tm_trail": False, "tm_lock_at": 0.0}
+    elif v6_pol == "TRAILING":
+        tm = tm_cfg(acc)
+    else:
+        tm = tm_cfg(acc) if not pos.get("trail_k") else None
     rs = pos.get("risk_stop", pos["stop"])
     if tm:
+        old_stop = pos["stop"]
         tm_trail(pos, best, sh, when, tm)
-    if tm and tm.get("tm_lock_at") and pos.get("target") and not pos.get("locked"):
+        if v6_pol and pos["stop"] != old_stop and pos.get("tm_log"):
+            pos["tm_log"][-1].update({
+                "old_stop": old_stop, "new_stop": pos["stop"], "policy": v6_pol, "timestamp": when.isoformat(),
+            })
+    if tm and tm.get("tm_lock_at") and pos.get("target") and not pos.get("locked") and v6_pol is None:
         way = pos["target"] - pos["entry"]
         if way and (best - pos["entry"]) / way >= tm["tm_lock_at"]:
             lock = round_px(m, pos["entry"] + tm["tm_lock_keep"] * way, down=not sh)
@@ -1495,7 +1543,8 @@ def check_position(cfg, led, pos, price, bars, now):
         if why:
             close_position(led, cfg, pos, price, why, now)
             return
-    tm = tm_cfg(acc) if not pos.get("trail_k") else None
+    v6_pol = exit_policy_for(pos, acc)
+    tm = None if v6_pol == "FIXED_SL_TP" else (tm_cfg(acc) if not pos.get("trail_k") else None)
     if tm:   # the Trade Manager thinks about the trade after every check (7 Nov 2026), whatever the scanner
         why = tm_react(pos, bars, now, price, tm)
         if why:
@@ -1696,11 +1745,13 @@ def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields, mk
     if led is None:
         led = load_ledger(cfg)
     key = mk + ":" + op["name"]
+    v6_pol = acc.get("v6_exit_policy", "FIXED_SL_TP") if version == "v6" else None
+    v6_id = (s.get("details") or {}).get("v6_setup_id") if version == "v6" else None
     args = type("A", (), {"symbol": key, "stop": str(op["stop"]), "target": str(op["target"]), "qty": None,
                           "price": None, "note": "scanner %s: %s on %s (stock stop %s, target %s)" % (
                               version, name, symbol, stop, target), "force": False, "side": "long",
                           "setup": s["setup"], "setup_name": name, "scanner": version,
-                          "liquidity": s.get("liquidity"),
+                          "liquidity": s.get("liquidity"), "exit_policy": v6_pol, "v6_setup_id": v6_id,
                           "entry_reason": "Scanner %s %s on %s at %s: bought the ATM %s (IV %.0f%%, delta %.2f); "
                                           "premium stop / target = the option's value at the underlying's stop %s / target %s"
                                           % (version, s["side"], symbol, entry, word, op["iv"] * 100,
@@ -1712,8 +1763,8 @@ def _option_setup(st, done, cfg, acc, symbol, s, op, version, led, v4_fields, mk
         save_json(LEDGER, led)
     except PaperError as e:
         st["6-8_budget_risk_broker"] = "BLOCK: %s" % e
-        return done("blocked", str(e))
-    if version == "v4" and stop is not None:
+        return done("blocked", str(e), stopped_agent=8)
+    if version in ("v4", "v6") and stop is not None:
         # the v4 plan on the underlying's own chart (owner, 17 Nov 2026): the option also exits when QQQ / Nifty
         # reaches the v4 stop or target, as the engine and the backtests do; the premium stop / target still count
         pos["underlying_plan"] = {"market": "US" if mk == "USOPT" else "NSE", "symbol": symbol, "side": s["side"],
@@ -1757,23 +1808,62 @@ def margin_x(acc, market, kind="equity"):
     return max(1.0, min(lev, 5.0))
 
 
+def _build_agent_trace(setup_id, symbol, side, ts_iso, statuses, reasons, levels):
+    """Canonical 9-agent execution trace shared by decisions.jsonl, API, and UI."""
+    meta = [
+        (1, "Scanner", "Structure & liquidity detection"),
+        (2, "News", "Event & headline check"),
+        (3, "Entry", "Pattern, confirmation & executable quote"),
+        (4, "Exit", "Structural SL, liquidity target & R:R"),
+        (5, "Portfolio", "Duplicate setup & exposure check"),
+        (6, "Budget", "Capital, quantity & fee affordability"),
+        (7, "Risk", "Per-trade, daily loss & final risk gate"),
+        (8, "Broker", "Order submission & fill confirmation"),
+        (9, "Trade Manager", "Active exit policy management"),
+    ]
+    out = []
+    for aid, name, resp in meta:
+        out.append({
+            "agent_id": aid,
+            "name": name,
+            "responsibility": resp,
+            "symbol": symbol,
+            "side": side,
+            "setup_id": setup_id,
+            "status": statuses.get(aid, "NOT_EVALUATED"),
+            "reason": reasons.get(aid, ""),
+            "timestamp": ts_iso,
+            "levels": levels,
+        })
+    return out
+
+
 def setup_decision(market, symbol, s, news=None, now_iso=None):
-    """One of the owner's setups found by the Scanner (v3; smc_playbook.owner_setups dict), taken through the agents
-    Entry (the candle close), Exit (stop, 2R or the v3 liquidity target, costs in R), Budget (size from this account's limits), Risk (costs <=
-    0.25R, at least one unit), then the Broker: a paper trade at the live price with that stop and 2R target (the
-    owner's decision for paper testing, 4 Nov 2026), or LOG ONLY when the account's trade_setups is off.
+    """One of the owner's setups found by the Scanner (smc_playbook.owner_setups dict), taken through Agents 1-9.
     Returns the decision record for decisions.jsonl."""
-    rec = {"time": now_iso or datetime.now(IST).isoformat(), "symbol": "%s:%s" % (market, symbol),
+    ts_iso = now_iso or datetime.now(IST).isoformat()
+    det0 = s.get("details") or {}
+    setup_id = det0.get("v6_setup_id") or "%s:%s:%s:%s" % (market, symbol, s["setup"], s.get("bar_end") or ts_iso)
+    rec = {"time": ts_iso, "symbol": "%s:%s" % (market, symbol), "setup_id": setup_id,
            "setup": s["setup"], "scanner_v2": True, "steps": {}, "result": None}
     st = rec["steps"]
     st["1_scanner"] = {"scanner": s.get("scanner", "v3"), "setup": s["setup"], "setup_name": s.get("name"),
                        "side": s["side"], "liquidity": s.get("liquidity"), "bar_end": s.get("bar_end"),
-                       "price": s["price"], **(s.get("details") or {})}
+                       "price": s["price"], **det0}
     st["2_news"] = news if news is not None else "not fetched for stock setups (hundreds a day)"
+    trace_st = {1: "PASS", 2: "PASS"}
+    trace_rs = {1: s.get("liquidity") or s["setup"], 2: str(st["2_news"])}
+    trace_lvl = {"signal_price": s["price"], "stop": s.get("stop"), "target": s.get("target")}
 
-    def done(result, why):
+    def done(result, why, stopped_agent=None):
         if rec.get("flipped_from"):
             why = "flip, closed %s first: %s" % (rec["flipped_from"], why)
+        if stopped_agent is not None:
+            trace_st[stopped_agent] = "REJECT"
+            trace_rs[stopped_agent] = why
+            for k in range(stopped_agent + 1, 10):
+                trace_st.setdefault(k, "NOT_EVALUATED")
+        rec["trace"] = _build_agent_trace(setup_id, rec["symbol"], s["side"], ts_iso, trace_st, trace_rs, trace_lvl)
         rec["result"], rec["why"] = result, why
         return rec
 
@@ -1872,12 +1962,73 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
         v4_fields = {"v4_chart": chart, "v4_signal_at": signal.isoformat()}
         if opens:
             v4_fields["allow_second"] = True
-    entry, stop, short = s["price"], s.get("stop"), s["side"] == "short"
-    target = s.get("target") or s.get("target_2r")
-    st["3_entry"] = {"side": s["side"], "price_now": entry, "note": "entry = the close of the candle that completed it"}
+    entry, stop, short = float(s["price"]), s.get("stop"), s["side"] == "short"
+    target = s.get("target") if version == "v6" else (s.get("target") or s.get("target_2r"))
+    if version == "v6":
+        now_utc = datetime.now(timezone.utc)
+        exec_px = s.get("_exec_price")
+        quote_src = "override" if exec_px is not None else "signal_close"
+        qt = None
+        want_live = s.get("_live_quote")
+        if exec_px is None and (want_live is True or (want_live is None and acc.get("trade_setups", True))):
+            try:
+                exec_px, qt = fetch_price(market, symbol)
+                quote_src = "live_quote"
+            except Exception as e:
+                st["3_entry"] = {"side": s["side"], "signal_price": entry, "error": str(e)}
+                return done("skipped", "V6 entry rejected: live quote unavailable (%s)" % e, stopped_agent=3)
+        if exec_px is not None:
+            exec_px = float(exec_px)
+            max_age = float(acc.get("v6_max_quote_age_s", 1200))
+            if quote_src == "live_quote" and qt is None and session(market, now_utc) != "closed":
+                st["3_entry"] = {"side": s["side"], "signal_price": entry, "price_now": exec_px, "quote_source": quote_src, "quote_age_s": None}
+                return done("skipped", "V6 entry rejected: live quote timestamp missing (freshness cannot be verified)", stopped_agent=3)
+            if qt is not None and (now_utc - qt).total_seconds() > max_age:
+                st["3_entry"] = {"side": s["side"], "signal_price": entry, "price_now": exec_px, "quote_age_s": round((now_utc - qt).total_seconds(), 1)}
+                return done("skipped", "V6 entry rejected: stale quote (%.0fs > %.0fs)" % ((now_utc - qt).total_seconds(), max_age), stopped_agent=3)
+            init_risk = abs(entry - float(stop)) if stop is not None else 0.0
+            max_gap_r = float(acc.get("v6_max_adverse_gap_r", 0.5))
+            adverse = (entry - exec_px) if short else (exec_px - entry)
+            if init_risk > 0 and adverse > max_gap_r * init_risk:
+                st["3_entry"] = {"side": s["side"], "signal_price": entry, "price_now": exec_px, "adverse_r": round(adverse / init_risk, 2)}
+                return done("skipped", "V6 entry rejected: adverse gap %.2fR exceeds max %.2fR (signal %s -> live %s)" % (
+                    adverse / init_risk, max_gap_r, entry, exec_px), stopped_agent=3)
+            entry = exec_px
+        st["3_entry"] = {"side": s["side"], "signal_price": s["price"], "price_now": entry, "quote_source": quote_src}
+        trace_st[3] = "PASS"
+        trace_rs[3] = "executable entry %s (%s)" % (entry, quote_src)
+        trace_lvl["entry"] = entry
+        # Agent 4: authoritative V6 Exit revalidation against actual executable entry (POLYCAB fix)
+        pools_snap = det0.get("pools_snapshot")
+        if pools_snap is not None and det0.get("sweep_low") is not None and det0.get("sweep_high") is not None:
+            import scanner_v6_bridge as _V6B
+            from decimal import Decimal as _Dec
+            tick_d = _Dec(str(det0.get("tick") or _V6B.tick_for(market, [(None, entry, entry, entry, entry)])))
+            reval, rej_why = _V6B.revalidate_v6_levels(
+                pools_snap, s["side"], entry, float(det0["sweep_low"]), float(det0["sweep_high"]),
+                tick_d, int(det0.get("sl_buffer_ticks", acc.get("v6_sl_buffer_ticks", 2))),
+                int(det0.get("tp_offset_ticks", acc.get("v6_tp_offset_ticks", 1))),
+                float(acc.get("min_reward_risk", 1.0)),
+            )
+            if rej_why:
+                st["4_exit"] = {"entry": entry, "stop": stop, "target": target, "rejected": rej_why}
+                return done("skipped", rej_why, stopped_agent=4)
+            entry, stop, target = reval["entry"], reval["stop"], reval["target"]
+            trace_lvl.update({"entry": entry, "stop": stop, "target": target, "rr": reval["rr"]})
+        else:
+            if stop is None or target is None:
+                st["4_exit"] = {"entry": entry, "stop": stop, "target": target}
+                return done("skipped", "V6 exit rejected: missing structural stop or opposing liquidity target", stopped_agent=4)
+            if (not short and target <= entry) or (short and target >= entry):
+                st["4_exit"] = {"entry": entry, "stop": stop, "target": target}
+                return done("skipped", "V6 exit rejected: target %s is on the wrong side of entry %s" % (target, entry), stopped_agent=4)
+    else:
+        st["3_entry"] = {"side": s["side"], "price_now": entry, "note": "entry = the close of the candle that completed it"}
+        trace_st[3] = "PASS"
+        trace_rs[3] = "entry %s" % entry
     risk = ((stop - entry) if short else (entry - stop)) if stop is not None else 0
     if risk <= 0:
-        return done("skipped", "price %s is already past the stop %s" % (entry, stop))
+        return done("skipped", "price %s is already past the stop %s" % (entry, stop), stopped_agent=4 if version == "v6" else 3)
     is_index = symbol.upper() in INDEX_UNDERLYINGS
     fno_ok = [u.upper() for u in (fno_acc.get("fno_underlyings") or ["NIFTY", "BANKNIFTY"])]
     if market in ("NSE", "BSE") and (is_index or fno_acc.get("fno_stock_options")):
@@ -1887,7 +2038,7 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
         op = None
         if symbol.upper() not in fno_ok:
             if is_index:
-                return done("skipped", "F&O is traded only on %s (owner, 12 Nov 2026)" % ", ".join(fno_ok))
+                return done("skipped", "F&O is traded only on %s (owner, 12 Nov 2026)" % ", ".join(fno_ok), stopped_agent=4)
         else:
             import fno_stock as _FS
             try:
@@ -1895,7 +2046,7 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
             except _FS.NoOption as e:
                 if is_index or "has no F&O" not in str(e):
                     st["4_exit"] = {"underlying_entry": entry, "underlying_stop": stop, "underlying_target": target}
-                    return done("skipped", "option: %s" % e)
+                    return done("skipped", "option: %s" % e, stopped_agent=4)
         if op:
             return _option_setup(st, done, cfg, fno_acc, symbol, s, op, version, led, v4_fields)
     if us_opt:
@@ -1921,29 +2072,54 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
         cost = (entry + target) * float(acc.get("fee_pct") or 0) / 100 / risk
     st["4_exit"] = {"entry": entry, "stop": stop, "target": target, "r_multiple": round(abs(target - entry) / risk, 2),
                     "stop_pct": round(risk / entry * 100, 3), "fee_r": round(cost, 3) if cost is not None else None}
+    trace_st[4] = "PASS"
+    trace_rs[4] = "stop %s, target %s (%.2fR)" % (stop, target, abs(target - entry) / risk)
+    trace_lvl.update({"entry": entry, "stop": stop, "target": target, "rr": round(abs(target - entry) / risk, 2)})
+    if version == "v6":
+        if led is None:
+            led = load_ledger(cfg)
+        chart_k = key(market, symbol)
+        if any(p["key"] == chart_k for p in led["open"]):
+            return done("skipped", "V6 portfolio: %s already has an open position" % chart_k, stopped_agent=5)
+        trace_st[5] = "PASS"
+        trace_rs[5] = "no duplicate open position on %s" % chart_k
+    else:
+        trace_st[5] = "PASS"
+        trace_rs[5] = "time machine / portfolio check passed"
     st["5_timemachine"] = v4_timemachine(market, symbol, s, acc, entry, stop, target) or \
         "n/a (these setups are backtested instead: research_v3 / research_smcp / research_abcd)"
     if qty <= 0 or (market != "CRYPTO" and qty < 1):
         return done("skipped", "0 units fit: the stop is %s away and the max loss is %s" % (round(risk, 6),
-                                                                                      acc["max_loss_per_trade"]))
+                                                                                      acc["max_loss_per_trade"]), stopped_agent=6)
+    trace_st[6] = "PASS"
+    trace_rs[6] = "qty %s affordable" % (round(qty, 6) if market == "CRYPTO" else qty)
     if cost is not None and cost > 0.25:
-        return done("skipped", "fees eat %.2fR of the trade (max 0.25R)" % cost)
+        return done("skipped", "fees eat %.2fR of the trade (max 0.25R)" % cost, stopped_agent=7)
+    if abs(target - entry) / risk + 1e-9 < float(acc.get("min_reward_risk", 1.0)):
+        return done("skipped", "reward:risk %.2f below minimum %.2f" % (abs(target - entry) / risk, acc.get("min_reward_risk", 1.0)), stopped_agent=7)
+    trace_st[7] = "PASS"
+    trace_rs[7] = "risk & fee_r %.3f approved" % (cost or 0.0)
     name = s.get("name") or s["setup"]
     if not acc.get("trade_setups", True):
         st["6-8_budget_risk_broker"] = {"verdict": "pass, NOT sent to the broker (trade_setups off)",
                                         "qty": round(qty, 6) if market == "CRYPTO" else qty, "entry": entry,
                                         "stop": stop, "target": target, "max_loss": round(risk * qty, 2)}
         st["9_alerts"] = "no trade, nothing to watch"
+        trace_st[8] = "NOT_EVALUATED"
+        trace_rs[8] = "trade_setups is off (LOG ONLY)"
+        trace_st[9] = "NO_POSITION"
         return done("LOG ONLY", "%s: passed the agents; recorded only (trade_setups is off)" % name)
-    # paper trade it: paper.py sizes at the live price, keeps the stop / 2R target, and its own checks still apply
+    # paper trade it: paper.py sizes at the live price, keeps the stop / target, and its own checks still apply
     import contextlib
     import io
     if led is None:
         led = load_ledger(cfg)
+    v6_pol = acc.get("v6_exit_policy", "FIXED_SL_TP") if version == "v6" else None
     args = type("A", (), {"symbol": "%s:%s" % (market, symbol), "stop": str(stop), "target": str(target), "qty": None,
-                          "price": None, "note": "scanner %s: %s" % (version, name), "force": False,
+                          "price": str(entry) if version == "v6" else None, "note": "scanner %s: %s" % (version, name), "force": False,
                           "side": "short" if short else "long", "setup": s["setup"], "setup_name": name,
                           "scanner": version, "liquidity": s.get("liquidity"),
+                          "exit_policy": v6_pol, "v6_setup_id": setup_id if version == "v6" else None,
                           "entry_reason": "found by Scanner %s; entry on the close of the %s candle, planned R:R %.1f" % (
                               version, (s.get("bar_end") or "")[11:16] or "last", abs(target - entry) / risk), **v4_fields})()
     buf = io.StringIO()
@@ -1953,11 +2129,17 @@ def setup_decision(market, symbol, s, news=None, now_iso=None):
         save_json(LEDGER, led)
     except PaperError as e:
         st["6-8_budget_risk_broker"] = "BLOCK: %s" % e
-        return done("blocked", str(e))
+        return done("blocked", str(e), stopped_agent=8)
     st["6-8_budget_risk_broker"] = {"verdict": "PASS, paper %s filled" % ("short" if short else "buy"), "qty": pos["qty"],
                                     "entry": pos["entry"], "stop": pos["stop"], "target": pos["target"],
                                     "max_loss": round(abs(pos["entry"] - pos["stop"]) * pos["qty"] + pos.get("entry_fee", 0), 2),
                                     "report": buf.getvalue().strip().splitlines()}
-    st["9_alerts"] = "live.py checks stop %s / target %s every cycle" % (pos["stop"], pos["target"])
+    st["9_alerts"] = ("V6 exit policy %s: live.py checks stop %s / target %s every cycle" % (
+        pos.get("exit_policy", "FIXED_SL_TP"), pos["stop"], pos["target"])) if version == "v6" else (
+        "live.py checks stop %s / target %s every cycle" % (pos["stop"], pos["target"]))
+    trace_st[8] = "TRADED"
+    trace_rs[8] = "filled %s @ %s" % (pos["qty"], pos["entry"])
+    trace_st[9] = "PASS"
+    trace_rs[9] = st["9_alerts"]
     return done("PAPER SHORT" if short else "PAPER BUY", "%s @ %s, stop %s, target %s (Scanner %s: %s)" % (
         fmt_qty(market, pos["qty"]), pos["entry"], pos["stop"], pos["target"], version, name))
