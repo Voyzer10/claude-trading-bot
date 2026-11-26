@@ -8,6 +8,7 @@ export type Runner = {
   updated: string | null;
   next_run: string | null;
   markets: string[] | null;
+  scanners?: Record<string, string>;
   pid: number | null;
   started_at: string | null;
   errors: string[];

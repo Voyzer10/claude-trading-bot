@@ -237,6 +237,10 @@ def build(state=None):
     counts = Counter(d["result"] for d in decisions)
 
     led = _json(LEDGER, {}) or {}
+    pcfg = _json(os.path.join("trader", "paper", "config.json"), {}) or {}
+    paccs = pcfg.get("accounts") or {}
+    scanners = {acc: str((paccs.get(acc) or {}).get("scanner_version") or "v3")
+                for acc in ("CRYPTO", "INDIA", "FNO", "US", "USFNO")}
     rules = {k: _json(os.path.join(LIVE, f), {}) for k, f in RULE_FILES.items()}
     nse, fno, us = markets.get("NSE") or {}, markets.get("FNO") or {}, markets.get("US") or {}
     snap = {
@@ -244,6 +248,7 @@ def build(state=None):
         "generated_at": now.isoformat(),
         "runner": {"mode": state.get("runner_mode") or ("vps" if os.environ.get("TRADER_SERVICE") else "pc"), "status": state.get("status"), "updated": state.get("updated"), "next_run": state.get("next_run"),
                    "markets": state.get("markets_scanned"), "pid": state.get("pid"),
+                   "scanners": scanners,
                    "started_at": since, "errors": state.get("errors") or [],
                    "uptime_24h_hours": round(up24, 2),
                    "segments": [{"start": a.isoformat(), "end": b.isoformat()} for a, b in segs[-30:]]},
