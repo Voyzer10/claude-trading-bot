@@ -214,6 +214,15 @@ def crypto_cycle(state, a):
     log("CRYPTO %dm @%s IST: %d/%d usable; %d above their 4h high, %d below their 4h low, %d oversold%s"
         % (C.BAR_MIN, datetime.fromisoformat(res["as_of"]).astimezone(S.IST).strftime("%H:%M"), res["usable"], res["scanned"],
            brk, bdn, osd, ("; NEW: " + ", ".join(new[:15])) if new else ""))
+    try:
+        import smc_playbook as PB
+        if PB.scanner_version("CRYPTO") == "v6":
+            import scanner_v6_bridge as V6B
+            f = V6B.funnel_summary("CRYPTO")
+            log("CRYPTO V6 funnel: %d coins, %d in transition, %d sweeps, %d patterns, %d confirmed, %d dropped (no pool)" % (
+                f["symbols"], f["transition"], f["sweeps"], f["patterns"], f["confirmed"], f["no_pool_drops"]))
+    except Exception:
+        pass
     if a.auto_paper:
         try:
             import auto_crypto

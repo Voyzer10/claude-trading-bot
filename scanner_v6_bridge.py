@@ -193,6 +193,7 @@ class V6SymbolState:
     last_seq: int = -1
     raw_sweeps: int = 0
     raw_patterns: int = 0
+    no_pool_drops: int = 0
     _seen_confirmed: set = field(default_factory=set)
 
     @classmethod
@@ -265,6 +266,8 @@ class V6SymbolState:
                                         sl_buffer_ticks, tp_offset_ticks, lq, raw_counts)
             if built:
                 out.append(built)
+            else:
+                self.no_pool_drops += 1
         return out
 
 
@@ -358,8 +361,34 @@ class IncrementalV6Scanner:
                 self._save_checkpoint(state)
             return out
 
+    def funnel_summary(self, market: Optional[str] = None) -> Dict[str, int]:
+        """Return live V6 funnel counts across tracked symbols for diagnostics."""
+        with self._lock:
+            items = [st for (mkt, _, _), st in self.states.items() if market is None or mkt == market]
+            transition = 0
+            for st in items:
+                try:
+                    st_name = getattr(st.stream.setup_stream.structure.state, "name", "")
+                    if st_name == "TRANSITION":
+                        transition += 1
+                except Exception:
+                    pass
+            return {
+                "symbols": len(items),
+                "transition": transition,
+                "sweeps": sum(st.raw_sweeps for st in items),
+                "patterns": sum(st.raw_patterns for st in items),
+                "confirmed": sum(len(st._seen_confirmed) for st in items),
+                "no_pool_drops": sum(st.no_pool_drops for st in items),
+            }
+
 
 _DEFAULT_SCANNER = IncrementalV6Scanner()
+
+
+def funnel_summary(market: Optional[str] = None) -> Dict[str, int]:
+    """Return live V6 funnel counts from the default incremental scanner."""
+    return _DEFAULT_SCANNER.funnel_summary(market)
 
 
 def setups(rows, i: int, market: Optional[str] = None, sl_buffer_ticks: int = 2, tp_offset_ticks: int = 1,

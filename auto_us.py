@@ -375,7 +375,8 @@ def scan_setups(log):
     if not ((9, 35) <= (lt.hour, lt.minute) <= (16, 0)) or _SETUP_BAR["last"] == last.isoformat():
         return
     _SETUP_BAR["last"] = last.isoformat()
-    data, _ = S.fetch_many(US_WATCH, "1d", "5m", 8, "", True)
+    ver = __import__("smc_playbook").scanner_version("US")
+    data, _ = S.fetch_many(US_WATCH, "5d" if ver == "v6" else "1d", "5m", 8, "", True)
     try:   # the dashboard's US watch list (owner, 10 Nov 2026)
         quotes = {s: q for s in US_WATCH for q in [S.watch_quote(data.get(s))] if q}
         idx, _ = S.fetch_many([y for _, y, _ in US_INDICES], "1d", "5m", 3, "", True)
@@ -387,6 +388,14 @@ def scan_setups(log):
     keep = lambda r: (9, 30) <= (r[0].hour, r[0].minute) < (16, 0)
     setups = S.setups_scan(data, "US", "", last, et, 8, keep)
     if not setups:
+        if ver == "v6":
+            try:
+                import scanner_v6_bridge as V6B
+                f = V6B.funnel_summary("US")
+                log("AUTO US V6 funnel: %d symbols, %d in transition, %d sweeps, %d patterns, %d confirmed, %d dropped (no pool)" % (
+                    f["symbols"], f["transition"], f["sweeps"], f["patterns"], f["confirmed"], f["no_pool_drops"]))
+            except Exception:
+                pass
         return
     by = {}
     for x in setups:
