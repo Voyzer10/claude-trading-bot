@@ -1,14 +1,12 @@
 """Dynamic US equity and ETF discovery, immutable daily snapshots, and Identity v3 mapping."""
 from __future__ import annotations
 
-import gzip
-import hashlib
-import json
 import os
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+# pyrefly: ignore[missing-import]
 from ..instruments import (
     AssetClass,
     ContractType,
@@ -21,6 +19,12 @@ from ..instruments import (
 )
 from .client import AlpacaDataClient
 from .config import NY_TZ, UTC_TZ
+from .snapshots import (
+    ImmutableSnapshotStore,
+    StoredSnapshot,
+    atomic_write_gz as _shared_atomic_write_gz,
+    atomic_write_json as _shared_atomic_write_json,
+)
 
 DEFAULT_US_ASSETS_ROOT = os.path.join("data", "raw", "us", "alpaca", "equities")
 DEFAULT_US_MANIFEST_ROOT = os.path.join("data", "manifests", "us", "alpaca")
@@ -43,6 +47,7 @@ _EXCHANGE_MICS = {
 }
 
 _KNOWN_ETFS = frozenset({"SPY", "QQQ", "IWM", "DIA", "VTI", "VOO", "XLK", "XLF", "XLE", "GLD", "SLV", "TLT"})
+_DEFAULT_ASSET_FILTERS = {"statuses": ["active", "inactive"]}
 
 
 def _classify_etf_asset(raw: Dict[str, Any]) -> Tuple[bool, str, bool]:
@@ -77,6 +82,22 @@ class AssetSnapshot:
     raw_gz_path: str
     manifest_path: str
     raw_assets: Tuple[Dict[str, Any], ...]
+    revision: int = 1
+    filters: Dict[str, Any] = field(default_factory=dict)
+
+
+def _to_asset_snapshot(s: StoredSnapshot) -> AssetSnapshot:
+    return AssetSnapshot(
+        snapshot_date=s.snapshot_date,
+        retrieved_at_utc=s.retrieved_at_utc,
+        sha256=s.sha256,
+        raw_count=s.count,
+        raw_gz_path=s.raw_gz_path,
+        manifest_path=s.manifest_path,
+        raw_assets=s.rows,
+        revision=s.revision,
+        filters=s.filters,
+    )
 
 
 @dataclass
@@ -90,6 +111,10 @@ class AssetDiscoveryReport:
         "Alpaca /v2/assets reflects Alpaca-supported US equities/ETFs (not a complete US consolidated security master); "
         "non-tradable assets are retained for data availability."
     )
+    retrieved_at_utc: Optional[datetime] = None
+    snapshot_path: Optional[str] = None
+    manifest_path: Optional[str] = None
+    snapshot_revision: Optional[int] = None
 
 
 def diff_asset_snapshots(
@@ -126,43 +151,52 @@ class AlpacaAssetsDiscovery:
         self.raw_root = raw_root
         self.manifest_root = manifest_root
 
-    def _paths(self, snap_date: date) -> Tuple[str, str]:
-        sdir = os.path.join(self.raw_root, f"date={snap_date.isoformat()}")
-        mdir = os.path.join(self.manifest_root, f"date={snap_date.isoformat()}")
-        return os.path.join(sdir, "assets.json.gz"), os.path.join(mdir, "assets_manifest.json")
+    def _store(self) -> ImmutableSnapshotStore:
+        return ImmutableSnapshotStore(
+            component="assets",
+            raw_root=self.raw_root,
+            manifest_root=self.manifest_root,
+            default_filters=_DEFAULT_ASSET_FILTERS,
+        )
+
+    @staticmethod
+    def _normalize_filters(statuses: Optional[Sequence[str]]) -> Optional[Dict[str, Any]]:
+        if statuses is None:
+            return None
+        return {"statuses": list(dict.fromkeys(str(s).strip().lower() for s in statuses if str(s).strip()))}
 
     def _atomic_write_gz(self, path: str, text: str) -> None:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        tmp = f"{path}.{os.getpid()}.tmp"
-        try:
-            with gzip.open(tmp, "wt", encoding="utf-8") as fh:
-                fh.write(text)
-                fh.flush()
-            os.replace(tmp, path)
-        except Exception:
-            if os.path.exists(tmp):
-                try:
-                    os.remove(tmp)
-                except OSError:
-                    pass
-            raise
+        _shared_atomic_write_gz(path, text)
 
     def _atomic_write_json(self, path: str, payload: Dict[str, Any]) -> None:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        tmp = f"{path}.{os.getpid()}.tmp"
-        try:
-            with open(tmp, "w", encoding="utf-8") as fh:
-                json.dump(payload, fh, indent=2, sort_keys=True)
-                fh.flush()
-                os.fsync(fh.fileno())
-            os.replace(tmp, path)
-        except Exception:
-            if os.path.exists(tmp):
-                try:
-                    os.remove(tmp)
-                except OSError:
-                    pass
-            raise
+        _shared_atomic_write_json(path, payload)
+
+    def load_snapshot(
+        self,
+        snap_date: date,
+        *,
+        statuses: Optional[Sequence[str]] = ("active", "inactive"),
+        revision: Optional[int] = None,
+        sha256: Optional[str] = None,
+    ) -> Optional[AssetSnapshot]:
+        """Load the latest (or specific revision/sha256) validated assets snapshot on snap_date."""
+        stored = self._store().load_snapshot(
+            snap_date,
+            filters=self._normalize_filters(statuses),
+            revision=revision,
+            sha256=sha256,
+        )
+        return _to_asset_snapshot(stored) if stored is not None else None
+
+    def list_snapshots(
+        self,
+        snap_date: date,
+        *,
+        statuses: Optional[Sequence[str]] = None,
+    ) -> List[AssetSnapshot]:
+        """List all immutable asset snapshot revisions committed on snap_date."""
+        stored = self._store().list_snapshots(snap_date, filters=self._normalize_filters(statuses))
+        return [_to_asset_snapshot(s) for s in stored]
 
     def fetch_raw_assets(self, *, statuses: Sequence[str] = ("active", "inactive")) -> List[Dict[str, Any]]:
         by_id: Dict[str, Dict[str, Any]] = {}
@@ -189,51 +223,30 @@ class AlpacaAssetsDiscovery:
         dry_run: bool = False,
         force_refresh: bool = False,
     ) -> AssetSnapshot:
+        """Fetch and persist an immutable asset snapshot; force_refresh creates a new revision only on content change."""
         now_utc = datetime.now(UTC_TZ)
         target_date = snap_date or now_utc.astimezone(NY_TZ).date()
-        gz_path, man_path = self._paths(target_date)
+        filters = self._normalize_filters(statuses) or dict(_DEFAULT_ASSET_FILTERS)
+        norm_statuses = tuple(filters["statuses"])
 
-        if not force_refresh and os.path.isfile(gz_path) and os.path.isfile(man_path):
-            with open(man_path, encoding="utf-8") as fh:
-                man = json.load(fh)
-            with gzip.open(gz_path, "rt", encoding="utf-8") as fh:
-                raw_text = fh.read()
-            sha = hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
-            if sha == man.get("sha256"):
-                rows = json.loads(raw_text)
-                return AssetSnapshot(
-                    snapshot_date=target_date,
-                    retrieved_at_utc=datetime.fromisoformat(man["retrieved_at_utc"]),
-                    sha256=sha,
-                    raw_count=len(rows),
-                    raw_gz_path=gz_path,
-                    manifest_path=man_path,
-                    raw_assets=tuple(rows),
-                )
+        if not force_refresh:
+            existing = self.load_snapshot(target_date, statuses=norm_statuses)
+            if existing is not None:
+                return existing
 
-        rows = self.fetch_raw_assets(statuses=statuses)
-        raw_text = json.dumps(rows, sort_keys=True)
-        sha = hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
-        if not dry_run:
-            self._atomic_write_gz(gz_path, raw_text)
-            self._atomic_write_json(
-                man_path,
-                {
-                    "snapshot_date": target_date.isoformat(),
-                    "retrieved_at_utc": now_utc.isoformat(),
-                    "sha256": sha,
-                    "raw_count": len(rows),
-                },
-            )
-        return AssetSnapshot(
-            snapshot_date=target_date,
-            retrieved_at_utc=now_utc,
-            sha256=sha,
-            raw_count=len(rows),
-            raw_gz_path=gz_path,
-            manifest_path=man_path,
-            raw_assets=tuple(rows),
+        rows = self.fetch_raw_assets(statuses=norm_statuses)
+        stored = self._store().persist(
+            snap_date=target_date,
+            now_utc=now_utc,
+            filters=filters,
+            raw_rows=rows,
+            pages_fetched=1,
+            pagination_complete=True,
+            dry_run=dry_run,
+            write_gz=self._atomic_write_gz,
+            write_json=self._atomic_write_json,
         )
+        return _to_asset_snapshot(stored)
 
     def discover(
         self,
@@ -243,7 +256,16 @@ class AlpacaAssetsDiscovery:
         dry_run: bool = False,
     ) -> AssetDiscoveryReport:
         snap = snapshot or self.download_snapshot(dry_run=dry_run)
-        report = AssetDiscoveryReport(snapshot_date=snap.snapshot_date, snapshot_sha256=snap.sha256)
+        snap_path = snap.raw_gz_path if (snap.raw_gz_path and os.path.isfile(snap.raw_gz_path)) else None
+        man_path = snap.manifest_path if (snap.manifest_path and os.path.isfile(snap.manifest_path)) else None
+        report = AssetDiscoveryReport(
+            snapshot_date=snap.snapshot_date,
+            snapshot_sha256=snap.sha256,
+            retrieved_at_utc=snap.retrieved_at_utc,
+            snapshot_path=snap_path,
+            manifest_path=man_path,
+            snapshot_revision=snap.revision,
+        )
         now_utc = snap.retrieved_at_utc
 
         for raw in snap.raw_assets:
@@ -300,6 +322,7 @@ class AlpacaAssetsDiscovery:
                     "options_late_close": bool(raw.get("options_late_close", False)),
                     "snapshot_date": snap.snapshot_date.isoformat(),
                     "snapshot_sha256": snap.sha256,
+                    "snapshot_revision": snap.revision,
                 },
             )
             mapping = ProviderInstrumentMapping(

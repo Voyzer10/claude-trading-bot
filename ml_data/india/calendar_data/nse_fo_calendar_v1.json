@@ -1,0 +1,170 @@
+{
+  "calendar_version": "1.0.0",
+  "exchange": "NSE",
+  "segment": "NFO",
+  "segment_description": "NSE Futures & Options Segment",
+  "timezone": "Asia/Kolkata",
+  "regular_session": {
+    "open": "09:15",
+    "close": "15:30"
+  },
+  "years": {
+    "2025": {
+      "verification_status": "VERIFIED",
+      "segment": "FUTURES & OPTIONS",
+      "sources": [
+        {
+          "circular_ref": "NSE/FAOP/65588",
+          "exchange_circular_ref": "161/2024",
+          "publication_date": "2024-12-13",
+          "retrieved_at_utc": "2026-11-27T15:55:00+00:00",
+          "url": "https://nsearchives.nseindia.com/content/circulars/FAOP65588.pdf",
+          "scope": "Annual F&O trading holidays for calendar year 2025"
+        },
+        {
+          "circular_ref": "NSE/FAOP/65730",
+          "exchange_circular_ref": "165/2024",
+          "publication_date": "2024-12-23",
+          "retrieved_at_utc": "2026-11-27T15:55:20+00:00",
+          "url": "https://nsearchives.nseindia.com/content/circulars/FAOP65730.pdf",
+          "scope": "Saturday Feb 01, 2025 Union Budget special live trading session"
+        },
+        {
+          "circular_ref": "NSE/FAOP/70320",
+          "exchange_circular_ref": "165/2025",
+          "publication_date": "2025-09-22",
+          "retrieved_at_utc": "2026-11-27T15:55:20+00:00",
+          "url": "https://nsearchives.nseindia.com/content/circulars/FAOP70320.pdf",
+          "scope": "Tuesday Oct 21, 2025 Diwali Muhurat Trading session timings"
+        }
+      ],
+      "trading_holidays": [
+        {"date": "2025-02-26", "day": "Wednesday", "description": "Mahashivratri", "circular_ref": "NSE/FAOP/65588"},
+        {"date": "2025-03-14", "day": "Friday", "description": "Holi", "circular_ref": "NSE/FAOP/65588"},
+        {"date": "2025-03-31", "day": "Monday", "description": "Id-Ul-Fitr (Ramadan Eid)", "circular_ref": "NSE/FAOP/65588"},
+        {"date": "2025-04-10", "day": "Thursday", "description": "Shri Mahavir Jayanti", "circular_ref": "NSE/FAOP/65588"},
+        {"date": "2025-04-14", "day": "Monday", "description": "Dr. Baba Saheb Ambedkar Jayanti", "circular_ref": "NSE/FAOP/65588"},
+        {"date": "2025-04-18", "day": "Friday", "description": "Good Friday", "circular_ref": "NSE/FAOP/65588"},
+        {"date": "2025-05-01", "day": "Thursday", "description": "Maharashtra Day", "circular_ref": "NSE/FAOP/65588"},
+        {"date": "2025-08-15", "day": "Friday", "description": "Independence Day", "circular_ref": "NSE/FAOP/65588"},
+        {"date": "2025-08-27", "day": "Wednesday", "description": "Ganesh Chaturthi", "circular_ref": "NSE/FAOP/65588"},
+        {"date": "2025-10-02", "day": "Thursday", "description": "Mahatma Gandhi Jayanti/Dussehra", "circular_ref": "NSE/FAOP/65588"},
+        {"date": "2025-10-22", "day": "Wednesday", "description": "Diwali-Balipratipada", "circular_ref": "NSE/FAOP/65588"},
+        {"date": "2025-11-05", "day": "Wednesday", "description": "Prakash Gurpurb Sri Guru Nanak Dev", "circular_ref": "NSE/FAOP/65588"},
+        {"date": "2025-12-25", "day": "Thursday", "description": "Christmas", "circular_ref": "NSE/FAOP/65588"}
+      ],
+      "weekend_holidays": [
+        {"date": "2025-01-26", "day": "Sunday", "description": "Republic Day", "circular_ref": "NSE/FAOP/65588"},
+        {"date": "2025-04-06", "day": "Sunday", "description": "Shri Ram Navami", "circular_ref": "NSE/FAOP/65588"},
+        {"date": "2025-06-07", "day": "Saturday", "description": "Bakri Id", "circular_ref": "NSE/FAOP/65588"},
+        {"date": "2025-07-06", "day": "Sunday", "description": "Muharram", "circular_ref": "NSE/FAOP/65588"}
+      ],
+      "special_sessions": [
+        {
+          "date": "2025-02-01",
+          "day": "Saturday",
+          "kind": "WEEKEND_SPECIAL",
+          "description": "Live Trading Session - Presentation of Union Budget",
+          "open": "09:15",
+          "close": "15:30",
+          "circular_ref": "NSE/FAOP/65730"
+        },
+        {
+          "date": "2025-10-21",
+          "day": "Tuesday",
+          "kind": "MUHURAT",
+          "description": "Diwali Laxmi Pujan Muhurat Trading Session",
+          "open": "13:45",
+          "close": "14:45",
+          "circular_ref": "NSE/FAOP/70320",
+          "annual_holiday_ref": "NSE/FAOP/65588"
+        }
+      ],
+      "pending_special_sessions": []
+    },
+    "2026": {
+      "verification_status": "VERIFIED",
+      "segment": "FUTURES & OPTIONS",
+      "sources": [
+        {
+          "circular_ref": "NSE/FAOP/71777",
+          "exchange_circular_ref": "212/2025",
+          "publication_date": "2025-12-12",
+          "retrieved_at_utc": "2026-11-27T15:55:00+00:00",
+          "url": "https://nsearchives.nseindia.com/content/circulars/FAOP71777.pdf",
+          "scope": "Annual F&O trading holidays for calendar year 2026"
+        },
+        {
+          "circular_ref": "NSE/FAOP/72262",
+          "exchange_circular_ref": "04/2026",
+          "publication_date": "2026-01-12",
+          "retrieved_at_utc": "2026-11-27T15:55:36+00:00",
+          "url": "https://nsearchives.nseindia.com/content/circulars/FAOP72262.pdf",
+          "scope": "Amendment declaring Thursday Jan 15, 2026 trading holiday for Municipal Corporation Election in Maharashtra"
+        },
+        {
+          "circular_ref": "NSE/FAOP/72352",
+          "exchange_circular_ref": "07/2026",
+          "publication_date": "2026-01-16",
+          "retrieved_at_utc": "2026-11-27T15:55:03+00:00",
+          "url": "https://nsearchives.nseindia.com/content/circulars/FAOP72352.pdf",
+          "scope": "Sunday Feb 01, 2026 Union Budget special live trading session"
+        },
+        {
+          "circular_ref": "NSE/FAOP/76940",
+          "exchange_circular_ref": "142/2026",
+          "publication_date": "2026-10-19",
+          "retrieved_at_utc": "2026-11-27T15:55:03+00:00",
+          "url": "https://nsearchives.nseindia.com/content/circulars/FAOP76940.pdf",
+          "scope": "Sunday Nov 08, 2026 Diwali Muhurat Trading session timings"
+        }
+      ],
+      "trading_holidays": [
+        {"date": "2026-01-15", "day": "Thursday", "description": "Municipal Corporation Election in Maharashtra", "circular_ref": "NSE/FAOP/72262"},
+        {"date": "2026-01-26", "day": "Monday", "description": "Republic Day", "circular_ref": "NSE/FAOP/71777"},
+        {"date": "2026-03-03", "day": "Tuesday", "description": "Holi", "circular_ref": "NSE/FAOP/71777"},
+        {"date": "2026-03-26", "day": "Thursday", "description": "Shri Ram Navami", "circular_ref": "NSE/FAOP/71777"},
+        {"date": "2026-03-31", "day": "Tuesday", "description": "Shri Mahavir Jayanti", "circular_ref": "NSE/FAOP/71777"},
+        {"date": "2026-04-03", "day": "Friday", "description": "Good Friday", "circular_ref": "NSE/FAOP/71777"},
+        {"date": "2026-04-14", "day": "Tuesday", "description": "Dr. Baba Saheb Ambedkar Jayanti", "circular_ref": "NSE/FAOP/71777"},
+        {"date": "2026-05-01", "day": "Friday", "description": "Maharashtra Day", "circular_ref": "NSE/FAOP/71777"},
+        {"date": "2026-05-28", "day": "Thursday", "description": "Bakri Id", "circular_ref": "NSE/FAOP/71777"},
+        {"date": "2026-06-26", "day": "Friday", "description": "Muharram", "circular_ref": "NSE/FAOP/71777"},
+        {"date": "2026-09-14", "day": "Monday", "description": "Ganesh Chaturthi", "circular_ref": "NSE/FAOP/71777"},
+        {"date": "2026-10-02", "day": "Friday", "description": "Mahatma Gandhi Jayanti", "circular_ref": "NSE/FAOP/71777"},
+        {"date": "2026-10-20", "day": "Tuesday", "description": "Dussehra", "circular_ref": "NSE/FAOP/71777"},
+        {"date": "2026-11-10", "day": "Tuesday", "description": "Diwali-Balipratipada", "circular_ref": "NSE/FAOP/71777"},
+        {"date": "2026-11-24", "day": "Tuesday", "description": "Prakash Gurpurb Sri Guru Nanak Dev", "circular_ref": "NSE/FAOP/71777"},
+        {"date": "2026-12-25", "day": "Friday", "description": "Christmas", "circular_ref": "NSE/FAOP/71777"}
+      ],
+      "weekend_holidays": [
+        {"date": "2026-02-15", "day": "Sunday", "description": "Mahashivratri", "circular_ref": "NSE/FAOP/71777"},
+        {"date": "2026-03-21", "day": "Saturday", "description": "Id-Ul-Fitr (Ramadan Eid)", "circular_ref": "NSE/FAOP/71777"},
+        {"date": "2026-08-15", "day": "Saturday", "description": "Independence Day", "circular_ref": "NSE/FAOP/71777"},
+        {"date": "2026-11-08", "day": "Sunday", "description": "Diwali Laxmi Pujan*", "circular_ref": "NSE/FAOP/71777"}
+      ],
+      "special_sessions": [
+        {
+          "date": "2026-02-01",
+          "day": "Sunday",
+          "kind": "WEEKEND_SPECIAL",
+          "description": "Live Trading Session - Presentation of Union Budget",
+          "open": "09:15",
+          "close": "15:30",
+          "circular_ref": "NSE/FAOP/72352"
+        },
+        {
+          "date": "2026-11-08",
+          "day": "Sunday",
+          "kind": "MUHURAT",
+          "description": "Diwali Muhurat Trading Session (CTS)",
+          "open": "14:20",
+          "close": "15:40",
+          "circular_ref": "NSE/FAOP/76940",
+          "annual_holiday_ref": "NSE/FAOP/71777"
+        }
+      ],
+      "pending_special_sessions": []
+    }
+  }
+}

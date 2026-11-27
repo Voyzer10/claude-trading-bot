@@ -17,7 +17,12 @@ from .config import (
     inspect_alpaca_credentials,
     resolve_alpaca_credential,
 )
-from .contracts import AlpacaOptionsContractDiscovery, OptionDiscoveryReport
+from .contracts import (
+    CANONICAL_US_OPTIONS_EXCHANGE,
+    AlpacaOptionsContractDiscovery,
+    OptionContractsSnapshot,
+    OptionDiscoveryReport,
+)
 from .coverage import AlpacaCoveragePreflight
 from .exceptions import (
     AlpacaAdapterError,
@@ -39,8 +44,9 @@ from .historical import (
     USOptionTrade,
     USStockBar,
 )
-from .indices import AlpacaIndexDiscovery, IndexDiscoveryReport, IndexOptionCapability
+from .indices import AlpacaIndexDiscovery, IndexDiscoveryReport, IndexOptionCapability, IndexSnapshot
 from .live_bridge import AlpacaUSLiveBridge, USRealtimeEvent
+from .snapshots import ImmutableSnapshotStore, StoredSnapshot
 
 __all__ = [
     "AlpacaAdapterError",
@@ -63,17 +69,22 @@ __all__ = [
     "AlpacaUSLiveBridge",
     "AssetDiscoveryReport",
     "AssetSnapshot",
+    "CANONICAL_US_OPTIONS_EXCHANGE",
+    "ImmutableSnapshotStore",
     "IndexDiscoveryReport",
     "IndexOptionCapability",
+    "IndexSnapshot",
     "NY_TZ",
     "OPTION_FEEDS",
     "OPTION_HISTORY_EARLIEST",
+    "OptionContractsSnapshot",
     "OptionDiscoveryReport",
     "PaginatedResult",
     "STOCK_ADJUSTMENTS",
     "STOCK_FEEDS",
     "SUPPORTED_TIMEFRAMES",
     "StockBarsResult",
+    "StoredSnapshot",
     "USCalendar",
     "USCalendarError",
     "USOptionBar",

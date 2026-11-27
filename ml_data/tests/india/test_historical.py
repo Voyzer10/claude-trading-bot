@@ -226,16 +226,16 @@ def test_checkpoint_isolation_oi_snapshot_corrupt_and_recovery(tmp_path):
         checkpoint_dir=str(ckpt_dir),
     )
 
-    # 1. Two consecutive disjoint date ranges: second must NOT contain 09:15
+    # 1. Two consecutive disjoint half-open [from_utc, to_utc) ranges: second must NOT contain 09:15/09:20
     r1 = hist.fetch_historical_candles(
         nifty_ce.instrument_id, "5minute",
         datetime(2026, 11, 27, 9, 15, tzinfo=IST_TZ),
-        datetime(2026, 11, 27, 9, 20, tzinfo=IST_TZ),
+        datetime(2026, 11, 27, 9, 25, tzinfo=IST_TZ),
     )
     r2 = hist.fetch_historical_candles(
         nifty_ce.instrument_id, "5minute",
         datetime(2026, 11, 27, 9, 25, tzinfo=IST_TZ),
-        datetime(2026, 11, 27, 9, 30, tzinfo=IST_TZ),
+        datetime(2026, 11, 27, 9, 35, tzinfo=IST_TZ),
     )
     assert [c.ts_ist.minute for c in r1.candles] == [15, 20]
     assert [c.ts_ist.minute for c in r2.candles] == [25, 30]
@@ -244,13 +244,13 @@ def test_checkpoint_isolation_oi_snapshot_corrupt_and_recovery(tmp_path):
     r_ov = hist.fetch_historical_candles(
         nifty_ce.instrument_id, "5minute",
         datetime(2026, 11, 27, 9, 20, tzinfo=IST_TZ),
-        datetime(2026, 11, 27, 9, 30, tzinfo=IST_TZ),
+        datetime(2026, 11, 27, 9, 35, tzinfo=IST_TZ),
     )
     assert [c.ts_ist.minute for c in r_ov.candles] == [20, 25, 30]
     r_wide = hist.fetch_historical_candles(
         nifty_ce.instrument_id, "5minute",
         datetime(2026, 11, 27, 9, 15, tzinfo=IST_TZ),
-        datetime(2026, 11, 27, 9, 30, tzinfo=IST_TZ),
+        datetime(2026, 11, 27, 9, 35, tzinfo=IST_TZ),
     )
     assert [c.ts_ist.minute for c in r_wide.candles] == [15, 20, 25, 30]
 
@@ -261,14 +261,14 @@ def test_checkpoint_isolation_oi_snapshot_corrupt_and_recovery(tmp_path):
         datetime(2026, 11, 27, 9, 25, tzinfo=IST_TZ),
         include_oi=False,
     )
-    assert all(c.oi is None for c in r_no_oi.candles)
+    assert len(r_no_oi.candles) == 2 and all(c.oi is None for c in r_no_oi.candles)
     r_with_oi = hist.fetch_historical_candles(
         nifty_ce.instrument_id, "5minute",
         datetime(2026, 11, 27, 9, 15, tzinfo=IST_TZ),
         datetime(2026, 11, 27, 9, 25, tzinfo=IST_TZ),
         include_oi=True,
     )
-    assert all(c.oi is not None for c in r_with_oi.candles)
+    assert len(r_with_oi.candles) == 2 and all(c.oi is not None for c in r_with_oi.candles)
 
     # 4. Corrupt checkpoint recovers cleanly
     for p in ckpt_dir.glob("*.json"):
@@ -276,7 +276,7 @@ def test_checkpoint_isolation_oi_snapshot_corrupt_and_recovery(tmp_path):
     r_rec = hist.fetch_historical_candles(
         nifty_ce.instrument_id, "5minute",
         datetime(2026, 11, 27, 9, 15, tzinfo=IST_TZ),
-        datetime(2026, 11, 27, 9, 20, tzinfo=IST_TZ),
+        datetime(2026, 11, 27, 9, 25, tzinfo=IST_TZ),
     )
     assert len(r_rec.candles) == 2
 
@@ -290,7 +290,7 @@ def test_checkpoint_isolation_oi_snapshot_corrupt_and_recovery(tmp_path):
     hist.fetch_historical_candles(
         nifty_ce.instrument_id, "5minute",
         datetime(2026, 11, 27, 9, 15, tzinfo=IST_TZ),
-        datetime(2026, 11, 27, 9, 20, tzinfo=IST_TZ),
+        datetime(2026, 11, 27, 9, 25, tzinfo=IST_TZ),
     )
     calls_after = sum(1 for c in sdk.calls if c[0] == "historical_data")
     assert calls_after > calls_before
@@ -397,4 +397,114 @@ def test_historical_coverage_exact_boundaries_intervals_and_states(tmp_path):
     hist_unv = KiteHistoricalDataClient(client=client, registry=reg, calendar=NSECalendar())
     cov_unv = hist_unv.coverage_preflight([bank_fut.instrument_id], f_dt, t_dt, intervals=("5minute",))
     assert cov_unv[0]["status"] == "UNVERIFIED_CALENDAR"
+    reg.close()
+
+
+def test_historical_strict_quality_duplicates_boundaries_session_and_tz(tmp_path):
+    from ml_data.india.config import UTC_TZ
+
+    cal = NSECalendar.official()
+    f_ist = datetime(2026, 11, 27, 9, 15, tzinfo=IST_TZ)
+    t_ist = datetime(2026, 11, 27, 9, 30, tzinfo=IST_TZ)
+
+    # 1. Invalid OHLCV / OI cases must all fail closed (never repair!)
+    bad_cases = [
+        ("zero_open", [["2026-11-27T09:15:00+0530", 0.0, 102.0, 99.0, 101.0, 100, 500]]),
+        ("neg_close", [["2026-11-27T09:15:00+0530", 100.0, 102.0, 99.0, -1.0, 100, 500]]),
+        ("nan_high", [["2026-11-27T09:15:00+0530", 100.0, float("nan"), 99.0, 101.0, 100, 500]]),
+        ("inf_low", [["2026-11-27T09:15:00+0530", 100.0, 102.0, float("inf"), 101.0, 100, 500]]),
+        ("bad_hl", [["2026-11-27T09:15:00+0530", 100.0, 101.0, 100.5, 100.8, 100, 500]]),  # low > open
+        ("neg_vol", [["2026-11-27T09:15:00+0530", 100.0, 102.0, 99.0, 101.0, -5, 500]]),
+        ("neg_oi", [["2026-11-27T09:15:00+0530", 100.0, 102.0, 99.0, 101.0, 100, -10]]),
+    ]
+    for label, rows in bad_cases:
+        sdk, client, reg, rep = _setup_registry(tmp_path / label, candles_by_token={(100001, "5minute"): rows})
+        hist = KiteHistoricalDataClient(client=client, registry=reg, calendar=cal)
+        nf = next(f for f in rep.futures if f.canonical_symbol == "NIFTY26DECFUT")
+        with pytest.raises(KiteAdapterError):
+            hist.fetch_historical_candles(nf.instrument_id, "5minute", f_ist, t_ist)
+        # Quarantine mode explicitly quarantines invalid rows without silently keeping them
+        q_res = hist.fetch_historical_candles(nf.instrument_id, "5minute", f_ist, t_ist, quarantine_invalid=True)
+        assert len(q_res.candles) == 0 and len(q_res.invalid_rows) == 1, label
+        reg.close()
+
+    # 2. Missing OI remains None (never converted to 0)
+    rows_no_oi = [["2026-11-27T09:15:00+0530", 24500.0, 24510.0, 24495.0, 24505.0, 0]]
+    sdk, client, reg, rep = _setup_registry(tmp_path / "oi_none", candles_by_token={(256265, "5minute"): rows_no_oi})
+    hist = KiteHistoricalDataClient(client=client, registry=reg, calendar=cal)
+    res_idx = hist.fetch_historical_candles(rep.indices[0].instrument_id, "5minute", f_ist, t_ist, include_oi=False)
+    assert res_idx.candles[0].oi is None
+    reg.close()
+
+    # 3. Conflicting duplicate timestamp rejected (and quarantine removes ambiguous bar)
+    conflict_rows = [
+        ["2026-11-27T09:15:00+0530", 100.0, 102.0, 99.0, 101.0, 100, 500],
+        ["2026-11-27T09:15:00+0530", 100.0, 102.0, 99.0, 101.0, 100, 500],  # exact duplicate
+        ["2026-11-27T09:15:00+0530", 100.0, 105.0, 99.0, 104.0, 120, 550],  # conflicting duplicate!
+    ]
+    sdk, client, reg, rep = _setup_registry(tmp_path / "conflict", candles_by_token={(100001, "5minute"): conflict_rows})
+    hist = KiteHistoricalDataClient(client=client, registry=reg, calendar=cal)
+    nf = next(f for f in rep.futures if f.canonical_symbol == "NIFTY26DECFUT")
+    with pytest.raises(KiteAdapterError):
+        hist.fetch_historical_candles(nf.instrument_id, "5minute", f_ist, t_ist)
+    q_conf = hist.fetch_historical_candles(nf.instrument_id, "5minute", f_ist, t_ist, quarantine_invalid=True)
+    assert q_conf.duplicates_dropped == 1
+    assert q_conf.conflicting_duplicates == 1
+    assert len(q_conf.candles) == 0  # never silently keep conflicting bar!
+    reg.close()
+
+    # 4. Exact half-open [from_utc, to_utc), boundary missing open+close, out-of-session, & IST/UTC equivalence
+    mix_rows = [
+        ["2026-11-27T09:10:00+0530", 99.0, 100.0, 98.0, 99.5, 10, 100],     # out-of-session inside [09:10, 09:30)
+        ["2026-11-27T09:15:00+0530", 100.0, 101.0, 99.0, 100.5, 50, 200],    # at from boundary when [09:15, 09:30)
+        ["2026-11-27T09:20:00+0530", 100.5, 102.0, 100.0, 101.0, 60, 210],   # interior bar
+        ["2026-11-27T09:30:00+0530", 101.0, 102.0, 100.5, 101.5, 70, 220],   # exact to_utc -> EXCLUDED!
+    ]
+    # Test missing first (09:15) AND missing last (09:25) when only 09:20 is inside [09:15, 09:30)
+    only_mid = [
+        ["2026-11-27T09:20:00+0530", 100.5, 102.0, 100.0, 101.0, 60, 210],
+        ["2026-11-27T09:30:00+0530", 101.0, 102.0, 100.5, 101.5, 70, 220],
+    ]
+    sdk, client, reg, rep = _setup_registry(
+        tmp_path / "bounds",
+        candles_by_token={(100001, "5minute"): mix_rows, (100002, "5minute"): only_mid, (100003, "5minute"): only_mid},
+    )
+    hist = KiteHistoricalDataClient(client=client, registry=reg, calendar=cal, checkpoint_dir=str(tmp_path / "bounds_ckpt"))
+    nf = next(f for f in rep.futures if f.canonical_symbol == "NIFTY26DECFUT")
+    bf = next(f for f in rep.futures if f.canonical_symbol == "BANKNIFTY26DECFUT")
+    nce = next(o for o in rep.options if o.canonical_symbol == "NIFTY26D0324500CE")
+
+    # Out-of-session candle inside [09:10, 09:30) is diagnosed, not silently discarded; 09:30 excluded
+    oos_res = hist.fetch_historical_candles(
+        nf.instrument_id, "5minute",
+        datetime(2026, 11, 27, 9, 10, tzinfo=IST_TZ),
+        datetime(2026, 11, 27, 9, 30, tzinfo=IST_TZ),
+    )
+    assert oos_res.out_of_session_count == 1
+    assert oos_res.out_of_session_candles[0].ts_ist.minute == 10
+    assert oos_res.out_of_range_dropped == 1  # 09:30 excluded
+    assert oos_res.coverage_status == "OUT_OF_SESSION_DETECTED"
+    assert [c.ts_ist.minute for c in oos_res.candles] == [15, 20]
+
+    # Boundary missing check: missing BOTH first (09:15) and final (09:25) candles in [09:15, 09:30)
+    b_res = hist.fetch_historical_candles(bf.instrument_id, "5minute", f_ist, t_ist)
+    assert [m.astimezone(IST_TZ).minute for m in b_res.missing_timestamps] == [15, 25]
+
+    # Sparse option remains SPARSE_OPTION_UNKNOWN (never fabricated)
+    opt_res = hist.fetch_historical_candles(nce.instrument_id, "5minute", f_ist, t_ist)
+    assert len(opt_res.candles) == 1
+    assert opt_res.coverage_status == "SPARSE_OPTION_UNKNOWN"
+    cov_opt = hist.coverage_preflight([nce.instrument_id], f_ist, t_ist, intervals=("5minute",))
+    assert cov_opt[0]["status"] == "UNKNOWN"
+    assert cov_opt[0]["coverage_classification"] == "SPARSE_OPTION_UNKNOWN"
+
+    # Naive IST == Aware IST == UTC equivalence
+    f_naive = datetime(2026, 11, 27, 9, 15)
+    t_naive = datetime(2026, 11, 27, 9, 30)
+    calls_before = sum(1 for c in sdk.calls if c[0] == "historical_data")
+    r_naive = hist.fetch_historical_candles(bf.instrument_id, "5minute", f_naive, t_naive)
+    r_utc = hist.fetch_historical_candles(bf.instrument_id, "5minute", f_ist.astimezone(UTC_TZ), t_ist.astimezone(UTC_TZ))
+    # All hit exact same checkpoint because timestamps normalize identically
+    assert sum(1 for c in sdk.calls if c[0] == "historical_data") == calls_before
+    assert r_naive.candles == b_res.candles == r_utc.candles
     reg.close()

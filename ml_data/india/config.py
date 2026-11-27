@@ -86,7 +86,16 @@ class KiteRateLimiter:
 
 @dataclass
 class NSECalendar:
-    """Explicit Asia/Kolkata NSE equity & index derivatives trading calendar."""
+    """Explicit Asia/Kolkata NSE equity & index derivatives trading calendar.
+
+    Precedence for a date ``day`` (after verification check):
+      1. ``unexpected_closures`` -> closed (None).
+      2. ``special_sessions`` -> explicit open/close session (overrides weekend/holiday rules).
+      3. ``pending_special_sessions`` -> timings unnotified (never fabricated; raises if verified).
+      4. ``holidays`` -> full-day trading holiday (closed).
+      5. Weekends (Saturday/Sunday) -> closed.
+      6. Normal NSE F&O trading session (09:15–15:30 IST).
+    """
 
     holidays: FrozenSet[date] = field(default_factory=frozenset)
     special_sessions: Dict[date, Tuple[dt_time, dt_time]] = field(default_factory=dict)
@@ -94,14 +103,70 @@ class NSECalendar:
     verified_years: FrozenSet[int] = field(default_factory=frozenset)
     regular_open: dt_time = dt_time(9, 15)
     regular_close: dt_time = dt_time(15, 30)
+    pending_special_sessions: Dict[date, str] = field(default_factory=dict)
+    special_session_kinds: Dict[date, str] = field(default_factory=dict)
+    holiday_descriptions: Dict[date, str] = field(default_factory=dict)
+    sources_by_year: Dict[int, Tuple[Dict[str, Any], ...]] = field(default_factory=dict)
+    calendar_version: str = "unverified"
+    segment: str = "NFO"
+
+    def __post_init__(self) -> None:
+        if self.regular_close <= self.regular_open:
+            raise CalendarError("regular_close must be after regular_open")
+        for d, (o_t, c_t) in self.special_sessions.items():
+            if c_t <= o_t:
+                raise CalendarError(f"Special session on {d.isoformat()} has close {c_t} <= open {o_t}")
+
+    @classmethod
+    def official(cls, years: Optional[Sequence[int]] = None) -> "NSECalendar":
+        """Load the versioned, official-circular-backed NSE F&O calendar (2025, 2026 verified)."""
+        from .calendars import build_nse_fo_calendar
+
+        return build_nse_fo_calendar(years=years)
+
+    def day_status(self, day: date, *, require_verified: bool = False) -> str:
+        """Classify a calendar date explicitly without fabricating unverified or unnotified sessions."""
+        if day.year not in self.verified_years:
+            if require_verified:
+                raise CalendarError(f"NSE holiday calendar is not verified for year {day.year}")
+            if not self.holidays and not self.special_sessions and not self.unexpected_closures and not self.pending_special_sessions:
+                return "UNVERIFIED_YEAR"
+        if day in self.unexpected_closures:
+            return "UNEXPECTED_CLOSURE"
+        if day in self.special_sessions:
+            if day.year not in self.verified_years and require_verified:
+                raise CalendarError(f"NSE holiday calendar is not verified for year {day.year}")
+            o_t, c_t = self.special_sessions[day]
+            if day in self.special_session_kinds:
+                return self.special_session_kinds[day]
+            if o_t == self.regular_open and c_t < self.regular_close:
+                return "EARLY_CLOSE"
+            return "SPECIAL_SESSION"
+        if day in self.pending_special_sessions:
+            return "SPECIAL_SESSION_TIMINGS_UNAVAILABLE"
+        if day in self.holidays:
+            return "HOLIDAY"
+        if day.weekday() >= 5:
+            return "WEEKEND"
+        if day.year not in self.verified_years:
+            return "UNVERIFIED_YEAR"
+        return "TRADING_DAY"
 
     def is_trading_day(self, day: date, *, require_verified: bool = False) -> bool:
         if require_verified and day.year not in self.verified_years:
             raise CalendarError(f"NSE holiday calendar is not verified for year {day.year}")
-        if day in self.unexpected_closures or day in self.holidays:
+        if day in self.unexpected_closures:
             return False
         if day in self.special_sessions:
             return True
+        if day in self.pending_special_sessions:
+            if require_verified:
+                raise CalendarError(
+                    f"Special session timings unavailable for {day.isoformat()}: {self.pending_special_sessions[day]}"
+                )
+            return False
+        if day in self.holidays:
+            return False
         return day.weekday() < 5
 
     def session_bounds(self, day: date, *, require_verified: bool = False) -> Optional[Tuple[datetime, datetime]]:

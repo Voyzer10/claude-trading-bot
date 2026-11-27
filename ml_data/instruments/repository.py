@@ -526,7 +526,6 @@ class SQLiteInstrumentRepository:
         provider_feed: Optional[str] = None,
         as_of: Optional[datetime] = None,
     ) -> Optional[Instrument]:
-        check_ts = (as_of or datetime.now(timezone.utc)).astimezone(timezone.utc)
         clauses = ["LOWER(pm.provider) = ?", "pm.provider_symbol = ?"]
         params: list = [provider.strip().lower(), provider_symbol]
         if provider_exchange is not None:
@@ -535,7 +534,46 @@ class SQLiteInstrumentRepository:
         if provider_feed is not None:
             clauses.append("LOWER(pm.provider_feed) = ?")
             params.append(provider_feed.strip().lower())
+        return self._resolve_active_mapping_target(
+            clauses,
+            params,
+            as_of=as_of,
+            err_ctx=f"({provider}, {provider_symbol}, {provider_exchange}, {provider_feed})",
+        )
 
+    def resolve_provider_instrument_id(
+        self,
+        provider: str,
+        provider_instrument_id: str,
+        provider_exchange: Optional[str] = None,
+        provider_feed: Optional[str] = None,
+        as_of: Optional[datetime] = None,
+    ) -> Optional[Instrument]:
+        """Resolve an external provider_instrument_id (e.g. recycled Kite token) at ``as_of``."""
+        clauses = ["LOWER(pm.provider) = ?", "pm.provider_instrument_id = ?"]
+        params: list = [provider.strip().lower(), str(provider_instrument_id).strip()]
+        if provider_exchange is not None:
+            clauses.append("UPPER(pm.provider_exchange) = ?")
+            params.append(provider_exchange.strip().upper())
+        if provider_feed is not None:
+            clauses.append("LOWER(pm.provider_feed) = ?")
+            params.append(provider_feed.strip().lower())
+        return self._resolve_active_mapping_target(
+            clauses,
+            params,
+            as_of=as_of,
+            err_ctx=f"({provider}, ext_id={provider_instrument_id}, {provider_exchange}, {provider_feed})",
+        )
+
+    def _resolve_active_mapping_target(
+        self,
+        clauses: List[str],
+        params: List[object],
+        *,
+        as_of: Optional[datetime],
+        err_ctx: str,
+    ) -> Optional[Instrument]:
+        check_ts = (as_of or datetime.now(timezone.utc)).astimezone(timezone.utc)
         with self._lock:
             rows = self._conn.execute(
                 f"""
@@ -557,10 +595,67 @@ class SQLiteInstrumentRepository:
                 return None
             if len(matched) > 1:
                 raise RegistryConflictError(
-                    f"Ambiguous active provider lookup at {check_ts.isoformat()} for "
-                    f"({provider}, {provider_symbol}, {provider_exchange}, {provider_feed})"
+                    f"Ambiguous active provider lookup at {check_ts.isoformat()} for {err_ctx}"
                 )
             return Instrument.from_json(next(iter(matched.values())))
+
+    def close_provider_mappings(
+        self,
+        provider: str,
+        *,
+        close_at: datetime,
+        provider_exchange: Optional[str] = None,
+        provider_instrument_id: Optional[str] = None,
+        provider_symbol: Optional[str] = None,
+        instrument_id: Optional[str] = None,
+        exclude_instrument_id: Optional[str] = None,
+    ) -> int:
+        """Close open/future-ending [valid_from, valid_until) mappings at ``close_at`` without altering history."""
+        if close_at.tzinfo is None or close_at.utcoffset() is None:
+            raise RegistryError("close_at must be a timezone-aware datetime")
+        close_utc = close_at.astimezone(timezone.utc)
+        close_iso = close_utc.isoformat()
+        clauses = ["LOWER(provider) = ?"]
+        params: list = [provider.strip().lower()]
+        if provider_exchange is not None:
+            clauses.append("UPPER(provider_exchange) = ?")
+            params.append(provider_exchange.strip().upper())
+        if provider_instrument_id is not None:
+            clauses.append("provider_instrument_id = ?")
+            params.append(str(provider_instrument_id).strip())
+        if provider_symbol is not None:
+            clauses.append("provider_symbol = ?")
+            params.append(provider_symbol)
+        if instrument_id is not None:
+            clauses.append("instrument_id = ?")
+            params.append(instrument_id)
+        if exclude_instrument_id is not None:
+            clauses.append("instrument_id != ?")
+            params.append(exclude_instrument_id)
+
+        closed = 0
+        with self._lock:
+            with self._conn:
+                rows = self._conn.execute(
+                    f"SELECT mapping_id, instrument_id, valid_from, valid_until FROM provider_mappings WHERE {' AND '.join(clauses)}",
+                    tuple(params),
+                ).fetchall()
+                for r in rows:
+                    vu = _parse_opt_dt(r["valid_until"])
+                    if vu is not None and vu <= close_utc:
+                        continue
+                    vf = _parse_opt_dt(r["valid_from"])
+                    if vf is not None and close_utc <= vf:
+                        raise RegistryConflictError(
+                            f"Cannot close mapping {r['mapping_id']} ({r['instrument_id']}) at "
+                            f"{close_iso} <= valid_from {vf.isoformat()}"
+                        )
+                    self._conn.execute(
+                        "UPDATE provider_mappings SET valid_until = ? WHERE mapping_id = ?",
+                        (close_iso, r["mapping_id"]),
+                    )
+                    closed += 1
+        return closed
 
     def get_spec_history(self, instrument_id: str) -> List[InstrumentSpecVersion]:
         with self._lock:

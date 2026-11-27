@@ -107,6 +107,43 @@ class InstrumentRegistry:
             as_of=as_of,
         )
 
+    def resolve_provider_instrument_id(
+        self,
+        provider: str,
+        provider_instrument_id: str,
+        provider_exchange: Optional[str] = None,
+        provider_feed: Optional[str] = None,
+        as_of: Optional[datetime] = None,
+    ) -> Optional[Instrument]:
+        return self._repo.resolve_provider_instrument_id(
+            provider,
+            provider_instrument_id,
+            provider_exchange=provider_exchange,
+            provider_feed=provider_feed,
+            as_of=as_of,
+        )
+
+    def close_provider_mappings(
+        self,
+        provider: str,
+        *,
+        close_at: datetime,
+        provider_exchange: Optional[str] = None,
+        provider_instrument_id: Optional[str] = None,
+        provider_symbol: Optional[str] = None,
+        instrument_id: Optional[str] = None,
+        exclude_instrument_id: Optional[str] = None,
+    ) -> int:
+        return self._repo.close_provider_mappings(
+            provider,
+            close_at=close_at,
+            provider_exchange=provider_exchange,
+            provider_instrument_id=provider_instrument_id,
+            provider_symbol=provider_symbol,
+            instrument_id=instrument_id,
+            exclude_instrument_id=exclude_instrument_id,
+        )
+
     def get_spec_history(self, instrument_id: str) -> List[InstrumentSpecVersion]:
         return self._repo.get_spec_history(instrument_id)
 

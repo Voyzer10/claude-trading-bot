@@ -1,14 +1,12 @@
 """Dynamic US index asset discovery and index-option capability probing for Alpaca."""
 from __future__ import annotations
 
-import gzip
-import hashlib
-import json
 import os
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
-from typing import Any, Dict, List, Optional, Sequence
+from datetime import date, datetime
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+# pyrefly: ignore[missing-import]
 from ..instruments import (
     AssetClass,
     ContractType,
@@ -23,6 +21,12 @@ from ..instruments import (
 from .client import AlpacaDataClient
 from .config import NY_TZ, UTC_TZ
 from .exceptions import AlpacaAdapterError, AlpacaAuthError, AlpacaSubscriptionError
+from .snapshots import (
+    ImmutableSnapshotStore,
+    StoredSnapshot,
+    atomic_write_gz as _shared_atomic_write_gz,
+    atomic_write_json as _shared_atomic_write_json,
+)
 
 
 @dataclass(frozen=True)
@@ -41,6 +45,37 @@ class IndexOptionCapability:
 DEFAULT_US_INDICES_ROOT = os.path.join("data", "raw", "us", "alpaca", "indices")
 DEFAULT_US_MANIFEST_ROOT = os.path.join("data", "manifests", "us", "alpaca")
 
+_INDEX_DISCOVERY_FILTERS = {"asset_class": "us_index", "exchange": "INDEX"}
+
+
+@dataclass(frozen=True)
+class IndexSnapshot:
+    """Immutable, content-addressed US index discovery snapshot."""
+
+    snapshot_date: date
+    retrieved_at_utc: datetime
+    sha256: str
+    raw_count: int
+    raw_gz_path: str
+    manifest_path: str
+    raw_indices: Tuple[Dict[str, Any], ...]
+    revision: int = 1
+    filters: Dict[str, Any] = field(default_factory=dict)
+
+
+def _to_index_snapshot(s: StoredSnapshot) -> IndexSnapshot:
+    return IndexSnapshot(
+        snapshot_date=s.snapshot_date,
+        retrieved_at_utc=s.retrieved_at_utc,
+        sha256=s.sha256,
+        raw_count=s.count,
+        raw_gz_path=s.raw_gz_path,
+        manifest_path=s.manifest_path,
+        raw_indices=s.rows,
+        revision=s.revision,
+        filters=s.filters,
+    )
+
 
 @dataclass
 class IndexDiscoveryReport:
@@ -50,6 +85,9 @@ class IndexDiscoveryReport:
     indices: List[Instrument] = field(default_factory=list)
     mappings: List[ProviderInstrumentMapping] = field(default_factory=list)
     capabilities: Dict[str, IndexOptionCapability] = field(default_factory=dict)
+    retrieved_at_utc: Optional[datetime] = None
+    manifest_path: Optional[str] = None
+    snapshot_revision: Optional[int] = None
 
 
 class AlpacaIndexDiscovery:
@@ -66,14 +104,78 @@ class AlpacaIndexDiscovery:
         self.raw_root = raw_root
         self.manifest_root = manifest_root
 
+    def _store(self) -> ImmutableSnapshotStore:
+        return ImmutableSnapshotStore(
+            component="indices",
+            raw_root=self.raw_root,
+            manifest_root=self.manifest_root,
+            default_filters=_INDEX_DISCOVERY_FILTERS,
+        )
+
+    def _atomic_write_gz(self, path: str, text: str) -> None:
+        _shared_atomic_write_gz(path, text)
+
+    def _atomic_write_json(self, path: str, payload: Dict[str, Any]) -> None:
+        _shared_atomic_write_json(path, payload)
+
+    def load_snapshot(
+        self,
+        snap_date: date,
+        *,
+        revision: Optional[int] = None,
+        sha256: Optional[str] = None,
+    ) -> Optional[IndexSnapshot]:
+        """Load the latest (or specific revision/sha256) validated index snapshot on snap_date."""
+        stored = self._store().load_snapshot(
+            snap_date,
+            filters=_INDEX_DISCOVERY_FILTERS,
+            revision=revision,
+            sha256=sha256,
+        )
+        return _to_index_snapshot(stored) if stored is not None else None
+
+    def list_snapshots(self, snap_date: date) -> List[IndexSnapshot]:
+        """List all immutable index snapshot revisions committed on snap_date."""
+        return [_to_index_snapshot(s) for s in self._store().list_snapshots(snap_date, filters=_INDEX_DISCOVERY_FILTERS)]
+
     def fetch_raw_indices(self) -> List[Dict[str, Any]]:
         resp = self.client.request(
             "trading",
             "/v2/assets",
-            params={"asset_class": "us_index", "exchange": "INDEX"},
+            params=dict(_INDEX_DISCOVERY_FILTERS),
         )
         rows = resp.body if isinstance(resp.body, list) else (resp.body or {}).get("assets") or []
         return [r for r in rows if isinstance(r, dict)]
+
+    def download_snapshot(
+        self,
+        *,
+        snap_date: Optional[date] = None,
+        dry_run: bool = False,
+        force_refresh: bool = False,
+    ) -> IndexSnapshot:
+        """Fetch and persist an immutable US index snapshot; force_refresh adds a revision only on content change."""
+        now_utc = datetime.now(UTC_TZ)
+        target_date = snap_date or now_utc.astimezone(NY_TZ).date()
+
+        if not force_refresh:
+            existing = self.load_snapshot(target_date)
+            if existing is not None:
+                return existing
+
+        raw_rows = self.fetch_raw_indices()
+        stored = self._store().persist(
+            snap_date=target_date,
+            now_utc=now_utc,
+            filters=dict(_INDEX_DISCOVERY_FILTERS),
+            raw_rows=raw_rows,
+            pages_fetched=1,
+            pagination_complete=True,
+            dry_run=dry_run,
+            write_gz=self._atomic_write_gz,
+            write_json=self._atomic_write_json,
+        )
+        return _to_index_snapshot(stored)
 
     def discover_indices(
         self,
@@ -81,37 +183,31 @@ class AlpacaIndexDiscovery:
         registry: Optional[InstrumentRegistry] = None,
         dry_run: bool = False,
         snap_date: Optional[date] = None,
+        snapshot: Optional[IndexSnapshot] = None,
+        force_refresh: Optional[bool] = None,
     ) -> IndexDiscoveryReport:
-        now_utc = datetime.now(UTC_TZ)
-        target_date = snap_date or now_utc.astimezone(NY_TZ).date()
-        raw_rows = self.fetch_raw_indices()
-        sha = hashlib.sha256(json.dumps(raw_rows, sort_keys=True).encode("utf-8")).hexdigest()
-        snap_path: Optional[str] = None
-        if not dry_run:
-            sdir = os.path.join(self.raw_root, f"date={target_date.isoformat()}")
-            mdir = os.path.join(self.manifest_root, f"date={target_date.isoformat()}")
-            os.makedirs(sdir, exist_ok=True)
-            os.makedirs(mdir, exist_ok=True)
-            snap_path = os.path.join(sdir, "indices.json.gz")
-            man_path = os.path.join(mdir, "indices_manifest.json")
-            if not os.path.exists(snap_path):
-                tmp_gz = f"{snap_path}.{os.getpid()}.tmp"
-                with gzip.open(tmp_gz, "wt", encoding="utf-8") as fh:
-                    fh.write(json.dumps(raw_rows, sort_keys=True))
-                os.replace(tmp_gz, snap_path)
-                tmp_man = f"{man_path}.{os.getpid()}.tmp"
-                with open(tmp_man, "w", encoding="utf-8") as fh:
-                    json.dump({
-                        "snapshot_date": target_date.isoformat(),
-                        "retrieved_at_utc": now_utc.isoformat(),
-                        "sha256": sha,
-                        "count": len(raw_rows),
-                    }, fh, indent=2, sort_keys=True)
-                os.replace(tmp_man, man_path)
+        if snapshot is not None:
+            snap = snapshot
+        else:
+            snap = self.download_snapshot(
+                snap_date=snap_date,
+                dry_run=dry_run,
+                force_refresh=True if force_refresh is None else force_refresh,
+            )
 
-        report = IndexDiscoveryReport(snapshot_date=target_date, snapshot_sha256=sha, snapshot_path=snap_path)
+        now_utc = snap.retrieved_at_utc
+        snap_path = snap.raw_gz_path if (not dry_run or os.path.isfile(snap.raw_gz_path)) else None
+        man_path = snap.manifest_path if (not dry_run or os.path.isfile(snap.manifest_path)) else None
+        report = IndexDiscoveryReport(
+            snapshot_date=snap.snapshot_date,
+            snapshot_sha256=snap.sha256,
+            snapshot_path=snap_path,
+            retrieved_at_utc=now_utc,
+            manifest_path=man_path,
+            snapshot_revision=snap.revision,
+        )
 
-        for raw in raw_rows:
+        for raw in snap.raw_indices:
             sym = str(raw.get("symbol") or "").strip().upper()
             if not sym:
                 continue
@@ -144,7 +240,9 @@ class AlpacaIndexDiscovery:
                     "alpaca_asset_id": provider_id,
                     "has_options": bool(raw.get("has_options", False)),
                     "options_late_close": bool(raw.get("options_late_close", False)),
-                    "snapshot_date": target_date.isoformat(),
+                    "snapshot_date": snap.snapshot_date.isoformat(),
+                    "snapshot_sha256": snap.sha256,
+                    "snapshot_revision": snap.revision,
                 },
             )
             mapping = ProviderInstrumentMapping(

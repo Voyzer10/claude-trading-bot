@@ -1,13 +1,13 @@
-"""Exact NIFTY/BANKNIFTY contract discovery and Identity v3 registry mapping."""
+"""Exact NIFTY/BANKNIFTY contract discovery, Identity v3 mapping, and point-in-time lifecycle management."""
 from __future__ import annotations
 
 import argparse
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time as dt_time, timezone
 from decimal import Decimal, InvalidOperation
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from ..instruments import (
     AssetClass,
@@ -22,6 +22,7 @@ from ..instruments import (
     Segment,
     SettlementType,
 )
+from .config import IST_TZ, UTC_TZ
 from .exceptions import ContractDiscoveryError
 from .instrument_master import InstrumentMasterDownloader, MasterSnapshot
 
@@ -63,6 +64,11 @@ class DiscoveryReport:
     options: List[Instrument] = field(default_factory=list)
     mappings: List[ProviderInstrumentMapping] = field(default_factory=list)
     rejected: List[Dict[str, str]] = field(default_factory=list)
+    expired: List[str] = field(default_factory=list)
+    temporarily_missing: List[str] = field(default_factory=list)
+    withdrawn: List[str] = field(default_factory=list)
+    unresolved: List[str] = field(default_factory=list)
+    reassigned_tokens: List[Dict[str, Any]] = field(default_factory=list)
 
     @property
     def nifty_counts(self) -> Dict[str, int]:
@@ -121,8 +127,181 @@ def _to_date(val: Any, field_name: str) -> date:
         raise ContractDiscoveryError(f"Invalid ISO date for {field_name}: {s!r}") from e
 
 
+def _snapshot_effective_utc(snap_date: date) -> datetime:
+    """Start-of-day IST effective timestamp in UTC for point-in-time [valid_from, valid_until) bounds."""
+    return datetime.combine(snap_date, dt_time(0, 0), tzinfo=IST_TZ).astimezone(UTC_TZ)
+
+
 class ContractDiscovery:
     """Discovers NIFTY & BANKNIFTY indices, futures, and options from Kite master snapshots."""
+
+    @staticmethod
+    def _reconcile_mapping_for_instrument(
+        registry: InstrumentRegistry,
+        inst: Instrument,
+        new_mapping: ProviderInstrumentMapping,
+        *,
+        effective_utc: datetime,
+        now_utc: datetime,
+        close_at_effective: bool = False,
+        report: Optional[DiscoveryReport] = None,
+    ) -> ProviderInstrumentMapping:
+        """Maintain idempotent, non-overlapping [valid_from, valid_until) mappings on upsert.
+
+        - If another instrument currently holds an open mapping for the same provider token or
+          symbol, close that prior instrument's mapping at ``effective_utc`` without altering its
+          canonical identity or earlier history.
+        - If this instrument already has an identical open mapping, reuse its original
+          ``valid_from`` so repeated snapshots remain idempotent.
+        """
+        prov = new_mapping.provider
+        ex = new_mapping.provider_exchange
+        ext_id = new_mapping.provider_instrument_id
+        sym = new_mapping.provider_symbol
+
+        # Close conflicting open mappings belonging to OTHER instruments (e.g. recycled Kite token)
+        if ext_id:
+            closed_tok = registry.close_provider_mappings(
+                prov,
+                close_at=effective_utc,
+                provider_exchange=ex,
+                provider_instrument_id=ext_id,
+                exclude_instrument_id=inst.instrument_id,
+            )
+            if closed_tok and report is not None:
+                report.reassigned_tokens.append({
+                    "provider_exchange": ex,
+                    "provider_instrument_id": ext_id,
+                    "new_instrument_id": inst.instrument_id,
+                    "effective_from": effective_utc.isoformat(),
+                    "closed_prior_mappings": closed_tok,
+                })
+        registry.close_provider_mappings(
+            prov,
+            close_at=effective_utc,
+            provider_exchange=ex,
+            provider_symbol=sym,
+            exclude_instrument_id=inst.instrument_id,
+        )
+
+        # Check this instrument's existing mappings for idempotent reuse vs token rotation
+        existing_maps = [
+            m for m in registry.get_provider_mappings(inst.instrument_id)
+            if m.provider == prov and (m.provider_exchange or "") == (ex or "")
+        ]
+        open_same = [
+            m for m in existing_maps
+            if (m.valid_until is None or m.valid_until > effective_utc)
+            and m.provider_symbol == sym
+            and (m.provider_instrument_id or "") == (ext_id or "")
+        ]
+        if open_same:
+            cur = open_same[-1]
+            return ProviderInstrumentMapping(
+                instrument_id=inst.instrument_id,
+                provider=prov,
+                provider_symbol=sym,
+                provider_instrument_id=ext_id,
+                provider_exchange=ex,
+                provider_feed=new_mapping.provider_feed,
+                valid_from=cur.valid_from,
+                valid_until=effective_utc if close_at_effective and (cur.valid_from is None or effective_utc > cur.valid_from) else cur.valid_until,
+                last_verified_at=now_utc,
+                is_primary=True,
+            )
+
+        # Token or symbol changed for this same canonical instrument -> close its previous open mappings
+        registry.close_provider_mappings(
+            prov,
+            close_at=effective_utc,
+            provider_exchange=ex,
+            instrument_id=inst.instrument_id,
+        )
+        return ProviderInstrumentMapping(
+            instrument_id=inst.instrument_id,
+            provider=prov,
+            provider_symbol=sym,
+            provider_instrument_id=ext_id,
+            provider_exchange=ex,
+            provider_feed=new_mapping.provider_feed,
+            valid_from=effective_utc,
+            valid_until=effective_utc if close_at_effective else None,
+            last_verified_at=now_utc,
+            is_primary=True,
+        )
+
+    @staticmethod
+    def _reconcile_missing_derivatives(
+        registry: InstrumentRegistry,
+        *,
+        seen_ids: Set[str],
+        snap_date: date,
+        effective_utc: datetime,
+        now_utc: datetime,
+        withdrawn_symbols: Set[str],
+        report: DiscoveryReport,
+    ) -> None:
+        """Update registered IN derivatives absent from the latest NFO snapshot without misclassifying absence."""
+        for ac in (AssetClass.FUTURE, AssetClass.OPTION):
+            for existing in registry.list_by_asset_class(ac):
+                if (
+                    existing.market != Market.IN
+                    or existing.exchange != "NFO"
+                    or existing.primary_provider != "kite"
+                    or existing.instrument_id in seen_ids
+                ):
+                    continue
+                if existing.instrument_status in (InstrumentStatus.EXPIRED, InstrumentStatus.DELISTED):
+                    continue
+
+                meta = dict(existing.metadata or {})
+                eff_exp = existing.last_trade_date or existing.expiry_date
+                is_withdrawn = (
+                    existing.canonical_symbol in withdrawn_symbols
+                    or bool(meta.get("withdrawn", False))
+                )
+                expiry_established = bool(meta.get("expiry_established", eff_exp is not None))
+
+                if is_withdrawn:
+                    new_status = InstrumentStatus.DELISTED
+                    lifecycle_state = "WITHDRAWN"
+                    report.withdrawn.append(existing.instrument_id)
+                    registry.close_provider_mappings(
+                        "kite",
+                        close_at=effective_utc,
+                        provider_exchange="NFO",
+                        instrument_id=existing.instrument_id,
+                    )
+                elif expiry_established and eff_exp is not None and eff_exp < snap_date:
+                    new_status = InstrumentStatus.EXPIRED
+                    lifecycle_state = "EXPIRED"
+                    report.expired.append(existing.instrument_id)
+                    registry.close_provider_mappings(
+                        "kite",
+                        close_at=effective_utc,
+                        provider_exchange="NFO",
+                        instrument_id=existing.instrument_id,
+                    )
+                elif eff_exp is None or not expiry_established:
+                    new_status = InstrumentStatus.UNKNOWN
+                    lifecycle_state = "UNRESOLVED"
+                    report.unresolved.append(existing.instrument_id)
+                else:
+                    # Absent prior to established expiry -> TEMPORARILY_MISSING, NOT EXPIRED!
+                    new_status = InstrumentStatus.UNKNOWN
+                    lifecycle_state = "TEMPORARILY_MISSING"
+                    report.temporarily_missing.append(existing.instrument_id)
+
+                meta["lifecycle_state"] = lifecycle_state
+                meta["missing_from_snapshot"] = True
+                meta.setdefault("missing_since_snapshot_date", snap_date.isoformat())
+                d = existing.to_dict()
+                d["instrument_status"] = new_status.value
+                d["is_active"] = False
+                d["is_tradable"] = False
+                d["updated_at"] = now_utc.isoformat()
+                d["metadata"] = meta
+                registry.upsert(Instrument.from_dict(d), validate_underlying=False)
 
     def discover_from_snapshots(
         self,
@@ -131,9 +310,16 @@ class ContractDiscovery:
         nfo_snapshot: MasterSnapshot,
         registry: Optional[InstrumentRegistry] = None,
         dry_run: bool = False,
+        reconcile_missing: bool = True,
+        withdrawn_symbols: Sequence[str] = (),
     ) -> DiscoveryReport:
-        report = DiscoveryReport(snapshot_date=nfo_snapshot.snapshot_date)
+        snap_date = nfo_snapshot.snapshot_date
+        report = DiscoveryReport(snapshot_date=snap_date)
         now_utc = datetime.now(timezone.utc)
+        nfo_effective_utc = _snapshot_effective_utc(snap_date)
+        nse_effective_utc = (
+            _snapshot_effective_utc(nse_snapshot.snapshot_date) if nse_snapshot is not None else nfo_effective_utc
+        )
         nse_rows = nse_snapshot.rows if nse_snapshot else ()
 
         # 1. Underlying indices (exact match on NSE INDICES)
@@ -184,6 +370,7 @@ class ContractDiscovery:
                     "snapshot_date": nse_snap_date_iso,
                     "snapshot_sha256": nse_snap_sha,
                     "index_token_available": matched_row is not None,
+                    "lifecycle_state": "ACTIVE" if matched_row is not None else "UNVERIFIED",
                 },
             )
             idx_by_root[root] = inst
@@ -194,15 +381,18 @@ class ContractDiscovery:
                         instrument_id=inst.instrument_id,
                         provider="kite",
                         provider_symbol=spec["kite_tradingsymbol"],
-                        provider_instrument_id=f"NSE:{spec['kite_tradingsymbol']}@{nse_snap_date_iso}",
+                        provider_instrument_id=str(int(matched_row["instrument_token"])),
                         provider_exchange="NSE",
                         provider_feed="kite",
+                        valid_from=nse_effective_utc,
+                        valid_until=None,
                         last_verified_at=now_utc,
                         is_primary=True,
                     )
                 )
 
         # 2. NFO Futures and Options (exact NIFTY / BANKNIFTY roots only)
+        seen_derivative_ids: Set[str] = set()
         for row in nfo_snapshot.rows:
             ex = row.get("exchange", "").upper()
             seg = row.get("segment", "").upper()
@@ -213,7 +403,6 @@ class ContractDiscovery:
             if ex != "NFO":
                 continue
 
-            # Only consider rows claiming NIFTY/BANKNIFTY name or symbol prefix, reject anything ambiguous
             parsed = parse_kite_nfo_symbol(tsym, nm, itype)
             if parsed is None:
                 if "NIFTY" in nm or "NIFTY" in tsym:
@@ -230,6 +419,20 @@ class ContractDiscovery:
                 tick = _to_decimal(row.get("tick_size"), "tick_size")
                 tok = int(row["instrument_token"])
                 und_inst = idx_by_root[parsed.root]
+
+                expired_by_meta = exp < snap_date
+                inst_status = InstrumentStatus.EXPIRED if expired_by_meta else InstrumentStatus.ACTIVE
+                lifecycle_state = "EXPIRED" if expired_by_meta else "ACTIVE"
+                common_meta = {
+                    "instrument_token": tok,
+                    "exchange_token": row.get("exchange_token"),
+                    "snapshot_date": snap_date.isoformat(),
+                    "snapshot_sha256": nfo_snapshot.sha256,
+                    "lifecycle_state": lifecycle_state,
+                    "last_seen_snapshot_date": snap_date.isoformat(),
+                    "expiry_established": True,
+                    "missing_from_snapshot": False,
+                }
 
                 if parsed.instrument_type == "FUT":
                     if seg not in ("NFO-FUT", ""):
@@ -256,21 +459,17 @@ class ContractDiscovery:
                         contract_type=ContractType.DATED_FUTURE,
                         settlement_type=SettlementType.CASH,
                         margin_type=MarginType.STANDARD,
-                        is_tradable=True,
-                        is_active=True,
+                        is_tradable=not expired_by_meta,
+                        is_active=not expired_by_meta,
+                        instrument_status=inst_status,
                         trading_calendar="XNSE",
                         timezone="Asia/Kolkata",
                         primary_provider="kite",
-                        provider_instrument_id=f"NFO:{tsym}@{nfo_snapshot.snapshot_date.isoformat()}",
+                        provider_instrument_id=f"NFO:{tsym}@{snap_date.isoformat()}",
                         provider_symbol=tsym,
                         source="kite_instrument_master",
                         last_verified_at=now_utc,
-                        metadata={
-                            "instrument_token": tok,
-                            "exchange_token": row.get("exchange_token"),
-                            "snapshot_date": nfo_snapshot.snapshot_date.isoformat(),
-                            "snapshot_sha256": nfo_snapshot.sha256,
-                        },
+                        metadata=common_meta,
                     )
                     report.futures.append(inst)
                 else:
@@ -303,32 +502,31 @@ class ContractDiscovery:
                         contract_type=ContractType.OPTION,
                         settlement_type=SettlementType.CASH,
                         margin_type=MarginType.STANDARD,
-                        is_tradable=True,
-                        is_active=True,
+                        is_tradable=not expired_by_meta,
+                        is_active=not expired_by_meta,
+                        instrument_status=inst_status,
                         trading_calendar="XNSE",
                         timezone="Asia/Kolkata",
                         primary_provider="kite",
-                        provider_instrument_id=f"NFO:{tsym}@{nfo_snapshot.snapshot_date.isoformat()}",
+                        provider_instrument_id=f"NFO:{tsym}@{snap_date.isoformat()}",
                         provider_symbol=tsym,
                         source="kite_instrument_master",
                         last_verified_at=now_utc,
-                        metadata={
-                            "instrument_token": tok,
-                            "exchange_token": row.get("exchange_token"),
-                            "snapshot_date": nfo_snapshot.snapshot_date.isoformat(),
-                            "snapshot_sha256": nfo_snapshot.sha256,
-                        },
+                        metadata=common_meta,
                     )
                     report.options.append(inst)
 
+                seen_derivative_ids.add(inst.instrument_id)
                 report.mappings.append(
                     ProviderInstrumentMapping(
                         instrument_id=inst.instrument_id,
                         provider="kite",
                         provider_symbol=tsym,
-                        provider_instrument_id=f"NFO:{tsym}@{nfo_snapshot.snapshot_date.isoformat()}",
+                        provider_instrument_id=str(tok),
                         provider_exchange="NFO",
                         provider_feed="kite",
+                        valid_from=nfo_effective_utc,
+                        valid_until=None,
                         last_verified_at=now_utc,
                         is_primary=True,
                     )
@@ -340,8 +538,40 @@ class ContractDiscovery:
             map_by_id: Dict[str, List[ProviderInstrumentMapping]] = {}
             for m in report.mappings:
                 map_by_id.setdefault(m.instrument_id, []).append(m)
-            for inst in report.indices + report.futures + report.options:
-                registry.upsert(inst, mappings=map_by_id.get(inst.instrument_id, []))
+            for idx_inst in report.indices:
+                eff = nse_effective_utc
+                idx_maps = [
+                    self._reconcile_mapping_for_instrument(
+                        registry, idx_inst, m, effective_utc=eff, now_utc=now_utc, report=report
+                    )
+                    for m in map_by_id.get(idx_inst.instrument_id, [])
+                ]
+                registry.upsert(idx_inst, mappings=idx_maps)
+            for inst in report.futures + report.options:
+                reconciled_maps = [
+                    self._reconcile_mapping_for_instrument(
+                        registry,
+                        inst,
+                        m,
+                        effective_utc=nfo_effective_utc,
+                        now_utc=now_utc,
+                        close_at_effective=(inst.instrument_status == InstrumentStatus.EXPIRED),
+                        report=report,
+                    )
+                    for m in map_by_id.get(inst.instrument_id, [])
+                ]
+                registry.upsert(inst, mappings=reconciled_maps)
+
+            if reconcile_missing:
+                self._reconcile_missing_derivatives(
+                    registry,
+                    seen_ids=seen_derivative_ids,
+                    snap_date=snap_date,
+                    effective_utc=nfo_effective_utc,
+                    now_utc=now_utc,
+                    withdrawn_symbols={s.strip().upper() for s in withdrawn_symbols if s.strip()},
+                    report=report,
+                )
 
         return report
 
