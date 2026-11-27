@@ -211,8 +211,10 @@ def crypto_cycle(state, a):
     brk = sum(1 for h in res["hits"] if h["setup"] == "range_breakout_4h")
     osd = sum(1 for h in res["hits"] if h["setup"] == "oversold_15m")
     bdn = sum(1 for h in res["hits"] if h["setup"] == "range_breakdown_4h")
-    log("CRYPTO %dm @%s IST: %d/%d usable; %d above their 4h high, %d below their 4h low, %d oversold%s"
-        % (C.BAR_MIN, datetime.fromisoformat(res["as_of"]).astimezone(S.IST).strftime("%H:%M"), res["usable"], res["scanned"],
+    ctag = _scanner_tag(["CRYPTO"])
+    log("CRYPTO %dm @%s IST%s: %d/%d usable; %d above their 4h high, %d below their 4h low, %d oversold%s"
+        % (C.BAR_MIN, datetime.fromisoformat(res["as_of"]).astimezone(S.IST).strftime("%H:%M"),
+           (" [%s]" % ctag) if ctag else "", res["usable"], res["scanned"],
            brk, bdn, osd, ("; NEW: " + ", ".join(new[:15])) if new else ""))
     try:
         import smc_playbook as PB
@@ -320,8 +322,9 @@ def cycle(state, a, markets):
         ms["seen"], ms["seen_date"] = seen, today
         ms["orb"] = res
         holding = sum(1 for h in res["hits"] if h["holding"])
-        log("%s ORB @%s: %d/%d usable broke out (%d still above the range)%s"
-            % (m, cutoff.strftime("%H:%M"), len(res["hits"]), res["usable"], holding,
+        otag = _scanner_tag([m])
+        log("%s ORB @%s%s: %d/%d usable broke out (%d still above the range)%s"
+            % (m, cutoff.strftime("%H:%M"), (" [%s]" % otag) if otag else "", len(res["hits"]), res["usable"], holding,
                ("; NEW: " + ", ".join(new[:15]) + (" ..." if len(new) > 15 else "")) if new else ""))
         if m == "NSE" and a.auto_paper:
             try:
@@ -384,6 +387,26 @@ def crypto_wake(now, a):
     return nxt if nxt > now else nxt + timedelta(minutes=5)
 
 
+_ACCT_FOR = {"CRYPTO": "CRYPTO", "NSE": "INDIA", "BSE": "INDIA", "FNO": "FNO", "US": "US"}
+
+
+def _scanner_tag(active):
+    """Human-readable active scanner label from trader/paper/config.json for cycle logs."""
+    try:
+        with open(os.path.join("trader", "paper", "config.json"), encoding="utf-8") as fh:
+            accs = (json.load(fh) or {}).get("accounts") or {}
+    except Exception:
+        return ""
+    accts = list(dict.fromkeys(_ACCT_FOR.get(m, m) for m in (active or []))) or ["CRYPTO", "INDIA", "FNO", "US"]
+    pairs = [(a, str((accs.get(a) or {}).get("scanner_version") or "v3")) for a in accts if a in accs]
+    if not pairs:
+        return ""
+    uniq = sorted({v for _, v in pairs})
+    if len(uniq) == 1:
+        return "Scanner %s" % uniq[0]
+    return ", ".join("%s %s" % (a, v) for a, v in pairs)
+
+
 def heartbeat(state, active, wake):
     """One log line per cycle (every 5 minutes), so the log shows the runner is alive and what it looked at."""
     parts = []
@@ -405,8 +428,10 @@ def heartbeat(state, active, wake):
             parts.append(m)
     paper = state.get("paper") or {}
     n_open = len(paper.get("open", [])) if isinstance(paper, dict) else 0
-    return "Cycle: %s; %d open paper position%s; next check %s" % (
-        "; ".join(parts) or "paused", n_open, "" if n_open == 1 else "s", wake.strftime("%H:%M"))
+    stag = _scanner_tag(active)
+    head = ("Cycle [%s]:" % stag) if stag else "Cycle:"
+    return "%s %s; %d open paper position%s; next check %s" % (
+        head, "; ".join(parts) or "paused", n_open, "" if n_open == 1 else "s", wake.strftime("%H:%M"))
 
 
 CONTROL = os.path.join("trader", "live", "control.json")
@@ -560,8 +585,9 @@ def main(argv=None):
     always = [m for m in markets if m in ("CRYPTO", "US", "FNO")]
     state = load_state()
     state.update({"status": "running", "markets_scanned": markets, "pid": os.getpid()})
-    log("live.py started: %s, every %d s in the session%s. Ctrl+C to stop."
-        % ("+".join(markets), max(300, a.interval), "; AUTO PAPER trading on breakouts" if a.auto_paper else ""))
+    stag = _scanner_tag(markets)
+    log("live.py started: %s%s, every %d s in the session%s. Ctrl+C to stop."
+        % ("+".join(markets), (" [%s]" % stag) if stag else "", max(300, a.interval), "; AUTO PAPER trading on breakouts" if a.auto_paper else ""))
     try:
         import alerts
         alerts.send("runner", "Trader runner started: %s (paper)" % "+".join(markets))

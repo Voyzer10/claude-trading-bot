@@ -21,7 +21,7 @@ import ChartTesting from "@/components/ChartTesting";
 import Zerodha, { ZerodhaBanner } from "@/components/Zerodha";
 import { FnoWatch, NseWatch, UsWatch } from "@/components/Watchlists";
 import { INDIA, liveFor, useLiveTicks, type LiveTicks } from "@/lib/live";
-import { errText } from "@/lib/api";
+import { errText, getJSON } from "@/lib/api";
 
 const POLL_MS = 30_000;
 const STALE_MIN = 12; // the runner pushes every 5 minutes; silence beyond this means it stopped or the PC slept
@@ -1146,6 +1146,31 @@ function TradeManagerStrip({ open, closed }: { open: Position[]; closed: Positio
 function LogsSection({ snap }: { snap: Snapshot }) {
   const [kind, setKind] = useState("all");
   const [q, setQ] = useState("");
+  const [fallbackScanners, setFallbackScanners] = useState<Record<string, string> | null>(null);
+  useEffect(() => {
+    if (snap.runner.scanners) return;
+    let alive = true;
+    getJSON<{ risk?: Record<string, { scanner_version?: string }> }>("/api/py/ops/settings")
+      .then((doc) => {
+        if (!alive || !doc?.risk) return;
+        const out: Record<string, string> = {};
+        for (const [acc, cfg] of Object.entries(doc.risk)) {
+          if (cfg?.scanner_version) out[acc] = String(cfg.scanner_version);
+        }
+        if (Object.keys(out).length) setFallbackScanners(out);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [snap.runner.scanners]);
+
+  const scanners = snap.runner.scanners ?? fallbackScanners;
+  const scannerText = useMemo(() => {
+    if (!scanners || Object.keys(scanners).length === 0) return null;
+    const vals = Array.from(new Set(Object.values(scanners)));
+    if (vals.length === 1) return `Scanner ${vals[0]}`;
+    return Object.entries(scanners).map(([k, v]) => `${k} ${v}`).join(" · ");
+  }, [scanners]);
+
   const rows = snap.logs
     .filter((l) => kind === "all" || l.kind === kind)
     .filter((l) => !q || l.text.toLowerCase().includes(q.toLowerCase()))
@@ -1156,7 +1181,10 @@ function LogsSection({ snap }: { snap: Snapshot }) {
     <section id="logs" className="panel" aria-labelledby="logs-h">
       <div className="panel-head">
         <div>
-          <h2 id="logs-h">Runner log</h2>
+          <h2 id="logs-h" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            Runner log
+            {scannerText && <span className="chip">{scannerText}</span>}
+          </h2>
           <p>Last {snap.logs.length} lines of trader\live\log.txt, newest first.</p>
         </div>
         <div className="filters">
