@@ -16,7 +16,6 @@ from .exceptions import (
 )
 from .historical import HistoricalCandle, HistoricalFetchResult, KiteHistoricalDataClient
 from .instrument_master import InstrumentMasterDownloader, MasterSnapshot
-from .live_bridge import KiteLiveBridge, NormalizedTick
 
 __all__ = [
     "CalendarError",
@@ -44,3 +43,11 @@ __all__ = [
     "load_nse_fo_calendar_data",
     "parse_kite_nfo_symbol",
 ]
+
+
+def __getattr__(name: str):
+    if name in ("KiteLiveBridge", "NormalizedTick"):
+        from . import live_bridge
+
+        return getattr(live_bridge, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -85,10 +85,16 @@ def build_nse_fo_calendar(
             continue
         if not isinstance(ydoc, dict):
             raise CalendarError(f"Invalid year entry {yr_key!r} in {path}")
-        if str(ydoc.get("verification_status") or "").upper() == "VERIFIED":
-            verified_years.add(yr)
         srcs = tuple(dict(s) for s in (ydoc.get("sources") or []) if isinstance(s, dict))
         sources_by_year[yr] = srcs
+        is_marked_verified = str(ydoc.get("verification_status") or "").upper() == "VERIFIED"
+        if is_marked_verified:
+            if not srcs or not (ydoc.get("trading_holidays") or ()):
+                raise CalendarError(f"Verified year {yr} in {path} is missing sources or trading_holidays")
+            for s in srcs:
+                if not s.get("circular_ref") or not s.get("url") or not s.get("publication_date"):
+                    raise CalendarError(f"Verified year {yr} has incomplete source provenance in {path}")
+            verified_years.add(yr)
 
         for h in ydoc.get("trading_holidays") or ():
             d = date.fromisoformat(str(h["date"]))

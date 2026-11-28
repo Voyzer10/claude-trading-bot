@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .enums import AssetClass, ContractType, InstrumentStatus, Market, OptionRight, Segment, SettlementType
 from .schemas import InstrumentValidationError
@@ -111,7 +112,11 @@ def validate_instrument(inst: "Instrument", *, check_id: bool = True) -> None:
     pc = _require_non_empty(inst.price_currency, "price_currency")
     if not (2 <= len(pc) <= 10 and pc.isalpha() and pc.isupper()):
         raise InstrumentValidationError(f"price_currency must be an uppercase currency code (got {pc!r})")
-    _require_non_empty(inst.timezone, "timezone")
+    tz = _require_non_empty(inst.timezone, "timezone")
+    try:
+        ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise InstrumentValidationError(f"Unknown or non-IANA timezone: {tz!r}") from exc
 
     _check_bool(inst.is_inverse, "is_inverse")
     _check_bool(inst.is_tradable, "is_tradable")

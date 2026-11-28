@@ -149,6 +149,8 @@ class USCalendar:
             return None
         if day in self.early_closes:
             close_t = self.early_closes[day]
+            if options_late_close and close_t == dt_time(13, 0):
+                close_t = dt_time(13, 15)
         elif options_late_close:
             close_t = self.options_late_close_time
         else:

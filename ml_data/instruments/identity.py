@@ -17,14 +17,30 @@ def _clean_token(val: str) -> str:
 
 
 def normalize_decimal_str(val: Decimal) -> str:
-    """Format a Decimal canonically without scientific notation or trailing fractional zeros."""
+    """Format a Decimal canonically without context rounding, scientific notation, or trailing fractional zeros."""
     if not isinstance(val, Decimal):
         raise TypeError("Expected Decimal, got %s" % type(val).__name__)
-    norm = val.normalize()
-    s = format(norm, "f")
-    if "." in s:
-        s = s.rstrip("0").rstrip(".")
-    return s or "0"
+    if not val.is_finite():
+        raise ValueError(f"Decimal must be finite, got {val!r}")
+    tup = val.as_tuple()
+    digits = "".join(str(d) for d in tup.digits)
+    if not digits or set(digits) == {"0"}:
+        return "0"
+    exp = int(tup.exponent)
+    if exp >= 0:
+        int_part = (digits + ("0" * exp)).lstrip("0") or "0"
+        frac_part = ""
+    else:
+        pos = len(digits) + exp
+        if pos <= 0:
+            int_part = "0"
+            frac_part = ("0" * (-pos)) + digits
+        else:
+            int_part = digits[:pos].lstrip("0") or "0"
+            frac_part = digits[pos:]
+        frac_part = frac_part.rstrip("0")
+    sign = "-" if tup.sign else ""
+    return f"{sign}{int_part}.{frac_part}" if frac_part else f"{sign}{int_part}"
 
 
 def normalize_option_right(right: Any) -> OptionRight:

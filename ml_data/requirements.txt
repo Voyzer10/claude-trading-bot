@@ -1,0 +1,8 @@
+# Phase 1 Market Data Foundation — Research & Storage Dependencies
+# Install in an isolated environment with:
+#   pip install -r ml_data/requirements.txt
+pyarrow==26.0.1
+pytest==9.1.1
+requests==2.34.2
+msgpack==1.2.1
+tzdata==2026.4
