@@ -260,7 +260,7 @@ class CanonicalCandle:
             d[dec_f] = _parse_json_dec(d.get(dec_f), dec_f, required=True)
         for dec_f in ("quote_volume", "open_interest", "mark_price", "index_price", "funding_rate"):
             d[dec_f] = _parse_json_dec(d.get(dec_f), dec_f, required=False)
-        d["quality_flags"] = tuple(d.get("quality_flags") or ())
+        # quality_flags is passed through unchanged: __post_init__ validates it (missing -> default ()).
         return cls(**d)
 
     @classmethod
@@ -329,7 +329,7 @@ class CanonicalQuote:
         d["received_at_utc"] = _parse_json_dt(d.get("received_at_utc"), "received_at_utc", required=True)
         for dec_f in ("bid_price", "ask_price", "bid_size", "ask_size"):
             d[dec_f] = _parse_json_dec(d.get(dec_f), dec_f, required=True)
-        d["quality_flags"] = tuple(d.get("quality_flags") or ())
+        # quality_flags is passed through unchanged: __post_init__ validates it (missing -> default ()).
         return cls(**d)
 
     @classmethod
@@ -397,7 +397,7 @@ class CanonicalTrade:
         d["price"] = _parse_json_dec(d.get("price"), "price", required=True)
         d["quantity"] = _parse_json_dec(d.get("quantity"), "quantity", required=True)
         d["quote_quantity"] = _parse_json_dec(d.get("quote_quantity"), "quote_quantity", required=False)
-        d["conditions"] = tuple(d.get("conditions") or ())
+        # conditions is passed through unchanged: __post_init__ validates it (missing -> default ()).
         return cls(**d)
 
     @classmethod

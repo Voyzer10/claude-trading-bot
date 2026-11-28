@@ -1,6 +1,7 @@
 """Phase 0 Step 1: Canonical Market-Data Contract validation tests."""
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -329,3 +330,120 @@ def test_phase0_micro_fixes_trading_date_iana_tz_and_tuple_normalization() -> No
         CanonicalTrade(**{**tr.__dict__, "conditions": "bad"})  # type: ignore[arg-type]
     with pytest.raises(SchemaValidationError):
         CanonicalTrade(**{**tr.__dict__, "aggressor_side": 1})  # type: ignore[arg-type]
+
+
+# --- Tuple fields through from_dict()/from_json(): strict JSON-array contract -----------------------------------
+
+_TUPLE_IID = "US:NASDAQ:EQUITY:AAPL#67004d96eaeaf24f2a7aa16221464a2c"
+_TUPLE_T0 = datetime(2026, 1, 5, 14, 30, tzinfo=UTC)
+
+
+def _tuple_candle(**kw):
+    t1 = _TUPLE_T0 + timedelta(minutes=5)
+    return CanonicalCandle(
+        instrument_id=_TUPLE_IID, market="US", asset_class="EQUITY", segment="US_EQUITY",
+        exchange="NASDAQ", provider="alpaca", provider_symbol="AAPL", provider_instrument_id="AAPL",
+        timestamp_start_utc=_TUPLE_T0, timestamp_end_utc=t1, event_time_utc=t1, received_at_utc=t1,
+        timeframe="5m", trading_date=date(2026, 1, 5), trading_session="REGULAR",
+        session_id="XNAS_2026-01-05", calendar_id="XNAS", calendar_version="2026.1",
+        open=Decimal("100"), high=Decimal("101"), low=Decimal("99"), close=Decimal("100.5"),
+        volume=Decimal("10"), provider_feed="iex", source_snapshot_id="s1", source_record_id="r1",
+        dataset_version="v1", adjustment_mode="RAW", retrieval_run_id="run-1", quality_status="VERIFIED", **kw,
+    )
+
+
+def _tuple_quote(**kw):
+    return CanonicalQuote(
+        instrument_id=_TUPLE_IID, event_time_utc=_TUPLE_T0, received_at_utc=_TUPLE_T0,
+        bid_price=Decimal("100"), ask_price=Decimal("101"), bid_size=Decimal("1"), ask_size=Decimal("1"),
+        exchange="NASDAQ", provider="alpaca", feed="iex", **kw,
+    )
+
+
+def _tuple_trade(**kw):
+    return CanonicalTrade(
+        instrument_id=_TUPLE_IID, trade_id="t1", event_time_utc=_TUPLE_T0, received_at_utc=_TUPLE_T0,
+        price=Decimal("100"), quantity=Decimal("1"), exchange="NASDAQ", provider="alpaca",
+        feed="iex", source_id="s1", **kw,
+    )
+
+
+_TUPLE_RECORDS = [
+    pytest.param(CanonicalCandle, _tuple_candle, "quality_flags", id="candle.quality_flags"),
+    pytest.param(CanonicalQuote, _tuple_quote, "quality_flags", id="quote.quality_flags"),
+    pytest.param(CanonicalTrade, _tuple_trade, "conditions", id="trade.conditions"),
+]
+_TUPLE_VALID = [
+    pytest.param(["flag1", "flag2"], ("flag1", "flag2"), id="two-flags"),
+    pytest.param([], (), id="empty-array"),
+]
+_TUPLE_INVALID = [
+    pytest.param("flag1", id="scalar-string"),
+    pytest.param("not-an-array", id="scalar-string-long"),
+    pytest.param(None, id="null"),
+    pytest.param(123, id="number"),
+    pytest.param({"flag": "x"}, id="object"),
+    pytest.param(["valid", 123], id="mixed-array"),
+    pytest.param([None], id="array-of-null"),
+]
+
+
+def _tuple_payload(build, field, value=None, *, present=True):
+    d = json.loads(build().to_json())
+    d.pop(field)
+    if present:
+        d[field] = value
+    return d
+
+
+@pytest.mark.parametrize("cls,build,field", _TUPLE_RECORDS)
+@pytest.mark.parametrize("value,expected", _TUPLE_VALID)
+def test_phase0_tuple_field_valid_array_accepted_via_dict_and_json(cls, build, field, value, expected) -> None:
+    d = _tuple_payload(build, field, value)
+    for rec in (cls.from_dict(d), cls.from_json(json.dumps(d))):
+        assert isinstance(getattr(rec, field), tuple)
+        assert getattr(rec, field) == expected                     # order preserved
+        assert rec == build(**{field: expected})
+    # direct constructor accepts the same list
+    assert getattr(build(**{field: list(value)}), field) == expected
+
+
+@pytest.mark.parametrize("cls,build,field", _TUPLE_RECORDS)
+def test_phase0_tuple_field_missing_uses_dataclass_default(cls, build, field) -> None:
+    d = _tuple_payload(build, field, present=False)
+    assert field not in d
+    for rec in (cls.from_dict(d), cls.from_json(json.dumps(d))):
+        assert getattr(rec, field) == () and isinstance(getattr(rec, field), tuple)
+
+
+@pytest.mark.parametrize("cls,build,field", _TUPLE_RECORDS)
+@pytest.mark.parametrize("value", _TUPLE_INVALID)
+def test_phase0_tuple_field_malformed_rejected_via_dict_json_and_constructor(cls, build, field, value) -> None:
+    d = _tuple_payload(build, field, value)
+    with pytest.raises(SchemaValidationError):
+        cls.from_dict(d)
+    with pytest.raises(SchemaValidationError):
+        cls.from_json(json.dumps(d))
+    with pytest.raises(SchemaValidationError):
+        build(**{field: value})
+
+
+@pytest.mark.parametrize("cls,build,field", _TUPLE_RECORDS)
+def test_phase0_tuple_field_roundtrip_serialization_and_immutability(cls, build, field) -> None:
+    src = ["flag1", "flag2"]
+    rec = build(**{field: src})
+    src.append("mutated")                                          # caller's list mutated after construction
+    assert getattr(rec, field) == ("flag1", "flag2")
+
+    payload = _tuple_payload(build, field, ["flag1", "flag2"])
+    from_d = cls.from_dict(payload)
+    payload[field].append("mutated")                               # caller's input dict mutated after from_dict
+    assert getattr(from_d, field) == ("flag1", "flag2")
+
+    assert cls.from_json(rec.to_json()) == rec
+    assert cls.from_dict(rec.to_dict()) == rec
+    out = rec.to_dict()[field]
+    assert isinstance(out, list) and out == ["flag1", "flag2"]
+    raw = json.loads(rec.to_json())[field]
+    assert isinstance(raw, list) and raw == ["flag1", "flag2"]    # JSON array, not a string
+    assert ('"%s":["flag1","flag2"]' % field) in rec.to_json()
